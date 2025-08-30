@@ -22,7 +22,8 @@ def identify_comment_points(narrative, glossary):
         narrative=narrative
     )
 
-    response = call_llm(message, IDENTIFY_COMMENTS_SYSTEM_PROMPT)
+    schema = {"type": "array", "items": {"type": "object", "properties": {"Fragment": {"type": "string"}, "Question": {"type": "string"}}}}
+    response = call_llm(message, IDENTIFY_COMMENTS_SYSTEM_PROMPT, schema)
     return parse_points_and_questions(response)
 
 
