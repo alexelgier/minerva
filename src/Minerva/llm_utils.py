@@ -15,7 +15,7 @@ config = load_config()
 client = OpenAI(base_url=config['llm_endpoint'], api_key=config['llm_api_key'])
 
 
-def call_llm(message, system_prompt=None):
+def call_llm(message, system_prompt=None, schema=None):
     """Call the local LLM."""
     try:
         messages = []
@@ -23,11 +23,19 @@ def call_llm(message, system_prompt=None):
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": message})
 
-        response = client.chat.completions.create(
-            model=config['llm_model'],
-            messages=messages,
-            temperature=0.7
-        )
+        if schema is not None:
+            response = client.chat.completions.create(
+                model=config['llm_model'],
+                messages=messages,
+                temperature=0.7,
+                schema=schema
+            )
+        else:
+            response = client.chat.completions.create(
+                model=config['llm_model'],
+                messages=messages,
+                temperature=0.7
+            )
 
         return response.choices[0].message.content.strip()
     except Exception as e:
