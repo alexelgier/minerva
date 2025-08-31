@@ -27,25 +27,24 @@ def identify_comment_points(narrative, glossary):
 
 def parse_points_and_questions(response):
     """Parse the LLM response to extract fragments and questions."""
-    lines = response.split('\n')
     points = []
     current_fragment = None
     current_question = None
+    in_fragment = False
 
-    for line in lines:
+    for line in response.split('\n'):
         line = line.strip()
-        if line.startswith('**Fragmen'):
+        if line.startswith('**Fragment'):
             if current_fragment and current_question:
                 points.append((current_fragment, current_question))
-            current_fragment = line.replace('**Fragmento:**', '').strip().strip('"')
-            current_question = None
-        elif line.startswith('**Pregunta:**'):
-            current_question = line.replace('**Pregunta:**', '').strip().strip('"')
-        elif current_fragment and not current_question and line and not line.startswith('-'):
+            current_fragment = line
+            in_fragment = True
+        elif in_fragment and line:
             current_question = line
-
-    if current_fragment and current_question:
-        points.append((current_fragment, current_question))
+            points.append((current_fragment, current_question))
+            in_fragment = False
+            current_fragment = None
+            current_question = None
 
     return points
 
