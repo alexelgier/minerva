@@ -18,13 +18,10 @@ def identify_comment_points(narrative, glossary):
             glossary_context += f"- {note}: {concept}\n"
 
     message = IDENTIFY_COMMENTS_USER_PROMPT.format(
-        glossary_context=glossary_context,
+        glossary=glossary_context,
         narrative=narrative
     )
-
-    schema = {"type": "array", "items": {"type": "object", "properties": {"Fragment": {"type": "string"},
-                                                                          "Question": {"type": "string"}}}}
-    response = call_llm(message, IDENTIFY_COMMENTS_SYSTEM_PROMPT, schema)
+    response = call_llm(message, IDENTIFY_COMMENTS_SYSTEM_PROMPT)
     return parse_points_and_questions(response)
 
 
@@ -37,7 +34,7 @@ def parse_points_and_questions(response):
 
     for line in lines:
         line = line.strip()
-        if line.startswith('**Fragmento:**'):
+        if line.startswith('**Fragmen'):
             if current_fragment and current_question:
                 points.append((current_fragment, current_question))
             current_fragment = line.replace('**Fragmento:**', '').strip().strip('"')
