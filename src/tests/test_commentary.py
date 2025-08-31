@@ -8,8 +8,10 @@ class TestCommentary(unittest.TestCase):
         pass
 
     def test_parse_points_and_questions(self):
-        # test implementation
-        pass
+        response = "Some response"
+        points, questions = parse_points_and_questions(response)
+        self.assertIsNotNone(points)
+        self.assertIsNotNone(questions)
 
     def test_interact_with_questions(self):
         # test implementation
