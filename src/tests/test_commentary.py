@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from ..Minerva/src/commentary import identify_comment_points, parse_points_and_questions, interact_with_questions, generate_comments, generate_general_comment, insert_general_comment, review_comments
+from src.Minerva.commentary import identify_comment_points, parse_points_and_questions, interact_with_questions, generate_comments, generate_general_comment, insert_general_comment, review_comments
 
 class TestCommentary(unittest.TestCase):
     def test_identify_comment_points(self):
