@@ -8,7 +8,6 @@ from sentence_transformers import SentenceTransformer
 import markdown
 from datetime import datetime
 
-
 class ObsidianRAG:
     def __init__(self, vault_path: str, collection_name: str = "obsidian_notes"):
         self.vault_path = Path(vault_path)
@@ -97,15 +96,24 @@ class ObsidianRAG:
                             chunks = self.chunk_content(note_data['plain_content'])
                             for i, chunk in enumerate(chunks):
                                 documents.append(chunk)
-                                metadata = note_data.copy()
-                                metadata['chunk_index'] = i
-                                metadata['total_chunks'] = len(chunks)
+                                metadata = {
+                                    'file_name': note_data['file_name'],
+                                    'chunk_index': i,
+                                    'total_chunks': len(chunks),
+                                    'tags': ','.join(note_data.get('tags', [])),
+                                    'modified_time': note_data['modified_time']
+                                }
                                 metadatas.append(metadata)
                                 ids.append(f"{note_data['relative_path']}_{i}")
                         else:
                             # Store whole note
                             documents.append(note_data['plain_content'])
-                            metadatas.append(note_data)
+                            metadata = {
+                                'file_name': note_data['file_name'],
+                                'tags': ','.join(note_data.get('tags', [])),
+                                'modified_time': note_data['modified_time']
+                            }
+                            metadatas.append(metadata)
                             ids.append(note_data['relative_path'])
 
                     except Exception as e:
@@ -139,7 +147,7 @@ class ObsidianRAG:
                 'metadata': results['metadatas'][0][i],
                 'distance': results['distances'][0][i],
                 'file_name': results['metadatas'][0][i]['file_name'],
-                'file_path': results['metadatas'][0][i]['file_path'],
+                'file_path': results['metadatas'][0][i].get('file_path', ''),
                 'tags': results['metadatas'][0][i].get('tags', []),
                 'wikilinks': results['metadatas'][0][i].get('wikilinks', [])
             })
@@ -153,7 +161,7 @@ class ObsidianRAG:
         matching_results = []
 
         for i, metadata in enumerate(all_results['metadatas']):
-            note_tags = metadata.get('tags', [])
+            note_tags = metadata.get('tags', '').split(',')
             if any(tag in note_tags for tag in tags):
                 matching_results.append({
                     'content': all_results['documents'][i],
@@ -204,9 +212,13 @@ class ObsidianRAG:
 
                 for i, chunk in enumerate(chunks):
                     documents.append(chunk)
-                    metadata = note_data.copy()
-                    metadata['chunk_index'] = i
-                    metadata['total_chunks'] = len(chunks)
+                    metadata = {
+                        'file_name': note_data['file_name'],
+                        'chunk_index': i,
+                        'total_chunks': len(chunks),
+                        'tags': ','.join(note_data.get('tags', [])),
+                        'modified_time': note_data['modified_time']
+                    }
                     metadatas.append(metadata)
                     ids.append(f"{note_data['relative_path']}_{i}")
 
@@ -219,7 +231,6 @@ class ObsidianRAG:
 
             except Exception as e:
                 print(f"Error updating {file_path}: {e}")
-
 
 # Example usage
 if __name__ == "__main__":
