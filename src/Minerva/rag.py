@@ -67,6 +67,10 @@ class ObsidianRAG:
     def chunk_content(self, content: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
         """Split content into overlapping chunks for better retrieval."""
         words = content.split()
+        if not words:
+            print(f"Empty content found in file.")
+            return []  # Return empty list for empty content
+
         chunks = []
 
         for i in range(0, len(words), chunk_size - overlap):
@@ -74,6 +78,7 @@ class ObsidianRAG:
             if chunk.strip():
                 chunks.append(chunk.strip())
 
+        print(f"Chunked content: {chunks}")
         return chunks
 
     def index_vault(self, file_extensions: List[str] = ['.md'], chunk_notes: bool = True):
