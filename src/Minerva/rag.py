@@ -80,6 +80,21 @@ class ObsidianRAG:
         """Index all notes in the Obsidian vault."""
         print(f"Indexing vault: {self.vault_path}")
 
+        # 1. Count actual files
+        file_count = 0
+        file_sizes = []
+        for root, dirs, files in os.walk(self.vault_path):
+            for file in files:
+                if file.endswith('.md'):  # or whatever format
+                    file_path = os.path.join(root, file)
+                    size = os.path.getsize(file_path)
+                    file_sizes.append(size)
+                    file_count += 1
+
+        print(f"Files found: {file_count}")
+        print(f"Average file size: {sum(file_sizes) / len(file_sizes)} bytes")
+        print(f"Files under 100 bytes: {sum(1 for s in file_sizes if s < 100)}")
+
         documents = []
         metadatas = []
         ids = []
