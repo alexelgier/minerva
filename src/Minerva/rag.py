@@ -1,320 +1,69 @@
 import os
-import json
-import re
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional
-import chromadb
-from sentence_transformers import SentenceTransformer
-import markdown
-from datetime import datetime
-import html
-import yaml  # Added for proper YAML parsing
-
+from typing import List, Dict
 
 class ObsidianRAG:
-    def __init__(self, vault_path: str, collection_name: str = "obsidian_notes"):
+    def __init__(self, vault_path: str):
         self.vault_path = Path(vault_path)
-        self.collection_name = collection_name
+        self.collection = None  # This would be initialized with your actual collection object
 
-        # Initialize embedding model
-        self.embedder = SentenceTransformer('jinaai/jina-embeddings-v2-base-es', trust_remote_code=True)
+    def index_vault(self):
+        """Index all notes in the vault."""
+        excluded_folders = ['.trash', '.idea', '.obsidian', '06 - Reference', 'Attachments']
 
-        # Initialize ChromaDB
-        self.client = chromadb.PersistentClient(path="./chroma_db")
-        self.collection = self.client.get_or_create_collection(
-            name=collection_name,
-            metadata={"hnsw:space": "cosine"}
-        )
-
-    def debug_search(self, query: str):
-        """Debug search by showing exact matches and embedding details."""
-        # Check for exact text matches
-        exact_matches = self.find_text_matches(query, case_sensitive=False)
-        print(f"Exact text matches for '{query}': {len(exact_matches)}")
-        for match in exact_matches[:3]:
-            print(f"File: {match['file_name']}")
-            print(f"Content snippet: {match['content'][:100]}...")
-            print()
-
-        # Check the query embedding
-        query_embedding = self.embedder.encode([query])
-        print(f"Query embedding shape: {query_embedding.shape}")
-        print(f"Query embedding sample: {query_embedding[0][:5]}")
-
-    def parse_obsidian_note(self, file_path: Path) -> Optional[Dict]:
-        """Parse an Obsidian markdown file and extract metadata with better error handling."""
-        try:
-            # Try multiple encodings to handle different file formats
-            encodings = ['utf-8', 'latin-1', 'cp1252']
-            content = None
-
-            for encoding in encodings:
+        for file_path in self.vault_path.rglob('*'):
+            if file_path.is_file() and not any(folder in str(file_path) for folder in excluded_folders):
                 try:
-                    with open(file_path, 'r', encoding=encoding) as f:
-                        content = f.read()
-                    break
-                except UnicodeDecodeError:
-                    continue
+                    note_data = self.parse_obsidian_note(file_path)
+                    if not note_data:
+                        continue
 
-            if content is None:
-                print(f"Could not read {file_path} with any encoding")
-                return None
+                    chunks = self.chunk_content(note_data['plain_content'])
 
-            # Extract frontmatter (YAML metadata)
-            frontmatter = {}
-            if content.startswith('---'):
-                try:
-                    parts = content.split('---', 2)
-                    if len(parts) >= 3:
-                        _, fm_content, content = parts
-                        # Use proper YAML parsing
-                        frontmatter = yaml.safe_load(fm_content) or {}
-                except (yaml.YAMLError, ValueError) as e:
-                    print(f"Error parsing frontmatter in {file_path}: {e}")
-                    # Continue without frontmatter
+                    documents = []
+                    metadatas = []
+                    ids = []
 
-            # Extract wikilinks [[Note Name|Alias]] or [[Note Name#Heading]]
-            wikilinks = re.findall(r'\[\[([^\]\|#]+)(?:[#\|][^\]])*\]\]', content)
+                    for i, chunk in enumerate(chunks):
+                        documents.append(chunk)
+                        metadata = {
+                            'file_name': note_data['file_name'],
+                            'file_path': note_data['relative_path'],
+                            'chunk_index': i,
+                            'total_chunks': len(chunks),
+                            'tags': ','.join(note_data.get('tags', [])),
+                            'wikilinks': ','.join(note_data.get('wikilinks', [])),
+                            'modified_time': note_data['modified_time']
+                        }
+                        metadatas.append(metadata)
+                        ids.append(f"{note_data['relative_path']}_{i}")
 
-            # Extract tags #tag or #tag/subtag
-            tags = re.findall(r'#([a-zA-ZÀ-ÿ0-9_\-/]+)', content)
+                    if documents:
+                        self.collection.add(
+                            documents=documents,
+                            metadatas=metadatas,
+                            ids=ids
+                        )
+                        print(f"✅ Indexed {file_path.name}")
+                except Exception as e:
+                    print(f"Error indexing {file_path}: {e}")
 
-            # Convert markdown to plain text for better embedding
-            # First remove code blocks to avoid processing them as markdown
-            content_no_code = re.sub(r'```.*?```', '', content, flags=re.DOTALL)
-            content_no_code = re.sub(r'`.*?`', '', content_no_code)
+    def parse_obsidian_note(self, file_path: Path):
+        """Parse an Obsidian note and return its content."""
+        # Implement your parsing logic here
+        pass
 
-            # Convert markdown to HTML then to plain text
-            html_content = markdown.markdown(content_no_code, extensions=['extra'])
-            plain_content = html.unescape(re.sub('<[^<]+?>', '', html_content)).strip()
+    def chunk_content(self, content: str) -> List[str]:
+        """Chunk the content into smaller pieces."""
+        # Implement your chunking logic here
+        pass
 
-            # Get file stats
-            stat = file_path.stat()
-            modified_time = datetime.fromtimestamp(stat.st_mtime).isoformat()
-            created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-
-            return {
-                'file_path': str(file_path),
-                'file_name': file_path.stem,
-                'content': content,
-                'plain_content': plain_content,
-                'frontmatter': frontmatter,
-                'wikilinks': wikilinks,
-                'tags': tags,
-                'modified_time': modified_time,
-                'created_time': frontmatter.get('created', created_time),
-                'relative_path': str(file_path.relative_to(self.vault_path))
-            }
-
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
-            return None
-
-    def chunk_content(self, content: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-        """Split content into overlapping chunks for better retrieval."""
-        if not content or not content.strip():
-            return []
-
-        # Split into sentences first for better chunk boundaries
-        sentences = re.split(r'(?<=[.!?])\s+', content)
-        chunks = []
-        current_chunk = []
-        current_length = 0
-
-        for sentence in sentences:
-            sentence_length = len(sentence.split())
-            # If adding this sentence would exceed chunk size, finalize current chunk
-            if current_length + sentence_length > chunk_size and current_chunk:
-                chunks.append(' '.join(current_chunk))
-                # Keep overlap sentences for next chunk
-                if overlap > 0:
-                    # Calculate how many sentences to keep for overlap
-                    overlap_count = 0
-                    overlap_length = 0
-                    for i in range(len(current_chunk) - 1, -1, -1):
-                        sent = current_chunk[i]
-                        sent_length = len(sent.split())
-                        if overlap_length + sent_length <= overlap:
-                            overlap_length += sent_length
-                            overlap_count += 1
-                        else:
-                            break
-                    current_chunk = current_chunk[-overlap_count:] if overlap_count > 0 else []
-                    current_length = overlap_length
-                else:
-                    current_chunk = []
-                    current_length = 0
-
-            current_chunk.append(sentence)
-            current_length += sentence_length
-
-        # Add the last chunk if it exists
-        if current_chunk:
-            chunks.append(' '.join(current_chunk))
-
-        return chunks
-
-    def index_vault(self, file_extensions: List[str] = ['.md'], chunk_notes: bool = True):
-        """Index all notes in the Obsidian vault with progress tracking."""
-        print(f"Indexing vault: {self.vault_path}")
-
-        documents = []
-        metadatas = []
-        ids = []
-        processed_files = 0
-        error_files = 0
-
-        # Find all markdown files
-        for ext in file_extensions:
-            file_list = list(self.vault_path.rglob(f'*{ext}'))
-            print(f"Found {len(file_list)} {ext} files")
-
-            for file_path in file_list:
-                if file_path.is_file():
-                    try:
-                        note_data = self.parse_obsidian_note(file_path)
-                        if not note_data:
-                            error_files += 1
-                            continue
-
-                        if chunk_notes:
-                            # Split into chunks
-                            chunks = self.chunk_content(note_data['plain_content'])
-                            for i, chunk in enumerate(chunks):
-                                documents.append(chunk)
-                                metadata = {
-                                    'file_name': note_data['file_name'],
-                                    'file_path': note_data['relative_path'],
-                                    'chunk_index': i,
-                                    'total_chunks': len(chunks),
-                                    'tags': ','.join(note_data.get('tags', [])),
-                                    'wikilinks': ','.join(note_data.get('wikilinks', [])),
-                                    'modified_time': note_data['modified_time']
-                                }
-                                metadatas.append(metadata)
-                                ids.append(f"{note_data['relative_path']}_{i}")
-                        else:
-                            # Store whole note
-                            documents.append(note_data['plain_content'])
-                            metadata = {
-                                'file_name': note_data['file_name'],
-                                'file_path': note_data['relative_path'],
-                                'tags': ','.join(note_data.get('tags', [])),
-                                'wikilinks': ','.join(note_data.get('wikilinks', [])),
-                                'modified_time': note_data['modified_time']
-                            }
-                            metadatas.append(metadata)
-                            ids.append(note_data['relative_path'])
-
-                        processed_files += 1
-                        if processed_files % 100 == 0:
-                            print(f"Processed {processed_files} files...")
-
-                    except Exception as e:
-                        print(f"Error processing {file_path}: {e}")
-                        error_files += 1
-
-        # Add to vector store
-        if documents:
-            print(f"Adding {len(documents)} document chunks to vector store...")
-            # Add in batches to avoid memory issues
-            batch_size = 100
-            for i in range(0, len(documents), batch_size):
-                end_idx = min(i + batch_size, len(documents))
-                self.collection.add(
-                    documents=documents[i:end_idx],
-                    metadatas=metadatas[i:end_idx],
-                    ids=ids[i:end_idx]
-                )
-                print(f"Added batch {i // batch_size + 1}/{(len(documents) - 1) // batch_size + 1}")
-
-            print(f"✅ Successfully indexed {processed_files} files with {len(documents)} chunks")
-            if error_files > 0:
-                print(f"❌ Failed to process {error_files} files")
-        else:
-            print("No documents found to index")
-
-    def search(self, query: str, n_results: int = 5, filter_dict: Dict = None) -> List[Dict]:
-        """Search the vault using semantic similarity."""
+    def search(self, query: str, n_results: int = 5):
+        """Search for notes matching the query."""
         try:
-            # Generate query embedding
-            query_embedding = self.embedder.encode([query]).tolist()
-
             results = self.collection.query(
-                query_embeddings=query_embedding,
+                query_vector=self.encode_query(query),
                 n_results=n_results,
-                where=filter_dict
-            )
-
-            # Format results
-            search_results = []
-            for i in range(len(results['ids'][0])):
-                metadata = results['metadatas'][0][i]
-                search_results.append({
-                    'content': results['documents'][0][i],
-                    'metadata': metadata,
-                    'distance': results['distances'][0][i],
-                    'file_name': metadata['file_name'],
-                    'file_path': metadata.get('file_path', ''),
-                    'tags': metadata.get('tags', '').split(','),
-                    'wikilinks': metadata.get('wikilinks', '').split(',')
-                })
-
-            return search_results
-
-        except Exception as e:
-            print(f"Error during search: {e}")
-            return []
-
-    def search_by_tags(self, tags: List[str], n_results: int = 10) -> List[Dict]:
-        """Search notes by tags using ChromaDB's filtering capabilities."""
-        try:
-            # ChromaDB supports filtering with the "where" parameter
-            tag_filters = [{"tags": {"$contains": tag}} for tag in tags]
-
-            results = self.collection.query(
-                query_texts=[""],  # Empty query to get all documents that match the filter
-                n_results=n_results,
-                where={"$or": tag_filters} if len(tags) > 1 else tag_filters[0]
-            )
-
-            formatted_results = []
-            for i in range(len(results['ids'][0])):
-                metadata = results['metadatas'][0][i]
-                formatted_results.append({
-                    'content': results['documents'][0][i],
-                    'metadata': metadata,
-                    'file_name': metadata['file_name'],
-                    'tags': metadata.get('tags', '').split(','),
-                    'distance': results['distances'][0][i] if results['distances'] else 0
-                })
-
-            return formatted_results
-
-        except Exception as e:
-            print(f"Error during tag search: {e}")
-            # Fallback to manual filtering if ChromaDB query fails
-            all_results = self.collection.get()
-            matching_results = []
-
-            for i, metadata in enumerate(all_results['metadatas']):
-                note_tags = metadata.get('tags', '').split(',')
-                if any(tag in note_tags for tag in tags):
-                    matching_results.append({
-                        'content': all_results['documents'][i],
-                        'metadata': metadata,
-                        'file_name': metadata['file_name'],
-                        'tags': note_tags
-                    })
-
-            return matching_results[:n_results]
-
-    def get_linked_notes(self, note_name: str) -> List[Dict]:
-        """Find notes that link to a specific note using metadata filtering."""
-        try:
-            results = self.collection.query(
-                query_texts=[""],  # Empty query to use only the filter
-                n_results=20,
                 where={"wikilinks": {"$contains": note_name}}
             )
 
@@ -406,7 +155,6 @@ class ObsidianRAG:
 
         return matches
 
-
 # Example usage with enhanced debugging
 if __name__ == "__main__":
     # Initialize RAG system
@@ -416,4 +164,53 @@ if __name__ == "__main__":
     # Index your vault
     rag.index_vault()
 
-    rag.debug_search("pelea con Ana")
+    # 1. First try semantic search
+    print("=== Semantic Search for 'pelea con Ana' ===")
+    results = rag.search("pelea con Ana", n_results=10)
+    for i, r in enumerate(results):
+        print(f"{i + 1}. 📄 {r['file_name']} (distance: {r['distance']:.4f})")
+        print(f"   🏷️  Tags: {r['tags']}")
+        print(f"   📝 {r['content'][:200]}...")
+        print()
+
+    # 2. If semantic search doesn't work, try exact text matching
+    if not results:
+        print("No results from semantic search, trying exact text matching...")
+        exact_matches = rag.find_text_matches("pelea con Ana", case_sensitive=False)
+        print(f"Found {len(exact_matches)} exact matches:")
+        for i, match in enumerate(exact_matches):
+            print(f"{i + 1}. 📄 {match['file_name']}")
+            print(f"   📝 {match['content'][:200]}...")
+            print()
+
+    # 3. Check what's actually in the database
+    print("=== Database Contents Sample ===")
+    all_data = rag.collection.get()
+    print(f"Total chunks in database: {len(all_data['ids'])}")
+
+    # Show a few samples
+    for i in range(min(3, len(all_data['ids']))):
+        print(f"Chunk {i + 1}:")
+        print(f"  ID: {all_data['ids'][i]}")
+        print(f"  Content: {all_data['documents'][i][:100]}...")
+        print(f"  Metadata: {json.dumps(all_data['metadatas'][i], indent=2)}")
+        print()
+
+    # 4. Search examples
+    print("=== Semantic Search Examples ===")
+    results = rag.search("productivity and goal setting", n_results=3)
+    for r in results:
+        print(f"📄 {r['file_name']} (distance: {r['distance']:.4f})")
+        print(f"🏷️  Tags: {r['tags']}")
+        print(f"📝 {r['content'][:200]}...")
+        print("---")
+
+    print("\n=== Tag Search ===")
+    tag_results = rag.search_by_tags(["productivity", "goals"])
+    for r in tag_results:
+        print(f"📄 {r['file_name']} - Tags: {r['tags']}")
+
+    print("\n=== Linked Notes ===")
+    linked = rag.get_linked_notes("Daily Notes")
+    for r in linked:
+        print(f"📄 {r['file_name']} links to 'Daily Notes'")
