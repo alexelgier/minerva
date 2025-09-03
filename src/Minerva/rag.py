@@ -6,6 +6,14 @@ class ObsidianRAG:
     def __init__(self, vault_path: str):
         self.vault_path = Path(vault_path)
         self.collection = None  # This would be initialized with your actual collection object
+        self._initialize_collection()
+
+    def _initialize_collection(self):
+        """Initialize the collection if it's not already set."""
+        if self.collection is None:
+            # Replace this with your actual collection initialization logic
+            print("Initializing collection...")
+            self.collection = {}  # Placeholder for actual collection
 
     def index_vault(self):
         """Index all notes in the vault."""
@@ -138,6 +146,7 @@ class ObsidianRAG:
         Find exact text matches across all documents (bypassing vector search).
         Useful for debugging cases where semantic search doesn't find expected results.
         """
+        self._initialize_collection()
         all_data = self.collection.get()
         matches = []
 
