@@ -41,8 +41,8 @@ class PartitionType(str, Enum):
 # ----------------------------
 
 class Node(BaseModel, ABC):
-    """Abstract entity. All nodes get at least these fields."""
-    partition: PartitionType = Field(..., description='partition of the graph')
+    """Entidad abstracta. Todos los nodos tienen al menos estos campos."""
+    partition: PartitionType = Field(..., description='partición del grafo')
     uuid: str = Field(default_factory=lambda: str(uuid4()))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -52,27 +52,27 @@ class Node(BaseModel, ABC):
 
 
 class Entity(Node, ABC):
-    name: str = Field(..., description='name of the entity')
-    type: EntityType = Field(..., description="Entity type (Person, Event, etc)")
-    summary_short: str = Field(..., description="Summary of the entity. Max 30 words")
-    summary: str = Field(..., description="Summary of the entity. Max 300 words")
+    name: str = Field(..., description='nombre de la entidad')
+    type: EntityType = Field(..., description="Tipo de entidad (Persona, Evento, etc)")
+    summary_short: str = Field(..., description="Resumen de la entidad. Máximo 30 palabras")
+    summary: str = Field(..., description="Resumen de la entidad. Máximo 300 palabras")
     partition: Literal[PartitionType.DOMAIN] = Field(PartitionType.DOMAIN.value,
-                                                     description="Partition type (always DOMAIN)")
-    name_embedding: list[float] | None = Field(default=None, description='embedding of the name')
+                                                     description="Tipo de partición (siempre DOMAIN)")
+    name_embedding: list[float] | None = Field(default=None, description='embedding del nombre')
 
 
 class Document(Node, ABC):
-    type: DocumentType = Field(..., description="Document type")
-    text: str = Field(..., description="The original text of the document")
+    type: DocumentType = Field(..., description="Tipo de documento")
+    text: str = Field(..., description="El texto original del documento")
     partition: Literal[PartitionType.LEXICAL] = Field(PartitionType.LEXICAL.value,
-                                                      description="Partition type (always LEXICAL)")
+                                                      description="Tipo de partición (siempre LEXICAL)")
 
 
 class Chunk(Node, ABC):
-    text: str = Field(..., description="The text of the chunk")
+    text: str = Field(..., description="El texto del fragmento")
     partition: Literal[PartitionType.LEXICAL] = Field(PartitionType.LEXICAL.value,
-                                                      description="Partition type (always LEXICAL)")
-    embedding: list[float] | None = Field(default=None, description='embedding of the chunk')
+                                                      description="Tipo de partición (siempre LEXICAL)")
+    embedding: list[float] | None = Field(default=None, description='embedding del fragmento')
 
 
 # ----------------------------
@@ -161,69 +161,69 @@ class ResourceStatus(str, Enum):
 # ----------------------------
 
 class Person(Entity):
-    """Represents an individual person."""
-    type: Literal[EntityType.PERSON] = Field(EntityType.PERSON.value, description="Entity type (always PERSON)")
-    occupation: str | None = Field(default=None, description="Job title or profession")
-    birth_date: date | None = Field(default=None, description="Date of birth")
+    """Representa a una persona individual."""
+    type: Literal[EntityType.PERSON] = Field(EntityType.PERSON.value, description="Tipo de entidad (siempre PERSON)")
+    occupation: str | None = Field(default=None, description="Cargo o profesión")
+    birth_date: date | None = Field(default=None, description="Fecha de nacimiento")
 
 
 class Emotion(Entity):
-    """Represents a distinct type of emotion that can be felt"""
-    type: Literal[EntityType.EMOTION] = Field(EntityType.EMOTION.value, description="Entity type (always EMOTION)")
+    """Representa un tipo distinto de emoción que se puede sentir"""
+    type: Literal[EntityType.EMOTION] = Field(EntityType.EMOTION.value, description="Tipo de entidad (siempre EMOTION)")
 
 
 class Feeling(Entity):
-    """Reified relationship: Person experiences Emotion or Thought about something"""
-    timestamp: datetime = Field(..., description="When this feeling occurred")
-    type: Literal[EntityType.FEELING] = Field(EntityType.FEELING.value, description="Entity type (always FEELING)")
-    intensity: int | None = Field(default=None, description="Intensity level (1-10)", ge=1, le=10)
-    duration: timedelta | None = Field(default=None, description="How long the feeling lasted")
+    """Relación reificada: Una persona experimenta una emoción o pensamiento sobre algo"""
+    timestamp: datetime = Field(..., description="Cuándo ocurrió este sentimiento")
+    type: Literal[EntityType.FEELING] = Field(EntityType.FEELING.value, description="Tipo de entidad (siempre FEELING)")
+    intensity: int | None = Field(default=None, description="Nivel de intensidad (1-10)", ge=1, le=10)
+    duration: timedelta | None = Field(default=None, description="Cuánto duró el sentimiento")
 
 
 class Event(Entity):
-    """Represents a notable occurrence or activity that happened at a specific time."""
-    category: str = Field(..., description="Category of event (meeting, workout, etc)")
-    date: datetime = Field(..., description="When the event occurred")
-    type: Literal[EntityType.EVENT] = Field(EntityType.EVENT.value, description="Entity type (always EVENT)")
-    duration: timedelta | None = Field(default=None, description="Duration of the event (e.g., 2 hours, 30 minutes)")
-    location: str | None = Field(default=None, description="Where the event took place")
+    """Representa un suceso o actividad notable que ocurrió en un momento específico."""
+    category: str = Field(..., description="Categoría del evento (reunión, entrenamiento, etc)")
+    date: datetime = Field(..., description="Cuándo ocurrió el evento")
+    type: Literal[EntityType.EVENT] = Field(EntityType.EVENT.value, description="Tipo de entidad (siempre EVENT)")
+    duration: timedelta | None = Field(default=None, description="Duración del evento (p. ej., 2 horas, 30 minutos)")
+    location: str | None = Field(default=None, description="Dónde tuvo lugar el evento")
 
 
 class Project(Entity):
-    """Represents an ongoing initiative, goal, or multistep endeavor with trackable progress."""
-    type: Literal[EntityType.PROJECT] = Field(EntityType.PROJECT.value, description="Entity type (always PROJECT)")
-    status: ProjectStatus | None = Field(default=None, description="Current status of the project")
-    start_date: datetime | None = Field(default=None, description="Date when the project was started")
-    target_completion: datetime | None = Field(default=None, description="Target or expected completion date")
-    progress: float | None = Field(default=None, description="Completion percentage (0.0 to 100.0)", ge=0.0, le=100.0)
+    """Representa una iniciativa, objetivo o esfuerzo de varios pasos en curso con progreso rastreable."""
+    type: Literal[EntityType.PROJECT] = Field(EntityType.PROJECT.value, description="Tipo de entidad (siempre PROJECT)")
+    status: ProjectStatus | None = Field(default=None, description="Estado actual del proyecto")
+    start_date: datetime | None = Field(default=None, description="Fecha de inicio del proyecto")
+    target_completion: datetime | None = Field(default=None, description="Fecha de finalización objetivo o esperada")
+    progress: float | None = Field(default=None, description="Porcentaje de finalización (0.0 a 100.0)", ge=0.0, le=100.0)
 
 
 class Concept(Entity):
-    """Represents an atomic idea or concept in your zettelkasten knowledge system."""
-    title: str = Field(..., description="Concise title of the concept or idea")
-    analysis: str = Field(..., description="Your personal analysis, insights, and understanding of the concept")
-    type: Literal[EntityType.CONCEPT] = Field(EntityType.CONCEPT.value, description="Entity type (always CONCEPT)")
+    """Representa una idea o concepto atómico en tu sistema de conocimiento zettelkasten."""
+    title: str = Field(..., description="Título conciso del concepto o idea")
+    analysis: str = Field(..., description="Tu análisis personal, ideas y comprensión del concepto")
+    type: Literal[EntityType.CONCEPT] = Field(EntityType.CONCEPT.value, description="Tipo de entidad (siempre CONCEPT)")
 
 
 class Resource(Entity):
-    """Represents external content (books, articles, videos) that serve as a source of information or entertainment."""
-    title: str = Field(..., description="Title or name of the resource")
-    category: ResourceType = Field(..., description="Category of resource")
-    type: Literal[EntityType.RESOURCE] = Field(EntityType.RESOURCE.value, description="Entity type (always RESOURCE)")
-    url: str | None = Field(default=None, description="Web URL or location where the resource can be accessed")
-    quotes: List[str] | None = Field(default=None, description="Notable quotes or excerpts from the resource")
-    status: ResourceStatus | None = Field(default=None, description="Current consumption status")
-    author: str | None = Field(default=None, description="Creator or author of the resource")
+    """Representa contenido externo (libros, artículos, videos) que sirve como fuente de información o entretenimiento."""
+    title: str = Field(..., description="Título o nombre del recurso")
+    category: ResourceType = Field(..., description="Categoría del recurso")
+    type: Literal[EntityType.RESOURCE] = Field(EntityType.RESOURCE.value, description="Tipo de entidad (siempre RESOURCE)")
+    url: str | None = Field(default=None, description="URL web o ubicación donde se puede acceder al recurso")
+    quotes: List[str] | None = Field(default=None, description="Citas o extractos notables del recurso")
+    status: ResourceStatus | None = Field(default=None, description="Estado de consumo actual")
+    author: str | None = Field(default=None, description="Creador o autor del recurso")
 
 
 class JournalEntry(Document):
-    date: date = Field(..., description="Date of the journal entry")
+    date: date = Field(..., description="Fecha de la entrada del diario")
     type: Literal[DocumentType.JOURNAL_ENTRY] = Field(DocumentType.JOURNAL_ENTRY.value,
-                                                      description="Document type (always JOURNAL_ENTRY)")
-    entry_text: str | None = Field(default=None, description="The body text of the journal entry")
-    panas_pos: List[float] | None = Field(default=None, description="PANAS positive scores")
-    panas_neg: List[float] | None = Field(default=None, description="PANAS negative scores")
-    bpns: List[float] | None = Field(default=None, description="BPNS scores")
-    flourishing: List[float] | None = Field(default=None, description="Flourishing scores")
-    wake: datetime | None = Field(default=None, description="Datetime of waking up")
-    sleep: datetime | None = Field(default=None, description="Datetime of going to sleep")
+                                                      description="Tipo de documento (siempre JOURNAL_ENTRY)")
+    entry_text: str | None = Field(default=None, description="El texto principal de la entrada del diario")
+    panas_pos: List[float] | None = Field(default=None, description="Puntuaciones positivas PANAS")
+    panas_neg: List[float] | None = Field(default=None, description="Puntuaciones negativas PANAS")
+    bpns: List[float] | None = Field(default=None, description="Puntuaciones BPNS")
+    flourishing: List[float] | None = Field(default=None, description="Puntuaciones de florecimiento")
+    wake: datetime | None = Field(default=None, description="Fecha y hora de despertar")
+    sleep: datetime | None = Field(default=None, description="Fecha y hora de dormir")
