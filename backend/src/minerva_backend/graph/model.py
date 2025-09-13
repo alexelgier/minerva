@@ -1,12 +1,15 @@
-from dataclasses import dataclass
+from __future__ import annotations
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import List, Dict, Optional
-
+from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
 
-class EntityType(Enum):
+# ----------------------------
+# Core entity + relationship types
+# ----------------------------
+
+class EntityType(str, Enum):
     PERSON = "Person"
     FEELING = "Feeling"
     EMOTION = "Emotion"
@@ -17,7 +20,7 @@ class EntityType(Enum):
     JOURNAL_ENTRY = "JournalEntry"
 
 
-class RelationshipType(Enum):
+class RelationshipType(str, Enum):
     ENTERTAINS = "ENTERTAINS"
     PARTICIPATES_IN = "PARTICIPATES_IN"
     WORKS_ON = "WORKS_ON"
@@ -29,6 +32,82 @@ class RelationshipType(Enum):
     TEACHES = "TEACHES"
     MENTIONS = "MENTIONS"
     CONTAINS = "CONTAINS"
+
+
+# ----------------------------
+# Base Entity
+# ----------------------------
+
+class Entity(BaseModel):
+    """Generic entity. All nodes get at least these fields."""
+    id: Optional[str] = Field(
+        None, description="Internal unique ID or external UUID"
+    )
+    type: EntityType = Field(..., description="Entity type (Person, Event, etc.)")
+    summary_short: str = Field(..., description="Summary of the entity. Max 30 words.")
+    summary: str = Field(..., description="Summary of the entity. Max 300 words.")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        extra = "allow"  # allow schema evolution (new fields in future)
+        use_enum_values = True
+
+
+# ----------------------------
+# Enums
+# ----------------------------
+
+class EmotionType(str, Enum):
+    ANGER = "anger"
+    ANNOYANCE = "annoyance"
+    CONTEMPT = "contempt"
+    DISGUST = "disgust"
+    IRRITATION = "irritation"
+    ANXIETY = "anxiety"
+    EMBARRASSMENT = "embarrassment"
+    FEAR = "fear"
+    HELPLESSNESS = "helplessness"
+    POWERLESSNESS = "powerlessness"
+    WORRY = "worry"
+    DOUBT = "doubt"
+    ENVY = "envy"
+    FRUSTRATION = "frustration"
+    GUILT = "guilt"
+    SHAME = "shame"
+    CONFUSION = "confusion"
+    BOREDOM = "boredom"
+    DESPAIR = "despair"
+    DISAPPOINTMENT = "disappointment"
+    HURT = "hurt"
+    SADNESS = "sadness"
+    LONELINESS = "loneliness"
+    STRESS = "stress"
+    TENSION = "tension"
+    AMUSEMENT = "amusement"
+    DELIGHT = "delight"
+    ELATION = "elation"
+    EXCITEMENT = "excitement"
+    HAPPINESS = "happiness"
+    JOY = "joy"
+    PLEASURE = "pleasure"
+    SATISFACTION = "satisfaction"
+    AFFECTION = "affection"
+    EMPATHY = "empathy"
+    LOVE = "love"
+    PRIDE = "pride"
+    GRATITUDE = "gratitude"
+    HOPE = "hope"
+    TRUST = "trust"
+    ANTICIPATION = "anticipation"
+    CALMNESS = "calmness"
+    CONTENTMENT = "contentment"
+    RELAXATION = "relaxation"
+    RELIEF = "relief"
+    SERENITY = "serenity"
+    AWE = "awe"
+    NOSTALGIA = "nostalgia"
+    INTEREST = "interest"
+    SURPRISE = "surprise"
 
 
 class ProjectStatus(str, Enum):
@@ -55,34 +134,44 @@ class ResourceStatus(str, Enum):
     ABANDONED = "ABANDONED"
 
 
-class Person(BaseModel):
+# ----------------------------
+# Specific entities (all extend Entity)
+# ----------------------------
+
+class Person(Entity):
     """Represents an individual person."""
+    type: Literal[EntityType.PERSON] = Field(EntityType.PERSON.value, description="Entity type (always PERSON)")
     full_name: str = Field(..., description="Full name of the person")
-    occupation: Optional[str] = Field(None, description="Current job title or profession")
-    birth_date: Optional[date] = Field(None, description="Date of birth (YYYY-MM-DD)")
+    occupation: Optional[str] = Field(None, description="Job title or profession")
+    birth_date: Optional[date] = Field(None, description="Date of birth")
 
 
-class Emotion(BaseModel):
-    """Represents a distinct type of emotion that can be felt (e.g., happiness, anxiety, frustration, grief)"""
+class Emotion(Entity):
+    """Represents a distinct type of emotion that can be felt"""
+    type: EntityType = Field(default=EntityType.EMOTION, const=True)
+    emotion_name: str = Field(..., description="Name of the emotion (e.g. joy, anger)")
 
 
-class Feeling(BaseModel):
+class Feeling(Entity):
     """Reified relationship: Person experiences Emotion or Thought about something"""
-    intensity: int = Field(..., description="Intensity level (1-10)")
+    type: EntityType = Field(default=EntityType.FEELING, const=True)
+    intensity: Optional[int] = Field(..., description="Intensity level (1-10)")
     timestamp: datetime = Field(..., description="When this feeling occurred")
     duration: Optional[timedelta] = Field(None, description="How long the feeling lasted")
 
 
-class Event(BaseModel):
+class Event(Entity):
     """Represents a notable occurrence or activity that happened at a specific time."""
-    type: str = Field(..., description="Category of event (e.g., practice, study, meeting, exercise)")
-    date: datetime = Field(..., description="Date and time when the event occurred")
+    type: EntityType = Field(EntityType.EVENT)
+    category: str = Field(..., description="Category of event (meeting, workout, etc.)")
+    date: datetime = Field(..., description="When the event occurred")
     duration: Optional[timedelta] = Field(None, description="Duration of the event (e.g., 2 hours, 30 minutes)")
     location: Optional[str] = Field(None, description="Where the event took place")
 
 
-class Project(BaseModel):
+class Project(Entity):
     """Represents an ongoing initiative, goal, or multistep endeavor with trackable progress."""
+    type: EntityType = Field(default=EntityType.PROJECT, const=True)
     project_name: str = Field(..., description="Name or title of the project")
     status: Optional[ProjectStatus] = Field(None, description="Current status of the project")
     start_date: Optional[datetime] = Field(None, description="Date when the project was started")
@@ -90,13 +179,13 @@ class Project(BaseModel):
     progress: Optional[float] = Field(None, description="Completion percentage (0.0 to 100.0)")
 
 
-class Concept(BaseModel):
+class Concept(Entity):
     """Represents an atomic idea or concept in your zettelkasten knowledge system."""
     title: str = Field(..., description="Concise title of the concept or idea")
     analysis: str = Field(..., description="Your personal analysis, insights, and understanding of the concept")
 
 
-class Resource(BaseModel):
+class Resource(Entity):
     """Represents external content (books, articles, videos) that serve as a source of information or entertainment."""
     title: str = Field(..., description="Title or name of the resource")
     type: ResourceType = Field(..., description="Category of resource")
@@ -106,13 +195,14 @@ class Resource(BaseModel):
     author: Optional[str] = Field(None, description="Creator or author of the resource")
 
 
-@dataclass
-class JournalEntry:
+class JournalEntry(Entity):
     id: str
     date: date
-    word_count: int
-    processing_status: str = "pending"
-    psychological_metrics: Dict = None
-    sleep_data: Dict = None
-    extraction_confidence: float = None
-    curation_completed: datetime = None
+    text: str
+    fulltext: str
+    panas_pos: List = None
+    panas_neg: List = None
+    bpns: List = None
+    flourishing: List = None
+    wake: datetime = None
+    sleep: datetime = None
