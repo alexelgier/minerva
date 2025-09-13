@@ -148,13 +148,13 @@ class Person(Entity):
 
 class Emotion(Entity):
     """Represents a distinct type of emotion that can be felt"""
-    type: EntityType = Field(default=EntityType.EMOTION, const=True)
+    type: Literal[EntityType.EMOTION] = Field(EntityType.EMOTION.value, description="Entity type (always EMOTION)")
     emotion_name: str = Field(..., description="Name of the emotion (e.g. joy, anger)")
 
 
 class Feeling(Entity):
     """Reified relationship: Person experiences Emotion or Thought about something"""
-    type: EntityType = Field(default=EntityType.FEELING, const=True)
+    type: Literal[EntityType.FEELING] = Field(EntityType.FEELING.value, description="Entity type (always FEELING)")
     intensity: Optional[int] = Field(..., description="Intensity level (1-10)")
     timestamp: datetime = Field(..., description="When this feeling occurred")
     duration: Optional[timedelta] = Field(None, description="How long the feeling lasted")
@@ -162,7 +162,7 @@ class Feeling(Entity):
 
 class Event(Entity):
     """Represents a notable occurrence or activity that happened at a specific time."""
-    type: EntityType = Field(EntityType.EVENT)
+    type: Literal[EntityType.EVENT] = Field(EntityType.EVENT.value, description="Entity type (always EVENT)")
     category: str = Field(..., description="Category of event (meeting, workout, etc.)")
     date: datetime = Field(..., description="When the event occurred")
     duration: Optional[timedelta] = Field(None, description="Duration of the event (e.g., 2 hours, 30 minutes)")
@@ -171,7 +171,7 @@ class Event(Entity):
 
 class Project(Entity):
     """Represents an ongoing initiative, goal, or multistep endeavor with trackable progress."""
-    type: EntityType = Field(default=EntityType.PROJECT, const=True)
+    type: Literal[EntityType.PROJECT] = Field(EntityType.PROJECT.value, description="Entity type (always PROJECT)")
     project_name: str = Field(..., description="Name or title of the project")
     status: Optional[ProjectStatus] = Field(None, description="Current status of the project")
     start_date: Optional[datetime] = Field(None, description="Date when the project was started")
@@ -181,14 +181,16 @@ class Project(Entity):
 
 class Concept(Entity):
     """Represents an atomic idea or concept in your zettelkasten knowledge system."""
+    type: Literal[EntityType.CONCEPT] = Field(EntityType.CONCEPT.value, description="Entity type (always CONCEPT)")
     title: str = Field(..., description="Concise title of the concept or idea")
     analysis: str = Field(..., description="Your personal analysis, insights, and understanding of the concept")
 
 
 class Resource(Entity):
     """Represents external content (books, articles, videos) that serve as a source of information or entertainment."""
+    type: Literal[EntityType.RESOURCE] = Field(EntityType.RESOURCE.value, description="Entity type (always RESOURCE)")
     title: str = Field(..., description="Title or name of the resource")
-    type: ResourceType = Field(..., description="Category of resource")
+    category: ResourceType = Field(..., description="Category of resource")
     url: Optional[str] = Field(None, description="Web URL or location where the resource can be accessed")
     quotes: Optional[List[str]] = Field(None, description="Notable quotes or excerpts from the resource")
     status: Optional[ResourceStatus] = Field(None, description="Current consumption status")
@@ -196,6 +198,7 @@ class Resource(Entity):
 
 
 class JournalEntry(Entity):
+    type: Literal[EntityType.JOURNAL_ENTRY] = Field(EntityType.JOURNAL_ENTRY.value, description="Entity type (always JOURNAL_ENTRY)")
     id: str
     date: date
     text: str
