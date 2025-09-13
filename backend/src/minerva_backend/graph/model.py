@@ -53,7 +53,7 @@ class PartitionType(str, Enum):
 class Node(BaseModel, ABC):
     """Abstract entity. All nodes get at least these fields."""
     uuid: str = Field(default_factory=lambda: str(uuid4()))
-    partition: PartitionType = Field(description='partition of the graph')
+    partition: PartitionType = Field(..., description='partition of the graph')
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
@@ -64,7 +64,7 @@ class Node(BaseModel, ABC):
 class Entity(Node, ABC):
     partition: Literal[PartitionType.DOMAIN] = Field(PartitionType.DOMAIN.value,
                                                      description="Partition type (always DOMAIN)")
-    name: str = Field(description='name of the entity')
+    name: str = Field(..., description='name of the entity')
     name_embedding: list[float] | None = Field(default=None, description='embedding of the name')
     type: EntityType = Field(..., description="Entity type (Person, Event, etc)")
     summary_short: str = Field(..., description="Summary of the entity. Max 30 words")
@@ -174,8 +174,8 @@ class Person(Entity):
     """Represents an individual person."""
     type: Literal[EntityType.PERSON] = Field(EntityType.PERSON.value, description="Entity type (always PERSON)")
     full_name: str = Field(..., description="Full name of the person")
-    occupation: Optional[str] = Field(None, description="Job title or profession")
-    birth_date: Optional[date] = Field(None, description="Date of birth")
+    occupation: str | None = Field(default=None, description="Job title or profession")
+    birth_date: date | None = Field(default=None, description="Date of birth")
 
 
 class Emotion(Entity):
@@ -187,9 +187,9 @@ class Emotion(Entity):
 class Feeling(Entity):
     """Reified relationship: Person experiences Emotion or Thought about something"""
     type: Literal[EntityType.FEELING] = Field(EntityType.FEELING.value, description="Entity type (always FEELING)")
-    intensity: Optional[int] = Field(..., description="Intensity level (1-10)")
+    intensity: int | None = Field(default=None, description="Intensity level (1-10)")
     timestamp: datetime = Field(..., description="When this feeling occurred")
-    duration: Optional[timedelta] = Field(None, description="How long the feeling lasted")
+    duration: timedelta | None = Field(default=None, description="How long the feeling lasted")
 
 
 class Event(Entity):
@@ -197,18 +197,18 @@ class Event(Entity):
     type: Literal[EntityType.EVENT] = Field(EntityType.EVENT.value, description="Entity type (always EVENT)")
     category: str = Field(..., description="Category of event (meeting, workout, etc)")
     date: datetime = Field(..., description="When the event occurred")
-    duration: Optional[timedelta] = Field(None, description="Duration of the event (e.g., 2 hours, 30 minutes)")
-    location: Optional[str] = Field(None, description="Where the event took place")
+    duration: timedelta | None = Field(default=None, description="Duration of the event (e.g., 2 hours, 30 minutes)")
+    location: str | None = Field(default=None, description="Where the event took place")
 
 
 class Project(Entity):
     """Represents an ongoing initiative, goal, or multistep endeavor with trackable progress."""
     type: Literal[EntityType.PROJECT] = Field(EntityType.PROJECT.value, description="Entity type (always PROJECT)")
     project_name: str = Field(..., description="Name or title of the project")
-    status: Optional[ProjectStatus] = Field(None, description="Current status of the project")
-    start_date: Optional[datetime] = Field(None, description="Date when the project was started")
-    target_completion: Optional[datetime] = Field(None, description="Target or expected completion date")
-    progress: Optional[float] = Field(None, description="Completion percentage (0.0 to 100.0)")
+    status: ProjectStatus | None = Field(default=None, description="Current status of the project")
+    start_date: datetime | None = Field(default=None, description="Date when the project was started")
+    target_completion: datetime | None = Field(default=None, description="Target or expected completion date")
+    progress: float | None = Field(default=None, description="Completion percentage (0.0 to 100.0)")
 
 
 class Concept(Entity):
@@ -223,20 +223,20 @@ class Resource(Entity):
     type: Literal[EntityType.RESOURCE] = Field(EntityType.RESOURCE.value, description="Entity type (always RESOURCE)")
     title: str = Field(..., description="Title or name of the resource")
     category: ResourceType = Field(..., description="Category of resource")
-    url: Optional[str] = Field(None, description="Web URL or location where the resource can be accessed")
-    quotes: Optional[List[str]] = Field(None, description="Notable quotes or excerpts from the resource")
-    status: Optional[ResourceStatus] = Field(None, description="Current consumption status")
-    author: Optional[str] = Field(None, description="Creator or author of the resource")
+    url: str | None = Field(default=None, description="Web URL or location where the resource can be accessed")
+    quotes: List[str] | None = Field(default=None, description="Notable quotes or excerpts from the resource")
+    status: ResourceStatus | None = Field(default=None, description="Current consumption status")
+    author: str | None = Field(default=None, description="Creator or author of the resource")
 
 
 class JournalEntry(Document):
     type: Literal[DocumentType.JOURNAL_ENTRY] = Field(DocumentType.JOURNAL_ENTRY.value,
                                                       description="Document type (always JOURNAL_ENTRY)")
     date: date = Field(..., description="Date of the journal entry")
-    entry_text: Optional[str] = Field(None, description="The body text of the journal entry")
-    panas_pos: Optional[List] = Field(None, description="PANAS positive scores")
-    panas_neg: Optional[List] = Field(None, description="PANAS negative scores")
-    bpns: Optional[List] = Field(None, description="BPNS scores")
-    flourishing: Optional[List] = Field(None, description="Flourishing scores")
-    wake: Optional[datetime] = Field(None, description="Datetime of waking up")
-    sleep: Optional[datetime] = Field(None, description="Datetime of going to sleep")
+    entry_text: str | None = Field(default=None, description="The body text of the journal entry")
+    panas_pos: List | None = Field(default=None, description="PANAS positive scores")
+    panas_neg: List | None = Field(default=None, description="PANAS negative scores")
+    bpns: List | None = Field(default=None, description="BPNS scores")
+    flourishing: List | None = Field(default=None, description="Flourishing scores")
+    wake: datetime | None = Field(default=None, description="Datetime of waking up")
+    sleep: datetime | None = Field(default=None, description="Datetime of going to sleep")
