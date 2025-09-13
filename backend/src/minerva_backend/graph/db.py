@@ -35,21 +35,10 @@ class MinervaDatabase:
             max_connection_pool_size=max_pool_size,
             max_connection_lifetime=3600  # 1 hour
         )
-        self._verify_connection()
+        if not self.health_check():
+            raise Exception("Failed to connect to Neo4j. Check logs for details.")
+        logger.info("Neo4j connection established successfully")
 
-    def _verify_connection(self):
-        """Verify database connection and schema."""
-        try:
-            with self.driver.session() as session:
-                result = session.run("RETURN 1 as test")
-                record = result.single()
-                if record and record["test"] == 1:
-                    logger.info("Neo4j connection established successfully")
-                else:
-                    raise Exception("Connection test failed")
-        except Exception as e:
-            logger.error(f"Failed to connect to Neo4j: {e}")
-            raise
 
     def close(self):
         """Close database connection."""
@@ -68,6 +57,7 @@ class MinervaDatabase:
                 record = result.single()
                 if record and record["test"] == 1:
                     return True
+                logger.error("Health check failed: test query did not return expected result.")
                 return False
         except Exception as e:
             logger.error(f"Health check failed: {e}")
