@@ -1,12 +1,16 @@
 from __future__ import annotations
-from datetime import date, datetime, timedelta
+
+from abc import ABC
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Literal
+from uuid import uuid4
+
 from pydantic import BaseModel, Field
 
 
 # ----------------------------
-# Core entity + relationship types
+# Core entity + relationship + partition types
 # ----------------------------
 
 class EntityType(str, Enum):
@@ -17,7 +21,10 @@ class EntityType(str, Enum):
     PROJECT = "Project"
     CONCEPT = "Concept"
     RESOURCE = "Resource"
-    JOURNAL_ENTRY = "JournalEntry"
+
+
+class DocumentType(str, Enum):
+    JOURNAL_ENTRY = "JOURNAL_ENTRY"
 
 
 class RelationshipType(str, Enum):
@@ -34,23 +41,48 @@ class RelationshipType(str, Enum):
     CONTAINS = "CONTAINS"
 
 
+class PartitionType(str, Enum):
+    DOMAIN = "DOMAIN"
+    LEXICAL = "LEXICAL"
+
+
 # ----------------------------
 # Base Entity
 # ----------------------------
 
-class Entity(BaseModel):
-    """Generic entity. All nodes get at least these fields."""
-    id: Optional[str] = Field(
-        None, description="Internal unique ID or external UUID"
-    )
-    type: EntityType = Field(..., description="Entity type (Person, Event, etc)")
-    summary_short: str = Field(..., description="Summary of the entity. Max 30 words")
-    summary: str = Field(..., description="Summary of the entity. Max 300 words")
-    created_at: datetime = Field(default_factory=datetime.now)
+class Node(BaseModel, ABC):
+    """Abstract entity. All nodes get at least these fields."""
+    uuid: str = Field(default_factory=lambda: str(uuid4()))
+    partition: PartitionType = Field(description='partition of the graph')
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         extra = "allow"  # allow schema evolution (new fields in future)
         use_enum_values = True
+
+
+class Entity(Node, ABC):
+    partition: Literal[PartitionType.DOMAIN] = Field(PartitionType.DOMAIN.value,
+                                                     description="Partition type (always DOMAIN)")
+    name: str = Field(description='name of the entity')
+    name_embedding: list[float] | None = Field(default=None, description='embedding of the name')
+    type: EntityType = Field(..., description="Entity type (Person, Event, etc)")
+    summary_short: str = Field(..., description="Summary of the entity. Max 30 words")
+    summary: str = Field(..., description="Summary of the entity. Max 300 words")
+
+
+class Document(Node, ABC):
+    partition: Literal[PartitionType.LEXICAL] = Field(PartitionType.LEXICAL.value,
+                                                      description="Partition type (always LEXICAL)")
+    type: DocumentType = Field(..., description="Document type")
+    text: str = Field(..., description="The original text of the document")
+
+
+class Chunk(Node, ABC):
+    partition: Literal[PartitionType.LEXICAL] = Field(PartitionType.LEXICAL.value,
+                                                      description="Partition type (always LEXICAL)")
+    text: str = Field(..., description="The text of the chunk")
+    embedding: list[float] | None = Field(default=None, description='embedding of the chunk')
 
 
 # ----------------------------
@@ -197,12 +229,11 @@ class Resource(Entity):
     author: Optional[str] = Field(None, description="Creator or author of the resource")
 
 
-class JournalEntry(Entity):
-    type: Literal[EntityType.JOURNAL_ENTRY] = Field(EntityType.JOURNAL_ENTRY.value,
-                                                    description="Entity type (always JOURNAL_ENTRY)")
+class JournalEntry(Document):
+    type: Literal[DocumentType.JOURNAL_ENTRY] = Field(DocumentType.JOURNAL_ENTRY.value,
+                                                      description="Document type (always JOURNAL_ENTRY)")
     date: date = Field(..., description="Date of the journal entry")
-    fulltext: str = Field(..., description="The complete, original text of the journal entry")
-    text: Optional[str] = Field(None, description="The body text of the journal entry")
+    entry_text: Optional[str] = Field(None, description="The body text of the journal entry")
     panas_pos: Optional[List] = Field(None, description="PANAS positive scores")
     panas_neg: Optional[List] = Field(None, description="PANAS negative scores")
     bpns: Optional[List] = Field(None, description="BPNS scores")
