@@ -43,9 +43,9 @@ class Entity(BaseModel):
     id: Optional[str] = Field(
         None, description="Internal unique ID or external UUID"
     )
-    type: EntityType = Field(..., description="Entity type (Person, Event, etc.)")
-    summary_short: str = Field(..., description="Summary of the entity. Max 30 words.")
-    summary: str = Field(..., description="Summary of the entity. Max 300 words.")
+    type: EntityType = Field(..., description="Entity type (Person, Event, etc)")
+    summary_short: str = Field(..., description="Summary of the entity. Max 30 words")
+    summary: str = Field(..., description="Summary of the entity. Max 300 words")
     created_at: datetime = Field(default_factory=datetime.now)
 
     class Config:
@@ -163,7 +163,7 @@ class Feeling(Entity):
 class Event(Entity):
     """Represents a notable occurrence or activity that happened at a specific time."""
     type: Literal[EntityType.EVENT] = Field(EntityType.EVENT.value, description="Entity type (always EVENT)")
-    category: str = Field(..., description="Category of event (meeting, workout, etc.)")
+    category: str = Field(..., description="Category of event (meeting, workout, etc)")
     date: datetime = Field(..., description="When the event occurred")
     duration: Optional[timedelta] = Field(None, description="Duration of the event (e.g., 2 hours, 30 minutes)")
     location: Optional[str] = Field(None, description="Where the event took place")
@@ -200,12 +200,12 @@ class Resource(Entity):
 class JournalEntry(Entity):
     type: Literal[EntityType.JOURNAL_ENTRY] = Field(EntityType.JOURNAL_ENTRY.value,
                                                     description="Entity type (always JOURNAL_ENTRY)")
-    date: date = Field(..., description="Date of the journal entry.")
-    fulltext: str = Field(..., description="The complete, original text of the journal entry.")
-    text: Optional[str] = Field(None, description="The body text of the journal entry.")
-    panas_pos: Optional[List] = Field(None, description="PANAS positive scores.")
-    panas_neg: Optional[List] = Field(None, description="PANAS negative scores.")
-    bpns: Optional[List] = Field(None, description="BPNS scores.")
-    flourishing: Optional[List] = Field(None, description="Flourishing scores.")
+    date: date = Field(..., description="Date of the journal entry")
+    fulltext: str = Field(..., description="The complete, original text of the journal entry")
+    text: Optional[str] = Field(None, description="The body text of the journal entry")
+    panas_pos: Optional[List] = Field(None, description="PANAS positive scores")
+    panas_neg: Optional[List] = Field(None, description="PANAS negative scores")
+    bpns: Optional[List] = Field(None, description="BPNS scores")
+    flourishing: Optional[List] = Field(None, description="Flourishing scores")
     wake: Optional[datetime] = Field(None, description="Datetime of waking up")
     sleep: Optional[datetime] = Field(None, description="Datetime of going to sleep")
