@@ -186,7 +186,7 @@ class Feeling(Entity):
     """Reified relationship: Person experiences Emotion or Thought about something"""
     timestamp: datetime = Field(..., description="When this feeling occurred")
     type: Literal[EntityType.FEELING] = Field(EntityType.FEELING.value, description="Entity type (always FEELING)")
-    intensity: int | None = Field(default=None, description="Intensity level (1-10)")
+    intensity: int | None = Field(default=None, description="Intensity level (1-10)", ge=1, le=10)
     duration: timedelta | None = Field(default=None, description="How long the feeling lasted")
 
 
@@ -205,7 +205,7 @@ class Project(Entity):
     status: ProjectStatus | None = Field(default=None, description="Current status of the project")
     start_date: datetime | None = Field(default=None, description="Date when the project was started")
     target_completion: datetime | None = Field(default=None, description="Target or expected completion date")
-    progress: float | None = Field(default=None, description="Completion percentage (0.0 to 100.0)")
+    progress: float | None = Field(default=None, description="Completion percentage (0.0 to 100.0)", ge=0.0, le=100.0)
 
 
 class Concept(Entity):
