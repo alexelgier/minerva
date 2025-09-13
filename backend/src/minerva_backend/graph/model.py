@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
-from typing import List, Optional, Literal
+from typing import List, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
