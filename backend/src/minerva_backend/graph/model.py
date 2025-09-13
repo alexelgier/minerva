@@ -198,11 +198,11 @@ class Resource(Entity):
 
 
 class JournalEntry(Entity):
-    type: Literal[EntityType.JOURNAL_ENTRY] = Field(EntityType.JOURNAL_ENTRY.value, description="Entity type (always JOURNAL_ENTRY)")
-    id: str
+    type: Literal[EntityType.JOURNAL_ENTRY] = Field(EntityType.JOURNAL_ENTRY.value,
+                                                    description="Entity type (always JOURNAL_ENTRY)")
     date: date
-    text: str
     fulltext: str
+    text: str = None
     panas_pos: List = None
     panas_neg: List = None
     bpns: List = None
