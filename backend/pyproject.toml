@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "minerva-backend"
+version = "0.1.0"
+description = "Backend processing engine for Minerva"
+authors = ["Alex <alexander.elgier@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "minerva_backend", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.112"
+uvicorn = "^0.30"
+neo4j = "^5.23"
+ollama = "^0.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+black = "^24.0"
+isort = "^6.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
