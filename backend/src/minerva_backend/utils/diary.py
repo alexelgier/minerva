@@ -2,9 +2,11 @@ import datetime
 import re
 from typing import Any
 
+from minerva_backend.graph.model import JournalEntry
 
-def parse_diary_entry(text: str, date: str) -> dict[str, Any]:
-    """Parse diary entry and return a dict with parsed values."""
+
+def parse_diary_entry(text: str, date: str) -> JournalEntry:
+    """Parse diary entry and return a JournalEntry object."""
     diary_entry = {}
 
     # PANAS Positive
@@ -80,7 +82,7 @@ def parse_diary_entry(text: str, date: str) -> dict[str, Any]:
         wake = "".join(wake_bed_match.groups()[0].split(":"))
         bed = "".join(wake_bed_match.groups()[1].split(":"))
         diary_entry['wake'] = datetime.time(int(wake[:2]), int(wake[2:]))
-        diary_entry['bed'] = datetime.time(int(bed[:2]), int(bed[2:]))
+        diary_entry['sleep'] = datetime.time(int(bed[:2]), int(bed[2:]))
 
     # Date
     date = date.split("-")
@@ -90,4 +92,15 @@ def parse_diary_entry(text: str, date: str) -> dict[str, Any]:
     diary_entry['text'] = re.search(r"(.+?)(?=\n*---\n*-\s*Imagen, Detalle:|\n*---.*## Noticias|\n*---.*## Sleep)",
                                     text, re.DOTALL).group(0)
 
-    return diary_entry
+    return JournalEntry(
+        id=date,
+        date=diary_entry['date'],
+        text=diary_entry['text'],
+        fulltext=text,
+        panas_pos=diary_entry.get('panas_pos'),
+        panas_neg=diary_entry.get('panas_neg'),
+        bpns=diary_entry.get('bpns'),
+        flourishing=diary_entry.get('flourishing'),
+        wake=diary_entry.get('wake'),
+        sleep=diary_entry.get('sleep'),
+    )
