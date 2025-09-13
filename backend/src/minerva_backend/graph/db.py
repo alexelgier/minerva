@@ -27,8 +27,14 @@ class MinervaDatabase:
 
     def __init__(self, uri: str = "bolt://localhost:7687",
                  user: str = "neo4j",
-                 password: str = "Alxe342!"):
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+                 password: str = "Alxe342!",
+                 max_pool_size: int = 50):
+        self.driver = GraphDatabase.driver(
+            uri,
+            auth=(user, password),
+            max_connection_pool_size=max_pool_size,
+            max_connection_lifetime=3600  # 1 hour
+        )
         self._verify_connection()
 
     def _verify_connection(self):
@@ -50,6 +56,22 @@ class MinervaDatabase:
         if self.driver:
             self.driver.close()
             logger.info("Neo4j connection closed")
+
+    def health_check(self) -> bool:
+        """
+        Performs a health check on the database connection.
+        Returns True if the connection is healthy, False otherwise.
+        """
+        try:
+            with self.driver.session() as session:
+                result = session.run("RETURN 1 as test")
+                record = result.single()
+                if record and record["test"] == 1:
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return False
 
     # =============================================================================
     # PERSON CRUD OPERATIONS
