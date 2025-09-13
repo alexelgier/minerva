@@ -28,17 +28,7 @@ class DocumentType(str, Enum):
 
 
 class RelationshipType(str, Enum):
-    ENTERTAINS = "ENTERTAINS"
-    PARTICIPATES_IN = "PARTICIPATES_IN"
-    WORKS_ON = "WORKS_ON"
-    KNOWS = "KNOWS"
-    TRIGGERS = "TRIGGERS"
-    TRIGGERED_BY = "TRIGGERED_BY"
-    RELATES_TO = "RELATES_TO"
-    INVOLVES = "INVOLVES"
-    TEACHES = "TEACHES"
-    MENTIONS = "MENTIONS"
-    CONTAINS = "CONTAINS"
+    RELATED_TO = "RELATED_TO"
 
 
 class PartitionType(str, Enum):
