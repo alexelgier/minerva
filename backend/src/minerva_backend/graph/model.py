@@ -1,7 +1,9 @@
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import List, Dict
+from typing import List, Dict, Optional
+
+from pydantic import BaseModel, Field
 
 
 class EntityType(Enum):
@@ -29,87 +31,79 @@ class RelationshipType(Enum):
     CONTAINS = "CONTAINS"
 
 
-@dataclass
-class Person:
-    id: str
-    full_name: str
-    aliases: List[str] = None
-    occupation: str = None
-    relationship_type: str = None
-    birth_date: date = None
-    first_mentioned: datetime = None
-    last_updated: datetime = None
-    mention_count: int = 0
-    emotional_valence: float = 0.0
+class ProjectStatus(str, Enum):
+    NOT_STARTED = "NOT_STARTED"
+    ACTIVE = "ACTIVE"
+    ON_HOLD = "ON_HOLD"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
-@dataclass
-class Feeling:
-    id: str
-    emotion_type: str
-    intensity: int
-    timestamp: datetime
-    duration_minutes: int = None
-    context: str = None
-    triggers: List[str] = None
-    journal_entry_id: str = None
+class ResourceType(str, Enum):
+    BOOK = "BOOK"
+    ARTICLE = "ARTICLE"
+    YOUTUBE = "YOUTUBE"
+    MOVIE = "MOVIE"
+    MISC = "MISC"
 
 
-@dataclass
-class Event:
-    id: str
-    title: str
-    event_type: str
-    start_date: datetime
-    end_date: datetime = None
-    location: str = None
-    participants: List[str] = None
-    significance_level: int = 5
-    emotional_impact: float = 0.0
-    tags: List[str] = None
+class ResourceStatus(str, Enum):
+    WANT_TO_CONSUME = "WANT_TO_CONSUME"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    REFERENCE = "REFERENCE"
+    ABANDONED = "ABANDONED"
 
 
-@dataclass
-class Project:
-    id: str
-    name: str
-    description: str
-    status: str
-    priority: str = "medium"
-    start_date: date = None
-    target_completion: date = None
-    progress_percentage: float = 0.0
-    associated_people: List[str] = None
-    related_concepts: List[str] = None
-    milestones: List[Dict] = None
+class Person(BaseModel):
+    """Represents an individual person."""
+    full_name: str = Field(..., description="Full name of the person")
+    occupation: Optional[str] = Field(None, description="Current job title or profession")
+    birth_date: Optional[date] = Field(None, description="Date of birth (YYYY-MM-DD)")
 
 
-@dataclass
-class Concept:
-    id: str
-    title: str
-    definition: str
-    category: str
-    complexity_level: int = 3
-    understanding_level: int = 3
-    first_encountered: date = None
-    source_type: str = None
-    related_quotes: List[str] = None
-    practical_applications: List[str] = None
+class Emotion(BaseModel):
+    """Represents a distinct type of emotion that can be felt (e.g., happiness, anxiety, frustration, grief)"""
 
 
-@dataclass
-class Resource:
-    id: str
-    title: str
-    type: str
-    author: str = None
-    status: str = "to_consume"
-    rating: int = None
-    consumption_date: date = None
-    key_insights: List[str] = None
-    quotes: List[Dict] = None
-    tags: List[str] = None
+class Feeling(BaseModel):
+    """Reified relationship: Person experiences Emotion or Thought about something"""
+    intensity: int = Field(..., description="Intensity level (1-10)")
+    timestamp: datetime = Field(..., description="When this feeling occurred")
+    duration: Optional[timedelta] = Field(None, description="How long the feeling lasted")
+
+
+class Event(BaseModel):
+    """Represents a notable occurrence or activity that happened at a specific time."""
+    type: str = Field(..., description="Category of event (e.g., practice, study, meeting, exercise)")
+    date: datetime = Field(..., description="Date and time when the event occurred")
+    duration: Optional[timedelta] = Field(None, description="Duration of the event (e.g., 2 hours, 30 minutes)")
+    location: Optional[str] = Field(None, description="Where the event took place")
+
+
+class Project(BaseModel):
+    """Represents an ongoing initiative, goal, or multistep endeavor with trackable progress."""
+    project_name: str = Field(..., description="Name or title of the project")
+    status: Optional[ProjectStatus] = Field(None, description="Current status of the project")
+    start_date: Optional[datetime] = Field(None, description="Date when the project was started")
+    target_completion: Optional[datetime] = Field(None, description="Target or expected completion date")
+    progress: Optional[float] = Field(None, description="Completion percentage (0.0 to 100.0)")
+
+
+class Concept(BaseModel):
+    """Represents an atomic idea or concept in your zettelkasten knowledge system."""
+    title: str = Field(..., description="Concise title of the concept or idea")
+    analysis: str = Field(..., description="Your personal analysis, insights, and understanding of the concept")
+
+
+class Resource(BaseModel):
+    """Represents external content (books, articles, videos) that serve as a source of information or entertainment."""
+    title: str = Field(..., description="Title or name of the resource")
+    type: ResourceType = Field(..., description="Category of resource")
+    url: Optional[str] = Field(None, description="Web URL or location where the resource can be accessed")
+    quotes: Optional[List[str]] = Field(None, description="Notable quotes or excerpts from the resource")
+    status: Optional[ResourceStatus] = Field(None, description="Current consumption status")
+    author: Optional[str] = Field(None, description="Creator or author of the resource")
 
 
 @dataclass
