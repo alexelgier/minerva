@@ -14,13 +14,13 @@ from pydantic import BaseModel, Field
 # ----------------------------
 
 class EntityType(str, Enum):
-    PERSON = "Person"
-    FEELING = "Feeling"
-    EMOTION = "Emotion"
-    EVENT = "Event"
-    PROJECT = "Project"
-    CONCEPT = "Concept"
-    RESOURCE = "Resource"
+    PERSON = "PERSON"
+    FEELING = "FEELING"
+    EMOTION = "EMOTION"
+    EVENT = "EVENT"
+    PROJECT = "PROJECT"
+    CONCEPT = "CONCEPT"
+    RESOURCE = "RESOURCE"
 
 
 class DocumentType(str, Enum):
