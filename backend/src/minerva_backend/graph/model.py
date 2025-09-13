@@ -200,12 +200,12 @@ class Resource(Entity):
 class JournalEntry(Entity):
     type: Literal[EntityType.JOURNAL_ENTRY] = Field(EntityType.JOURNAL_ENTRY.value,
                                                     description="Entity type (always JOURNAL_ENTRY)")
-    date: date
-    fulltext: str
-    text: str = None
-    panas_pos: List = None
-    panas_neg: List = None
-    bpns: List = None
-    flourishing: List = None
-    wake: datetime = None
-    sleep: datetime = None
+    date: date = Field(..., description="Date of the journal entry.")
+    fulltext: str = Field(..., description="The complete, original text of the journal entry.")
+    text: Optional[str] = Field(None, description="The body text of the journal entry, excluding frontmatter.")
+    panas_pos: Optional[List] = Field(None, description="Positive and Negative Affect Schedule (PANAS) positive scores.")
+    panas_neg: Optional[List] = Field(None, description="Positive and Negative Affect Schedule (PANAS) negative scores.")
+    bpns: Optional[List] = Field(None, description="Basic Psychological Need Satisfaction (BPNS) scores.")
+    flourishing: Optional[List] = Field(None, description="Flourishing scale scores.")
+    wake: Optional[datetime] = Field(None, description="Time of waking up on the entry's date.")
+    sleep: Optional[datetime] = Field(None, description="Time of going to sleep on the entry's date.")
