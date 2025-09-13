@@ -172,7 +172,6 @@ class ResourceStatus(str, Enum):
 
 class Person(Entity):
     """Represents an individual person."""
-    full_name: str = Field(..., description="Full name of the person")
     type: Literal[EntityType.PERSON] = Field(EntityType.PERSON.value, description="Entity type (always PERSON)")
     occupation: str | None = Field(default=None, description="Job title or profession")
     birth_date: date | None = Field(default=None, description="Date of birth")
@@ -180,7 +179,6 @@ class Person(Entity):
 
 class Emotion(Entity):
     """Represents a distinct type of emotion that can be felt"""
-    emotion_name: str = Field(..., description="Name of the emotion (e.g. joy, anger)")
     type: Literal[EntityType.EMOTION] = Field(EntityType.EMOTION.value, description="Entity type (always EMOTION)")
 
 
@@ -203,7 +201,6 @@ class Event(Entity):
 
 class Project(Entity):
     """Represents an ongoing initiative, goal, or multistep endeavor with trackable progress."""
-    project_name: str = Field(..., description="Name or title of the project")
     type: Literal[EntityType.PROJECT] = Field(EntityType.PROJECT.value, description="Entity type (always PROJECT)")
     status: ProjectStatus | None = Field(default=None, description="Current status of the project")
     start_date: datetime | None = Field(default=None, description="Date when the project was started")
