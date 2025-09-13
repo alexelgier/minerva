@@ -231,9 +231,9 @@ class JournalEntry(Document):
     type: Literal[DocumentType.JOURNAL_ENTRY] = Field(DocumentType.JOURNAL_ENTRY.value,
                                                       description="Document type (always JOURNAL_ENTRY)")
     entry_text: str | None = Field(default=None, description="The body text of the journal entry")
-    panas_pos: List | None = Field(default=None, description="PANAS positive scores")
-    panas_neg: List | None = Field(default=None, description="PANAS negative scores")
-    bpns: List | None = Field(default=None, description="BPNS scores")
-    flourishing: List | None = Field(default=None, description="Flourishing scores")
+    panas_pos: List[float] | None = Field(default=None, description="PANAS positive scores")
+    panas_neg: List[float] | None = Field(default=None, description="PANAS negative scores")
+    bpns: List[float] | None = Field(default=None, description="BPNS scores")
+    flourishing: List[float] | None = Field(default=None, description="Flourishing scores")
     wake: datetime | None = Field(default=None, description="Datetime of waking up")
     sleep: datetime | None = Field(default=None, description="Datetime of going to sleep")
