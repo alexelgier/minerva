@@ -161,6 +161,56 @@ class TemporalRepository:
             record = result.single()
             return record["day_uuid"] if record else None
 
+    def get_month_uuid(self, year: int, month: int) -> Optional[str]:
+        """
+        Get the UUID of a month node if it exists.
+
+        Args:
+            year: Year to find
+            month: Month to find (1-12)
+
+        Returns:
+            UUID of month node or None if not found
+        """
+        query = """
+        MATCH (m:Month {
+            year: $year,
+            month: $month,
+            partition: 'TEMPORAL'
+        })
+        RETURN m.uuid as month_uuid
+        """
+        with self.connection.session() as session:
+            result = session.run(
+                query,
+                year=year,
+                month=month
+            )
+            record = result.single()
+            return record["month_uuid"] if record else None
+
+    def get_year_uuid(self, year: int) -> Optional[str]:
+        """
+        Get the UUID of a year node if it exists.
+
+        Args:
+            year: Year to find
+
+        Returns:
+            UUID of year node or None if not found
+        """
+        query = """
+        MATCH (y:Year {
+            year: $year,
+            partition: 'TEMPORAL'
+        })
+        RETURN y.uuid as year_uuid
+        """
+        with self.connection.session() as session:
+            result = session.run(query, year=year)
+            record = result.single()
+            return record["year_uuid"] if record else None
+
     def get_journal_entries_for_date(self, target_date: date) -> List[JournalEntry]:
         """
         Get all journal entries for a specific date.
