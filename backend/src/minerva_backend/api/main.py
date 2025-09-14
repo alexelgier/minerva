@@ -19,6 +19,7 @@ from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrato
 async def lifespan(app: FastAPI):
     # Initialize container and services on startup
     container: Container = app.state.container
+    container.wire(modules=[__name__])
     await container.curation_manager().initialize()
     await container.pipeline_orchestrator().initialize()
 
@@ -35,7 +36,6 @@ container = Container()
 
 backend_app = FastAPI(title="Minerva Backend", version="0.1.0", lifespan=lifespan)
 backend_app.state.container = container
-backend_app.state.container.wire(modules=[__name__])
 
 # CORS for Vue.js dashboard
 backend_app.add_middleware(
@@ -242,10 +242,8 @@ async def health_check(
         db_healthy = db.health_check()
         stats = await curation_manager.get_curation_stats()
 
-        is_healthy = db_healthy
-
         return {
-            "status": "healthy" if is_healthy else "unhealthy",
+            "status": "healthy" if db_healthy else "unhealthy",
             "services": {
                 "api": "running",
                 "temporal": "connected",
