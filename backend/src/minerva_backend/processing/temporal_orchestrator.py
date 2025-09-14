@@ -288,7 +288,15 @@ async def run_worker():
         client,
         task_queue="minerva-pipeline",
         workflows=[JournalProcessingWorkflow],
-        activities=[activities],
+        activities=[
+            activities.extract_entities,
+            activities.extract_relationships,
+            activities.submit_entity_curation,
+            activities.wait_for_entity_curation,
+            activities.submit_relationship_curation,
+            activities.wait_for_relationship_curation,
+            activities.write_to_knowledge_graph,
+        ],
     )
 
     print("🚀 Minerva pipeline worker started...")
