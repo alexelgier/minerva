@@ -8,6 +8,7 @@ from typing import Dict, Any, List
 from temporalio import workflow, activity
 from temporalio.client import Client
 from temporalio.common import RetryPolicy
+from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
 from minerva_backend.graph.models.documents import JournalEntry
@@ -32,7 +33,7 @@ class PipelineStage(str, Enum):
 @dataclass
 class PipelineState:
     stage: PipelineStage
-    created_at: datetime
+    created_at: datetime = datetime.now()
     journal_entry: JournalEntry = None
     entities_extracted: List[Entity] = None
     entities_curated: List[Entity] = None
@@ -132,14 +133,13 @@ class JournalProcessingWorkflow:
 
     def __init__(self):
         self.state = PipelineState(
-            stage=PipelineStage.SUBMITTED,
-            created_at=datetime.now(UTC),
+            stage=PipelineStage.SUBMITTED
         )
 
     @workflow.run
     async def run(self, journal_entry: JournalEntry) -> PipelineState:
         self.state.journal_entry = journal_entry
-
+        self.state.created_at = workflow.now()
         # Configure retry policy for LLM activities
         llm_retry_policy = RetryPolicy(
             initial_interval=timedelta(seconds=1),
@@ -234,15 +234,16 @@ class PipelineOrchestrator:
 
     async def initialize(self):
         """Connect to Temporal server"""
-        self.client = await Client.connect(self.temporal_uri)
+        self.client = await Client.connect(self.temporal_uri, data_converter=pydantic_data_converter)
 
     async def submit_journal(self, journal_entry: JournalEntry) -> str:
         """Submit a journal entry for processing"""
         workflow_id = f"journal-{journal_entry.date}-{journal_entry.uuid}"
+        created_at = datetime.now(UTC)
 
         await self.client.start_workflow(
             JournalProcessingWorkflow.run,
-            args=[journal_entry],
+            args=[journal_entry, created_at],
             id=workflow_id,
             task_queue="minerva-pipeline"
         )
