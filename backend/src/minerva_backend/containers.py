@@ -26,6 +26,9 @@ class Container(containers.DeclarativeContainer):
     # This is a first step; they will need to be refactored to accept
     # the connection as a dependency.
 
-    curation_manager = providers.Singleton(CurationManager)
+    curation_manager = providers.Singleton(
+        CurationManager,
+        db_path=config.CURATION_DB_PATH,
+    )
 
     pipeline_orchestrator = providers.Singleton(PipelineOrchestrator)

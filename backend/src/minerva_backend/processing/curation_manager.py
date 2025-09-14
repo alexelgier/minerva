@@ -11,7 +11,7 @@ from minerva_backend.graph.models.relations import Relation
 class CurationManager:
     """Manages the human-in-the-loop curation queue using SQLite"""
 
-    def __init__(self, db_path: str = "curation.db"):
+    def __init__(self, db_path: str):
         self.db_path = db_path
 
     async def initialize(self):
