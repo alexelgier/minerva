@@ -15,7 +15,7 @@ class PersonRepository(BaseRepository[Person]):
 
     @property
     def entity_label(self) -> str:
-        return EntityType.PERSON.value.capitalize()
+        return EntityType.PERSON.value
 
     @property
     def entity_class(self) -> type[Person]:

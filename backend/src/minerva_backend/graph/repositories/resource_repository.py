@@ -14,7 +14,7 @@ class ResourceRepository(BaseRepository[Resource]):
 
     @property
     def entity_label(self) -> str:
-        return EntityType.RESOURCE.value.capitalize()
+        return EntityType.RESOURCE.value
 
     @property
     def entity_class(self) -> type[Resource]:

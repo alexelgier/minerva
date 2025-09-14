@@ -15,7 +15,7 @@ class EmotionRepository(BaseRepository[Emotion]):
 
     @property
     def entity_label(self) -> str:
-        return EntityType.EMOTION.value.capitalize()
+        return EntityType.EMOTION.value
 
     @property
     def entity_class(self) -> type[Emotion]:

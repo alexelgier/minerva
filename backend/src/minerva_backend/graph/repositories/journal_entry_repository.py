@@ -15,7 +15,7 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
 
     @property
     def entity_label(self) -> str:
-        return "".join(x.capitalize() for x in DocumentType.JOURNAL_ENTRY.value.split("_"))
+        return DocumentType.JOURNAL_ENTRY.value
 
     @property
     def entity_class(self) -> type[JournalEntry]:

@@ -16,7 +16,7 @@ class EventRepository(BaseRepository[Event]):
 
     @property
     def entity_label(self) -> str:
-        return EntityType.EVENT.value.capitalize()
+        return EntityType.EVENT.value
 
     @property
     def entity_class(self) -> type[Event]:

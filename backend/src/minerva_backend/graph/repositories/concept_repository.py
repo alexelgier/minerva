@@ -15,7 +15,7 @@ class ConceptRepository(BaseRepository[Concept]):
 
     @property
     def entity_label(self) -> str:
-        return EntityType.CONCEPT.value.capitalize()
+        return EntityType.CONCEPT.value
 
     @property
     def entity_class(self) -> type[Concept]:

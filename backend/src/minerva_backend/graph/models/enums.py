@@ -6,17 +6,17 @@ from enum import Enum
 # ----------------------------
 
 class EntityType(str, Enum):
-    PERSON = "PERSON"
-    FEELING = "FEELING"
-    EMOTION = "EMOTION"
-    EVENT = "EVENT"
-    PROJECT = "PROJECT"
-    CONCEPT = "CONCEPT"
-    RESOURCE = "RESOURCE"
+    PERSON = "Person"
+    FEELING = "Feeling"
+    EMOTION = "Emotion"
+    EVENT = "Event"
+    PROJECT = "Project"
+    CONCEPT = "Concept"
+    RESOURCE = "Resource"
 
 
 class DocumentType(str, Enum):
-    JOURNAL_ENTRY = "JOURNAL_ENTRY"
+    JOURNAL_ENTRY = "JournalEntry"
 
 
 class RelationshipType(str, Enum):

@@ -15,7 +15,7 @@ class ProjectRepository(BaseRepository[Project]):
 
     @property
     def entity_label(self) -> str:
-        return EntityType.PROJECT.value.capitalize()
+        return EntityType.PROJECT.value
 
     @property
     def entity_class(self) -> type[Project]:
