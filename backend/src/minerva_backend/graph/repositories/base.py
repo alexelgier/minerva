@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any, TypeVar, Generic
 from datetime import datetime
 import logging
 
-from minerva_backend.graph.db import get_connection
+from minerva_backend.graph.db import get_connection, Neo4jConnection
 from minerva_backend.graph.models.base import Entity
 
 logger = logging.getLogger(__name__)
@@ -23,9 +23,9 @@ class BaseRepository(Generic[T], ABC):
     All entity repositories should inherit from this class.
     """
 
-    def __init__(self):
+    def __init__(self, connection: Neo4jConnection = None):
         """Initialize repository with database connection."""
-        self.connection = get_connection()
+        self.connection = connection or get_connection()
 
     @property
     @abstractmethod
