@@ -26,6 +26,7 @@ class RelationshipType(str, Enum):
 class PartitionType(str, Enum):
     DOMAIN = "DOMAIN"
     LEXICAL = "LEXICAL"
+    TEMPORAL = "TEMPORAL"
 
 
 # ----------------------------
