@@ -7,6 +7,7 @@ from typing import List
 
 from .base import BaseRepository
 from ..models.entities import Person
+from ..models.enums import EntityType
 
 
 class PersonRepository(BaseRepository[Person]):
@@ -14,7 +15,7 @@ class PersonRepository(BaseRepository[Person]):
 
     @property
     def entity_label(self) -> str:
-        return "Person"
+        return EntityType.PERSON.value.capitalize()
 
     @property
     def entity_class(self) -> type[Person]:

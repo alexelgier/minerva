@@ -8,6 +8,7 @@ from typing import List
 
 from .base import BaseRepository
 from ..models.entities import Event
+from ..models.enums import EntityType
 
 
 class EventRepository(BaseRepository[Event]):
@@ -15,7 +16,7 @@ class EventRepository(BaseRepository[Event]):
 
     @property
     def entity_label(self) -> str:
-        return "Event"
+        return EntityType.EVENT.value.capitalize()
 
     @property
     def entity_class(self) -> type[Event]:

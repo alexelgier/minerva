@@ -7,6 +7,7 @@ from typing import List
 
 from .base import BaseRepository
 from ..models.entities import Emotion
+from ..models.enums import EntityType
 
 
 class EmotionRepository(BaseRepository[Emotion]):
@@ -14,7 +15,7 @@ class EmotionRepository(BaseRepository[Emotion]):
 
     @property
     def entity_label(self) -> str:
-        return "Emotion"
+        return EntityType.EMOTION.value.capitalize()
 
     @property
     def entity_class(self) -> type[Emotion]:

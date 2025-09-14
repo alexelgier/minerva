@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from .base import BaseRepository
 from ..models.documents import JournalEntry
+from ..models.enums import DocumentType
 
 
 class JournalEntryRepository(BaseRepository[JournalEntry]):
@@ -14,7 +15,7 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
 
     @property
     def entity_label(self) -> str:
-        return "JournalEntry"
+        return "".join(x.capitalize() for x in DocumentType.JOURNAL_ENTRY.value.split("_"))
 
     @property
     def entity_class(self) -> type[JournalEntry]:

@@ -6,7 +6,7 @@ from typing import List
 
 from .base import BaseRepository
 from ..models.entities import Resource
-from ..models.enums import ResourceType, ResourceStatus
+from ..models.enums import ResourceType, ResourceStatus, EntityType
 
 
 class ResourceRepository(BaseRepository[Resource]):
@@ -14,7 +14,7 @@ class ResourceRepository(BaseRepository[Resource]):
 
     @property
     def entity_label(self) -> str:
-        return "Resource"
+        return EntityType.RESOURCE.value.capitalize()
 
     @property
     def entity_class(self) -> type[Resource]:

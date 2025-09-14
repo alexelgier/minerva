@@ -7,7 +7,7 @@ from typing import List
 
 from .base import BaseRepository
 from ..models.entities import Project
-from ..models.enums import ProjectStatus
+from ..models.enums import ProjectStatus, EntityType
 
 
 class ProjectRepository(BaseRepository[Project]):
@@ -15,7 +15,7 @@ class ProjectRepository(BaseRepository[Project]):
 
     @property
     def entity_label(self) -> str:
-        return "Project"
+        return EntityType.PROJECT.value.capitalize()
 
     @property
     def entity_class(self) -> type[Project]:
