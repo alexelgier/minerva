@@ -4,6 +4,7 @@ from dependency_injector import containers, providers
 
 from minerva_backend.config import settings
 from minerva_backend.graph.db import Neo4jConnection
+from minerva_backend.graph.services.knowledge_graph_service import KnowledgeGraphService
 from minerva_backend.processing.curation_manager import CurationManager
 from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator
 
@@ -34,4 +35,9 @@ class Container(containers.DeclarativeContainer):
     pipeline_orchestrator = providers.Singleton(
         PipelineOrchestrator,
         temporal_uri=config.TEMPORAL_URI,
+    )
+
+    kg_service = providers.Singleton(
+        KnowledgeGraphService,
+        connection=db_connection,
     )

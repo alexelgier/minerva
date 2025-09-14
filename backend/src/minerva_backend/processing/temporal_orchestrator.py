@@ -10,9 +10,12 @@ from temporalio.client import Client
 from temporalio.common import RetryPolicy
 from temporalio.worker import Worker
 
+from minerva_backend.containers import Container
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
+from minerva_backend.graph.services.knowledge_graph_service import KnowledgeGraphService
+from minerva_backend.processing.curation_manager import CurationManager
 
 
 class PipelineStage(str, Enum):
@@ -54,84 +57,74 @@ class PipelineState:
 
 # ===== ACTIVITIES (The actual work) =====
 
-@activity.defn
-async def extract_entities(journal_entry: JournalEntry) -> List[Entity]:
-    """Stage 1-2: Extract standalone and relational entities using LLM"""
+class PipelineActivities:
+    def __init__(self, curation_manager: CurationManager, kg_service: KnowledgeGraphService):
+        self.curation_manager = curation_manager
+        self.kg_service = kg_service
 
-    # This will call your Ollama extraction pipeline
-    return []
+    @activity.defn
+    async def extract_entities(self, journal_entry: JournalEntry) -> List[Entity]:
+        """Stage 1-2: Extract standalone and relational entities using LLM"""
 
-
-@activity.defn
-async def extract_relationships(journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
-    """Stage 3: Extract relationships between entities"""
-
-    # This will call your Ollama extraction pipeline
-    return []
+        # This will call your Ollama extraction pipeline
+        return []
 
 
-@activity.defn
-async def submit_entity_curation(journal_entry: JournalEntry, entities: List[Entity]) -> None:
-    """Human-in-the-loop: Wait for user to curate entities"""
-    from minerva_backend.processing.curation_manager import CurationManager
+    @activity.defn
+    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
+        """Stage 3: Extract relationships between entities"""
 
-    curation_mgr = CurationManager()
-
-    # Add to curation queue
-    await curation_mgr.queue_entity_curation(journal_entry.uuid, journal_entry.entry_text, entities)
+        # This will call your Ollama extraction pipeline
+        return []
 
 
-@activity.defn
-async def wait_for_entity_curation(journal_entry: JournalEntry) -> List[Entity]:
-    """Human-in-the-loop: Wait for user to curate entities"""
-    from minerva_backend.processing.curation_manager import CurationManager
-
-    curation_mgr = CurationManager()
-    # Poll until user completes curation (with heartbeat to keep workflow alive)
-    while True:
-        result = await curation_mgr.get_entity_curation_result(journal_entry.uuid)
-        if result:
-            return result
-        # Temporal heartbeat to prevent timeout
-        activity.heartbeat()
-        await asyncio.sleep(30)  # Check every 30 seconds
+    @activity.defn
+    async def submit_entity_curation(self, journal_entry: JournalEntry, entities: List[Entity]) -> None:
+        """Human-in-the-loop: Wait for user to curate entities"""
+        # Add to curation queue
+        await self.curation_manager.queue_entity_curation(journal_entry.uuid, journal_entry.entry_text, entities)
 
 
-@activity.defn
-async def submit_relationship_curation(journal_entry: JournalEntry, entities: List[Entity],
+    @activity.defn
+    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[Entity]:
+        """Human-in-the-loop: Wait for user to curate entities"""
+        # Poll until user completes curation (with heartbeat to keep workflow alive)
+        while True:
+            result = await self.curation_manager.get_entity_curation_result(journal_entry.uuid)
+            if result:
+                return result
+            # Temporal heartbeat to prevent timeout
+            activity.heartbeat()
+            await asyncio.sleep(30)  # Check every 30 seconds
+
+
+    @activity.defn
+    async def submit_relationship_curation(self, journal_entry: JournalEntry, entities: List[Entity],
                                        relations: List[Relation]) -> None:
-    """Human-in-the-loop: Wait for user to curate entities"""
-    from minerva_backend.processing.curation_manager import CurationManager
-
-    curation_mgr = CurationManager()
-
-    # Add to curation queue
-    await curation_mgr.queue_relationship_curation(journal_entry.uuid, journal_entry.entry_text, entities, relations)
+        """Human-in-the-loop: Wait for user to curate entities"""
+        # Add to curation queue
+        await self.curation_manager.queue_relationship_curation(journal_entry.uuid, journal_entry.entry_text, entities, relations)
 
 
-@activity.defn
-async def wait_for_relationship_curation(journal_entry: JournalEntry) -> List[Relation]:
-    """Human-in-the-loop: Wait for user to curate relationships"""
-    from minerva_backend.processing.curation_manager import CurationManager
-
-    curation_mgr = CurationManager()
-    while True:
-        result = await curation_mgr.get_relationship_curation_result(journal_entry.uuid)
-        if result:
-            return result
-        activity.heartbeat()
-        await asyncio.sleep(30)
+    @activity.defn
+    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[Relation]:
+        """Human-in-the-loop: Wait for user to curate relationships"""
+        while True:
+            result = await self.curation_manager.get_relationship_curation_result(journal_entry.uuid)
+            if result:
+                return result
+            activity.heartbeat()
+            await asyncio.sleep(30)
 
 
-@activity.defn
-async def write_to_knowledge_graph(journal_entry: JournalEntry, entities: List[Entity],
+    @activity.defn
+    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[Entity],
                                    relationships: List[Relation]) -> bool:
-    """Final stage: Write curated data to Neo4j"""
-    from minerva_backend.graph.services.knowledge_graph_service import KnowledgeGraphService
-
-    kg_service = KnowledgeGraphService()
-    # Convert back to Pydantic models and save
-    return True
+        """Final stage: Write curated data to Neo4j"""
+        # In a real implementation, you would also pass the entities and relationships
+        # to the knowledge graph service to be persisted.
+        self.kg_service.add_journal_entry(journal_entry)
+        return True
 
 
 # ===== WORKFLOW (The orchestration) =====
@@ -161,7 +154,7 @@ class JournalProcessingWorkflow:
             # Stage 1-2: Entity Extraction (LLM)
             self.state.stage = PipelineStage.ENTITY_PROCESSING
             self.state.entities_extracted = await workflow.execute_activity(
-                extract_entities,
+                "extract_entities",
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(minutes=60),  # Max 60 min for Entity Extraction
                 retry_policy=llm_retry_policy,
@@ -170,15 +163,15 @@ class JournalProcessingWorkflow:
             # Stage 3.0: Submit Entities for curation
             self.state.stage = PipelineStage.SUBMIT_ENTITY_CURATION
             await workflow.execute_activity(
-                submit_entity_curation,
+                "submit_entity_curation",
                 args=[journal_entry, self.state.entities_extracted],
             )
 
             # Stage 3: Entity Curation (Human)
             self.state.stage = PipelineStage.WAIT_ENTITY_CURATION
             self.state.entities_curated = await workflow.execute_activity(
-                wait_for_entity_curation,
-                args=[journal_entry, self.state.entities_extracted],
+                "wait_for_entity_curation",
+                args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),  # User has 7 days
                 heartbeat_timeout=timedelta(minutes=2),  # Heartbeat every 2 min
             )
@@ -186,7 +179,7 @@ class JournalProcessingWorkflow:
             # Stage 4: Relationship Extraction (LLM)
             self.state.stage = PipelineStage.RELATION_PROCESSING
             self.state.relationships_extracted = await workflow.execute_activity(
-                extract_relationships,
+                "extract_relationships",
                 args=[journal_entry, self.state.entities_curated],
                 schedule_to_close_timeout=timedelta(minutes=10),
                 retry_policy=llm_retry_policy,
@@ -195,14 +188,14 @@ class JournalProcessingWorkflow:
             # Stage 5.0: Submit Relations for curation
             self.state.stage = PipelineStage.SUBMIT_RELATION_CURATION
             await workflow.execute_activity(
-                submit_relationship_curation,
+                "submit_relationship_curation",
                 args=[journal_entry, self.state.entities_curated, self.state.relationships_extracted],
             )
 
             # Stage 5: Relationship Curation (Human)
             self.state.stage = PipelineStage.WAIT_RELATION_CURATION
             self.state.relationships_curated = await workflow.execute_activity(
-                wait_for_relationship_curation,
+                "wait_for_relationship_curation",
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),
                 heartbeat_timeout=timedelta(minutes=2),
@@ -211,7 +204,7 @@ class JournalProcessingWorkflow:
             # Stage 6: Database Write
             self.state.stage = PipelineStage.DB_WRITE
             success = await workflow.execute_activity(
-                write_to_knowledge_graph,
+                "write_to_knowledge_graph",
                 args=[journal_entry, self.state.entities_curated, self.state.relationships_curated],
                 schedule_to_close_timeout=timedelta(minutes=5),
                 retry_policy=llm_retry_policy,
@@ -279,21 +272,25 @@ class PipelineOrchestrator:
 
 async def run_worker():
     """Start the Temporal worker that executes activities"""
-    client = await Client.connect("localhost:7233")
+    # Create a container instance for the worker
+    container = Container()
+    container.wire(modules=[__name__])
+
+    # Instantiate services
+    curation_manager = container.curation_manager()
+    await curation_manager.initialize()
+    kg_service = container.kg_service()
+
+    # Create activity instance with dependencies
+    activities = PipelineActivities(curation_manager, kg_service)
+
+    client = await Client.connect(container.config.TEMPORAL_URI())
 
     worker = Worker(
         client,
         task_queue="minerva-pipeline",
         workflows=[JournalProcessingWorkflow],
-        activities=[
-            extract_entities,
-            extract_relationships,
-            submit_entity_curation,
-            wait_for_entity_curation,
-            submit_relationship_curation,
-            wait_for_relationship_curation,
-            write_to_knowledge_graph
-        ]
+        activities=[activities],
     )
 
     print("🚀 Minerva pipeline worker started...")

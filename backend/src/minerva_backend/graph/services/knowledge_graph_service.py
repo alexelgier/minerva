@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Any, Dict
 
-from minerva_backend.graph.db import Neo4jConnection, get_connection
+from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.repositories.concept_repository import ConceptRepository
 from minerva_backend.graph.repositories.emotion_repository import EmotionRepository
@@ -22,11 +22,11 @@ class KnowledgeGraphService:
     Combines repository actions into complex workflows.
     """
 
-    def __init__(self, connection: Neo4jConnection = None):
+    def __init__(self, connection: Neo4jConnection):
         """
         Initializes the service with a database connection and all repositories.
         """
-        self.connection = connection or get_connection()
+        self.connection = connection
         self.person_repository = PersonRepository(self.connection)
         self.emotion_repository = EmotionRepository(self.connection)
         self.event_repository = EventRepository(self.connection)
