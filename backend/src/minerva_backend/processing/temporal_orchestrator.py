@@ -47,10 +47,13 @@ class PipelineState:
             "stage": self.stage.value,
             "created_at": self.created_at.isoformat(),
             "journal_entry": self.journal_entry.model_dump() if self.journal_entry else None,
-            "entities_extracted": [e.model_dump() for e in self.entities_extracted] if self.entities_extracted else None,
+            "entities_extracted": [e.model_dump() for e in
+                                   self.entities_extracted] if self.entities_extracted else None,
             "entities_curated": [e.model_dump() for e in self.entities_curated] if self.entities_curated else None,
-            "relationships_extracted": [r.model_dump() for r in self.relationships_extracted] if self.relationships_extracted else None,
-            "relationships_curated": [r.model_dump() for r in self.relationships_curated] if self.relationships_curated else None,
+            "relationships_extracted": [r.model_dump() for r in
+                                        self.relationships_extracted] if self.relationships_extracted else None,
+            "relationships_curated": [r.model_dump() for r in
+                                      self.relationships_curated] if self.relationships_curated else None,
             "error_count": self.error_count
         }
 
@@ -69,7 +72,6 @@ class PipelineActivities:
         # This will call your Ollama extraction pipeline
         return []
 
-
     @activity.defn
     async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
         """Stage 3: Extract relationships between entities"""
@@ -77,13 +79,11 @@ class PipelineActivities:
         # This will call your Ollama extraction pipeline
         return []
 
-
     @activity.defn
     async def submit_entity_curation(self, journal_entry: JournalEntry, entities: List[Entity]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
         # Add to curation queue
         await self.curation_manager.queue_entity_curation(journal_entry.uuid, journal_entry.entry_text, entities)
-
 
     @activity.defn
     async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[Entity]:
@@ -97,14 +97,13 @@ class PipelineActivities:
             activity.heartbeat()
             await asyncio.sleep(30)  # Check every 30 seconds
 
-
     @activity.defn
     async def submit_relationship_curation(self, journal_entry: JournalEntry, entities: List[Entity],
-                                       relations: List[Relation]) -> None:
+                                           relations: List[Relation]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
         # Add to curation queue
-        await self.curation_manager.queue_relationship_curation(journal_entry.uuid, journal_entry.entry_text, entities, relations)
-
+        await self.curation_manager.queue_relationship_curation(journal_entry.uuid, journal_entry.entry_text, entities,
+                                                                relations)
 
     @activity.defn
     async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[Relation]:
@@ -116,10 +115,9 @@ class PipelineActivities:
             activity.heartbeat()
             await asyncio.sleep(30)
 
-
     @activity.defn
     async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[Entity],
-                                   relationships: List[Relation]) -> bool:
+                                       relationships: List[Relation]) -> bool:
         """Final stage: Write curated data to Neo4j"""
         # In a real implementation, you would also pass the entities and relationships
         # to the knowledge graph service to be persisted.
@@ -129,7 +127,7 @@ class PipelineActivities:
 
 # ===== WORKFLOW (The orchestration) =====
 
-@workflow.defn
+@workflow.defn(name="JournalProcessing")
 class JournalProcessingWorkflow:
     """Main workflow that orchestrates the entire 6-stage pipeline"""
 
