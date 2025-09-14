@@ -22,103 +22,105 @@ class JournalEntry(Document):
     wake: datetime | None = Field(default=None, description="Fecha y hora de despertar")
     sleep: datetime | None = Field(default=None, description="Fecha y hora de dormir")
 
+    @classmethod
+    def from_text(cls, text: str, journal_date: str) -> JournalEntry:
+        """Parse journal entry from text and return a JournalEntry object."""
+        journal_entry = {}
 
-def parse_journal_entry(text: str, journal_date: str) -> JournalEntry:
-    """Parse journal entry and return a JournalEntry object."""
-    journal_entry = {}
+        # PANAS Positive
+        panas_pos_match = re.search(
+            r"## PANAS.*?Positive Affect.*?"
+            r"Interested::\s*(\d+).*?"
+            r"Excited::\s*(\d+).*?"
+            r"Strong::\s*(\d+).*?"
+            r"Enthusiastic::\s*(\d+).*?"
+            r"Proud::\s*(\d+).*?"
+            r"Alert::\s*(\d+).*?"
+            r"Inspired::\s*(\d+).*?"
+            r"Determined::\s*(\d+).*?"
+            r"Attentive::\s*(\d+).*?"
+            r"Active::\s*(\d+)",
+            text, re.DOTALL)
+        if panas_pos_match:
+            journal_entry['panas_pos'] = [int(val) for val in panas_pos_match.groups()]
 
-    # PANAS Positive
-    panas_pos_match = re.search(
-        r"## PANAS.*?Positive Affect.*?"
-        r"Interested::\s*(\d+).*?"
-        r"Excited::\s*(\d+).*?"
-        r"Strong::\s*(\d+).*?"
-        r"Enthusiastic::\s*(\d+).*?"
-        r"Proud::\s*(\d+).*?"
-        r"Alert::\s*(\d+).*?"
-        r"Inspired::\s*(\d+).*?"
-        r"Determined::\s*(\d+).*?"
-        r"Attentive::\s*(\d+).*?"
-        r"Active::\s*(\d+)",
-        text, re.DOTALL)
-    if panas_pos_match:
-        journal_entry['panas_pos'] = [int(val) for val in panas_pos_match.groups()]
+        # PANAS Negative
+        panas_neg_match = re.search(
+            r"Negative Affect.*?"
+            r"Distressed::\s*(\d+).*?"
+            r"Upset::\s*(\d+).*?"
+            r"Guilty::\s*(\d+).*?"
+            r"Scared::\s*(\d+).*?"
+            r"Hostile::\s*(\d+).*?"
+            r"Irritable::\s*(\d+).*?"
+            r"Ashamed::\s*(\d+).*?"
+            r"Nervous::\s*(\d+).*?"
+            r"Jittery::\s*(\d+).*?"
+            r"Afraid::\s*(\d+)",
+            text, re.DOTALL)
+        if panas_neg_match:
+            journal_entry['panas_neg'] = [int(val) for val in panas_neg_match.groups()]
 
-    # PANAS Negative
-    panas_neg_match = re.search(
-        r"Negative Affect.*?"
-        r"Distressed::\s*(\d+).*?"
-        r"Upset::\s*(\d+).*?"
-        r"Guilty::\s*(\d+).*?"
-        r"Scared::\s*(\d+).*?"
-        r"Hostile::\s*(\d+).*?"
-        r"Irritable::\s*(\d+).*?"
-        r"Ashamed::\s*(\d+).*?"
-        r"Nervous::\s*(\d+).*?"
-        r"Jittery::\s*(\d+).*?"
-        r"Afraid::\s*(\d+)",
-        text, re.DOTALL)
-    if panas_neg_match:
-        journal_entry['panas_neg'] = [int(val) for val in panas_neg_match.groups()]
+        # BPNS
+        bpns_match = re.search(
+            r"## BPNS.*?"
+            r"Autonomy.*?"
+            r"I feel like I can make choices about the things I do::\s*(\d+).*?"
+            r"I feel free to decide how I do my daily tasks::\s*(\d+).*?"
+            r"Competence.*?"
+            r"I feel capable at the things I do::\s*(\d+).*?"
+            r"I can successfully complete challenging tasks::\s*(\d+).*?"
+            r"Relatedness.*?"
+            r"I feel close and connected with the people around me::"
+            r"\s*(\d+).*?I get along well with the people I interact with daily::"
+            r"\s*(\d+).*?I feel supported by others in my life::\s*(\d+)",
+            text, re.DOTALL)
+        if bpns_match:
+            journal_entry['bpns'] = [int(val) for val in bpns_match.groups()]
 
-    # BPNS
-    bpns_match = re.search(
-        r"## BPNS.*?"
-        r"Autonomy.*?"
-        r"I feel like I can make choices about the things I do::\s*(\d+).*?"
-        r"I feel free to decide how I do my daily tasks::\s*(\d+).*?"
-        r"Competence.*?"
-        r"I feel capable at the things I do::\s*(\d+).*?"
-        r"I can successfully complete challenging tasks::\s*(\d+).*?"
-        r"Relatedness.*?"
-        r"I feel close and connected with the people around me::"
-        r"\s*(\d+).*?I get along well with the people I interact with daily::"
-        r"\s*(\d+).*?I feel supported by others in my life::\s*(\d+)",
-        text, re.DOTALL)
-    if bpns_match:
-        journal_entry['bpns'] = [int(val) for val in bpns_match.groups()]
+        # Flourishing
+        flour_match = re.search(
+            r"## Flourishing Scale.*?I lead a purposeful and meaningful life::\s*(\d+).*?"
+            r"My social relationships are supportive and rewarding::\s*(\d+).*?"
+            r"I am engaged and interested in my daily activities::\s*(\d+).*?"
+            r"I actively contribute to the happiness and well-being of others::\s*(\d+).*?"
+            r"I am competent and capable in the activities that are important to me::\s*(\d+).*?"
+            r"I am a good person and live a good life::\s*(\d+).*?"
+            r"I am optimistic about my future::\s*(\d+).*?"
+            r"People respect me::\s*(\d+)",
+            text, re.DOTALL)
+        if flour_match:
+            journal_entry['flourishing'] = [int(val) for val in flour_match.groups()]
 
-    # Flourishing
-    flour_match = re.search(
-        r"## Flourishing Scale.*?I lead a purposeful and meaningful life::\s*(\d+).*?"
-        r"My social relationships are supportive and rewarding::\s*(\d+).*?"
-        r"I am engaged and interested in my daily activities::\s*(\d+).*?"
-        r"I actively contribute to the happiness and well-being of others::\s*(\d+).*?"
-        r"I am competent and capable in the activities that are important to me::\s*(\d+).*?"
-        r"I am a good person and live a good life::\s*(\d+).*?"
-        r"I am optimistic about my future::\s*(\d+).*?"
-        r"People respect me::\s*(\d+)",
-        text, re.DOTALL)
-    if flour_match:
-        journal_entry['flourishing'] = [int(val) for val in flour_match.groups()]
+        # Wake / Bed
+        wake_bed_match = re.search(
+            r"Wake time:\s*(\d\d:?\d\d).*?Bedtime:\s*(\d\d:?\d\d)",
+            text, re.DOTALL)
+        if wake_bed_match:
+            wake = "".join(wake_bed_match.groups()[0].split(":"))
+            bed = "".join(wake_bed_match.groups()[1].split(":"))
+            journal_entry['wake'] = time(int(wake[:2]), int(wake[2:]))
+            journal_entry['sleep'] = time(int(bed[:2]), int(bed[2:]))
 
-    # Wake / Bed
-    wake_bed_match = re.search(
-        r"Wake time:\s*(\d\d:?\d\d).*?Bedtime:\s*(\d\d:?\d\d)",
-        text, re.DOTALL)
-    if wake_bed_match:
-        wake = "".join(wake_bed_match.groups()[0].split(":"))
-        bed = "".join(wake_bed_match.groups()[1].split(":"))
-        journal_entry['wake'] = time(int(wake[:2]), int(wake[2:]))
-        journal_entry['sleep'] = time(int(bed[:2]), int(bed[2:]))
+        # Date
+        journal_date = journal_date.split("-")
+        journal_entry['date'] = date(int(journal_date[0]), int(journal_date[1]), int(journal_date[2]))
 
-    # Date
-    journal_date = journal_date.split("-")
-    journal_entry['date'] = date(int(journal_date[0]), int(journal_date[1]), int(journal_date[2]))
+        # Narration
+        journal_entry['text'] = re.search(r"(.+?)(?=\n*---\n*-\s*Imagen, Detalle:|\n*---.*## Noticias|\n*---.*## Sleep)",
+                                          text, re.DOTALL).group(0)
 
-    # Narration
-    journal_entry['text'] = re.search(r"(.+?)(?=\n*---\n*-\s*Imagen, Detalle:|\n*---.*## Noticias|\n*---.*## Sleep)",
-                                      text, re.DOTALL).group(0)
+        return cls(
+            id=date,
+            date=journal_entry['date'],
+            text=journal_entry['text'],
+            fulltext=text,
+            panas_pos=journal_entry.get('panas_pos'),
+            panas_neg=journal_entry.get('panas_neg'),
+            bpns=journal_entry.get('bpns'),
+            flourishing=journal_entry.get('flourishing'),
+            wake=journal_entry.get('wake'),
+            sleep=journal_entry.get('sleep'),
+        )
 
-    return JournalEntry(
-        id=date,
-        date=journal_entry['date'],
-        text=journal_entry['text'],
-        fulltext=text,
-        panas_pos=journal_entry.get('panas_pos'),
-        panas_neg=journal_entry.get('panas_neg'),
-        bpns=journal_entry.get('bpns'),
-        flourishing=journal_entry.get('flourishing'),
-        wake=journal_entry.get('wake'),
-        sleep=journal_entry.get('sleep'),
-    )
+
