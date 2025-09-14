@@ -7,6 +7,7 @@ import os
 try:
     # It's a good practice to use python-dotenv for local development
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     # If dotenv is not installed, we'll just rely on system environment variables
