@@ -1,17 +1,17 @@
 # pipeline/temporal_orchestrator.py
 import asyncio
-from datetime import datetime, timedelta, UTC, date
+from dataclasses import dataclass
+from datetime import datetime, timedelta, UTC
 from enum import Enum
 from typing import Dict, Any, List
-from dataclasses import dataclass
 
 from temporalio import workflow, activity
-from temporalio.common import RetryPolicy
 from temporalio.client import Client
+from temporalio.common import RetryPolicy
 from temporalio.worker import Worker
 
-from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
 
 
@@ -97,13 +97,13 @@ async def submit_relationship_curation(journal_entry: JournalEntry, entities: Li
 
 
 @activity.defn
-async def wait_for_relationship_curation(journal_id: str, relationships: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def wait_for_relationship_curation(journal_entry: JournalEntry) -> List[Relation]:
     """Human-in-the-loop: Wait for user to curate relationships"""
     from minerva_backend.processing.curation_manager import CurationManager
 
     curation_mgr = CurationManager()
     while True:
-        result = await curation_mgr.get_relationship_curation_result(journal_id)
+        result = await curation_mgr.get_relationship_curation_result(journal_entry.uuid)
         if result:
             return result
         activity.heartbeat()
@@ -111,8 +111,8 @@ async def wait_for_relationship_curation(journal_id: str, relationships: List[Di
 
 
 @activity.defn
-async def write_to_knowledge_graph(journal_id: str, entities: List[Dict[str, Any]],
-                                   relationships: List[Dict[str, Any]]) -> bool:
+async def write_to_knowledge_graph(journal_entry: JournalEntry, entities: List[Entity],
+                                   relationships: List[Relation]) -> bool:
     """Final stage: Write curated data to Neo4j"""
     from minerva_backend.graph.services.knowledge_graph_service import KnowledgeGraphService
 
@@ -156,7 +156,7 @@ class JournalProcessingWorkflow:
 
             # Stage 3.0: Submit Entities for curation
             self.state.stage = PipelineStage.SUBMIT_ENTITY_CURATION
-            self.state.entities_curated = await workflow.execute_activity(
+            await workflow.execute_activity(
                 submit_entity_curation,
                 args=[journal_entry, self.state.entities_extracted],
             )
@@ -181,16 +181,16 @@ class JournalProcessingWorkflow:
 
             # Stage 5.0: Submit Relations for curation
             self.state.stage = PipelineStage.SUBMIT_RELATION_CURATION
-            self.state.entities_curated = await workflow.execute_activity(
-                submit_entity_curation,
-                args=[journal_entry, self.state.entities_extracted],
+            await workflow.execute_activity(
+                submit_relationship_curation,
+                args=[journal_entry, self.state.entities_curated, self.state.relationships_extracted],
             )
 
             # Stage 5: Relationship Curation (Human)
             self.state.stage = PipelineStage.WAIT_RELATION_CURATION
             self.state.relationships_curated = await workflow.execute_activity(
                 wait_for_relationship_curation,
-                args=[journal_id, self.state.relationships_extracted],
+                args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),
                 heartbeat_timeout=timedelta(minutes=2),
             )
@@ -199,7 +199,7 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.DB_WRITE
             success = await workflow.execute_activity(
                 write_to_knowledge_graph,
-                args=[journal_id, self.state.entities_curated, self.state.relationships_curated],
+                args=[journal_entry, self.state.entities_curated, self.state.relationships_curated],
                 schedule_to_close_timeout=timedelta(minutes=5),
                 retry_policy=llm_retry_policy,
             )
@@ -208,7 +208,7 @@ class JournalProcessingWorkflow:
                 self.state.stage = PipelineStage.COMPLETED
 
         except Exception as e:
-            workflow.logger.error(f"Pipeline failed for {journal_id}: {e}")
+            workflow.logger.error(f"Pipeline failed for {journal_entry.date}({journal_entry.uuid}): {e}")
             self.state.error_count += 1
             raise
 
@@ -274,7 +274,9 @@ async def run_worker():
         activities=[
             extract_entities,
             extract_relationships,
+            submit_entity_curation,
             wait_for_entity_curation,
+            submit_relationship_curation,
             wait_for_relationship_curation,
             write_to_knowledge_graph
         ]

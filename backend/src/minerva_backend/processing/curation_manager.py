@@ -140,7 +140,7 @@ class CurationManager:
             """, (journal_id, journal_text, json.dumps(entities), json.dumps(relationships)))
             await db.commit()
 
-    async def get_relationship_curation_result(self, journal_id: str) -> Optional[List[Dict[str, Any]]]:
+    async def get_relationship_curation_result(self, journal_id: str) -> List[Relation] | None:
         """Check if relationship curation is complete, return curated relationships if done"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
