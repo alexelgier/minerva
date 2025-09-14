@@ -9,6 +9,8 @@ from typing import Optional, Dict, Any
 import logging
 from contextlib import contextmanager
 
+from minerva_backend.config import settings
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,9 +23,9 @@ class Neo4jConnection:
     """
 
     def __init__(self,
-                 uri: str = "bolt://localhost:7687",
-                 user: str = "neo4j",
-                 password: str = "Alxe342!",
+                 uri: str = settings.NEO4J_URI,
+                 user: str = settings.NEO4J_USER,
+                 password: str = settings.NEO4J_PASSWORD,
                  max_pool_size: int = 50,
                  max_connection_lifetime: int = 3600):
         """
@@ -222,15 +224,14 @@ def get_connection() -> Neo4jConnection:
     global _connection
 
     if _connection is None:
-        # Default connection parameters - should be overridden in production
         _connection = Neo4jConnection()
 
     return _connection
 
 
-def initialize_connection(uri: str = "bolt://localhost:7687",
-                          user: str = "neo4j",
-                          password: str = "Alxe342!",
+def initialize_connection(uri: str = settings.NEO4J_URI,
+                          user: str = settings.NEO4J_USER,
+                          password: str = settings.NEO4J_PASSWORD,
                           **kwargs) -> Neo4jConnection:
     """
     Initialize the global database connection.
