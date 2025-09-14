@@ -9,7 +9,7 @@ from datetime import datetime
 import logging
 
 from minerva_backend.graph.db import get_connection, Neo4jConnection
-from minerva_backend.graph.models.base import Entity
+from minerva_backend.graph.models.entities import Entity
 
 logger = logging.getLogger(__name__)
 
