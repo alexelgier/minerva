@@ -22,6 +22,7 @@ class CurationManager:
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS entity_curation (
                     journal_id TEXT,
+                    journal_text TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     entities_json TEXT,
                     curated_entities_json TEXT NULL,
@@ -33,6 +34,7 @@ class CurationManager:
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS relationship_curation (
                     journal_id TEXT,
+                    journal_text TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     relationships_json TEXT,
                     curated_relationships_json TEXT NULL,
@@ -55,14 +57,14 @@ class CurationManager:
 
     # ===== ENTITY CURATION =====
 
-    async def queue_entity_curation(self, journal_id: str, entities: List[Dict[str, Any]]) -> None:
+    async def queue_entity_curation(self, journal_id: str, journal_text: str, entities: List[Dict[str, Any]]) -> None:
         """Add entities to curation queue"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 INSERT OR REPLACE INTO entity_curation 
-                (journal_id, entities_json, status) 
-                VALUES (?, ?, 'PENDING')
-            """, (journal_id, json.dumps(entities)))
+                (journal_id, journal_text, entities_json, status) 
+                VALUES (?, ?, ?, 'PENDING')
+            """, (journal_id, journal_text, json.dumps(entities)))
             await db.commit()
 
     async def get_entity_curation_result(self, journal_id: str) -> Optional[List[Dict[str, Any]]]:
@@ -83,7 +85,7 @@ class CurationManager:
         """Get all pending entity curation tasks, oldest first"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT journal_id, entities_json, created_at, status
+                SELECT journal_id, journal_text, entities_json, created_at, status
                 FROM entity_curation 
                 WHERE status IN ('PENDING', 'IN_PROGRESS')
                 ORDER BY created_at ASC
@@ -93,9 +95,10 @@ class CurationManager:
                 return [
                     {
                         "journal_id": row[0],
-                        "entities": json.loads(row[1]),
-                        "created_at": row[2],
-                        "status": row[3]
+                        "journal_text": row[1],
+                        "entities": json.loads(row[2]),
+                        "created_at": row[3],
+                        "status": row[4]
                     }
                     for row in rows
                 ]
@@ -123,14 +126,15 @@ class CurationManager:
 
     # ===== RELATIONSHIP CURATION =====
 
-    async def queue_relationship_curation(self, journal_id: str, relationships: List[Dict[str, Any]]) -> None:
+    async def queue_relationship_curation(self, journal_id: str, journal_text: str,
+                                          relationships: List[Dict[str, Any]]) -> None:
         """Add relationships to curation queue"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 INSERT OR REPLACE INTO relationship_curation 
-                (journal_id, relationships_json, status) 
-                VALUES (?, ?, 'PENDING')
-            """, (journal_id, json.dumps(relationships)))
+                (journal_id, journal_text, relationships_json, status) 
+                VALUES (?, ?, ?, 'PENDING')
+            """, (journal_id, journal_text, json.dumps(relationships)))
             await db.commit()
 
     async def get_relationship_curation_result(self, journal_id: str) -> Optional[List[Dict[str, Any]]]:
@@ -151,7 +155,7 @@ class CurationManager:
         """Get all pending relationship curation tasks, oldest first"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT journal_id, relationships_json, created_at, status
+                SELECT journal_id, journal_text, relationships_json, created_at, status
                 FROM relationship_curation 
                 WHERE status IN ('PENDING', 'IN_PROGRESS')
                 ORDER BY created_at ASC
@@ -161,9 +165,10 @@ class CurationManager:
                 return [
                     {
                         "journal_id": row[0],
-                        "relationships": json.loads(row[1]),
-                        "created_at": row[2],
-                        "status": row[3]
+                        "journal_text": row[1],
+                        "relationships": json.loads(row[2]),
+                        "created_at": row[3],
+                        "status": row[4]
                     }
                     for row in rows
                 ]

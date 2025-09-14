@@ -12,6 +12,7 @@ from temporalio.worker import Worker
 
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.graph.models.relations import Relation
 
 
 class PipelineStage(str, Enum):
@@ -31,15 +32,15 @@ class PipelineState:
     created_at: datetime
     entities_extracted: List[Entity] = None
     entities_curated: List[Entity] = None
-    relationships_extracted: List[Dict[str, Any]] = None
-    relationships_curated: List[Dict[str, Any]] = None
+    relationships_extracted: List[Relation] = None
+    relationships_curated: List[Relation] = None
     error_count: int = 0
 
 
 # ===== ACTIVITIES (The actual work) =====
 
 @activity.defn
-async def extract_entities(journal_entry: JournalEntry) -> List[Dict[str, Any]]:
+async def extract_entities(journal_entry: JournalEntry) -> List[Entity]:
     """Stage 1-2: Extract standalone and relational entities using LLM"""
     # This will call your Ollama extraction pipeline
     from pipeline.llm_extractor import LLMExtractor
@@ -50,7 +51,7 @@ async def extract_entities(journal_entry: JournalEntry) -> List[Dict[str, Any]]:
 
 
 @activity.defn
-async def extract_relationships(journal_entry: JournalEntry, entities: List[Entity]) -> List[Dict[str, Any]]:
+async def extract_relationships(journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
     """Stage 3: Extract relationships between entities"""
     from pipeline.llm_extractor import LLMExtractor
 
@@ -60,7 +61,7 @@ async def extract_relationships(journal_entry: JournalEntry, entities: List[Enti
 
 
 @activity.defn
-async def wait_for_entity_curation(journal_entry: JournalEntry, entities: List[Entity]) -> List[Dict[str, Any]]:
+async def submit_entity_curation(journal_entry: JournalEntry, entities: List[Entity]) -> List[Dict[str, Any]]:
     """Human-in-the-loop: Wait for user to curate entities"""
     from minerva_backend.processing.curation_manager import CurationManager
 
@@ -69,6 +70,13 @@ async def wait_for_entity_curation(journal_entry: JournalEntry, entities: List[E
     # Add to curation queue
     await curation_mgr.queue_entity_curation(journal_entry, entities)
 
+
+@activity.defn
+async def wait_for_entity_curation(journal_entry: JournalEntry, entities: List[Entity]) -> List[Dict[str, Any]]:
+    """Human-in-the-loop: Wait for user to curate entities"""
+    from minerva_backend.processing.curation_manager import CurationManager
+
+    curation_mgr = CurationManager()
     # Poll until user completes curation (with heartbeat to keep workflow alive)
     while True:
         result = await curation_mgr.get_entity_curation_result(journal_entry)
@@ -149,6 +157,8 @@ class JournalProcessingWorkflow:
                 schedule_to_close_timeout=timedelta(minutes=60),  # Max 60 min for Entity Extraction
                 retry_policy=llm_retry_policy,
             )
+
+            # Stage 3.0: Submit Entities for curation
 
             # Stage 3: Entity Curation (Human)
             self.state.stage = PipelineStage.ENTITY_CURATION
