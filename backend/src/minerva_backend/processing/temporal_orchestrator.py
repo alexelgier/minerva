@@ -253,7 +253,7 @@ class PipelineOrchestrator:
     async def get_pipeline_status(self, workflow_id: str) -> PipelineState:
         """Get current status of a journal processing pipeline"""
         handle = self.client.get_workflow_handle(workflow_id)
-        return await handle.query(JournalProcessingWorkflow.get_state)
+        return await handle.query("get_state")
 
     async def get_all_pending_curation(self) -> List[Dict[str, Any]]:
         """Get all journal entries waiting for curation (across all workflows)"""
