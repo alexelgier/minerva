@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from minerva_backend.containers import Container
+from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.processing.curation_manager import CurationManager
 from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator
@@ -232,19 +233,24 @@ async def complete_relationship_curation(
 @backend_app.get("/api/health")
 @inject
 async def health_check(
+        db: Neo4jConnection = Depends(Provide[Container.db_connection]),
         curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
 ):
     """Health check endpoint"""
     try:
         # Basic health checks
+        db_healthy = db.health_check()
         stats = await curation_manager.get_curation_stats()
 
+        is_healthy = db_healthy
+
         return {
-            "status": "healthy",
+            "status": "healthy" if is_healthy else "unhealthy",
             "services": {
                 "api": "running",
                 "temporal": "connected",
-                "curation_db": "accessible"
+                "curation_db": "accessible",
+                "neo4j_db": "healthy" if db_healthy else "unhealthy",
             },
             "curation_stats": stats
         }
