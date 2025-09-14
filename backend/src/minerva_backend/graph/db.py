@@ -209,59 +209,6 @@ class Neo4jConnection:
         self.close()
 
 
-# Global connection instance - can be imported by repositories
-_connection: Optional[Neo4jConnection] = None
-
-
-def get_connection() -> Neo4jConnection:
-    """
-    Get the global database connection instance.
-    Creates connection if it doesn't exist.
-
-    Returns:
-        Neo4jConnection: Global connection instance
-    """
-    global _connection
-
-    if _connection is None:
-        _connection = Neo4jConnection()
-
-    return _connection
-
-
-def initialize_connection(uri: str = settings.NEO4J_URI,
-                          user: str = settings.NEO4J_USER,
-                          password: str = settings.NEO4J_PASSWORD,
-                          **kwargs) -> Neo4jConnection:
-    """
-    Initialize the global database connection.
-    Should be called once at application startup.
-
-    Args:
-        uri: Neo4j connection URI
-        user: Database username
-        password: Database password
-        **kwargs: Additional connection parameters
-
-    Returns:
-        Neo4jConnection: Initialized connection instance
-    """
-    global _connection
-
-    if _connection:
-        _connection.close()
-
-    _connection = Neo4jConnection(uri, user, password, **kwargs)
-    return _connection
-
-
-def close_connection():
-    """Close the global database connection."""
-    global _connection
-
-    if _connection:
-        _connection.close()
-        _connection = None
 
 
 # Example usage and testing
