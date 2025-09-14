@@ -1,14 +1,10 @@
 # pipeline/curation_manager.py
-import asyncio
 import json
-import sqlite3
-from datetime import datetime
-from typing import List, Dict, Any, Optional
-from contextlib import asynccontextmanager
+from typing import List, Dict, Any
+
 import aiosqlite
 
 from minerva_backend.graph.models.entities import Entity
-from minerva_backend.graph.models.enums import EntityType
 from minerva_backend.graph.models.relations import Relation
 
 
