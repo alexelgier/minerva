@@ -10,7 +10,6 @@ from temporalio.client import Client
 from temporalio.common import RetryPolicy
 from temporalio.worker import Worker
 
-from minerva_backend.containers import Container
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
@@ -271,6 +270,7 @@ class PipelineOrchestrator:
 async def run_worker():
     """Start the Temporal worker that executes activities"""
     # Create a container instance for the worker
+    from minerva_backend.containers import Container
     container = Container()
     container.wire(modules=[__name__])
 
