@@ -37,7 +37,7 @@ class KnowledgeGraphService:
         self.journal_entry_repository = JournalEntryRepository(self.connection)
         self.temporal_repository = TemporalRepository(self.connection)
 
-    def add_journal_entry(self, journal_entry: JournalEntry) -> str:
+    def add_journal_entry(self, journal_entry: JournalEntry, ) -> str:
         """
         Adds a new journal entry and connects it to the time tree.
 

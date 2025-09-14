@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+from abc import ABC
 from datetime import date, datetime, timedelta
 from typing import List, Literal
 
 from pydantic import Field
 
-from .base import Entity
-from .enums import EntityType, ProjectStatus, ResourceStatus, ResourceType
+from .base import Node
+from .enums import EntityType, ProjectStatus, ResourceStatus, ResourceType, PartitionType
+
+
+class Entity(Node, ABC):
+    name: str = Field(..., description='nombre de la entidad')
+    type: EntityType = Field(..., description="Tipo de entidad (Persona, Evento, etc)")
+    summary_short: str = Field(..., description="Resumen de la entidad. Máximo 30 palabras")
+    summary: str = Field(..., description="Resumen de la entidad. Máximo 300 palabras")
+    partition: Literal[PartitionType.DOMAIN] = Field(PartitionType.DOMAIN.value,
+                                                     description="Tipo de partición (siempre DOMAIN)")
+    name_embedding: list[float] | None = Field(default=None, description='embedding del nombre')
 
 
 # ----------------------------
@@ -48,7 +59,8 @@ class Project(Entity):
     status: ProjectStatus | None = Field(default=None, description="Estado actual del proyecto")
     start_date: datetime | None = Field(default=None, description="Fecha de inicio del proyecto")
     target_completion: datetime | None = Field(default=None, description="Fecha de finalización objetivo o esperada")
-    progress: float | None = Field(default=None, description="Porcentaje de finalización (0.0 a 100.0)", ge=0.0, le=100.0)
+    progress: float | None = Field(default=None, description="Porcentaje de finalización (0.0 a 100.0)", ge=0.0,
+                                   le=100.0)
 
 
 class Concept(Entity):
@@ -62,7 +74,8 @@ class Resource(Entity):
     """Representa contenido externo (libros, artículos, videos) que sirve como fuente de información o entretenimiento."""
     title: str = Field(..., description="Título o nombre del recurso")
     category: ResourceType = Field(..., description="Categoría del recurso")
-    type: Literal[EntityType.RESOURCE] = Field(EntityType.RESOURCE.value, description="Tipo de entidad (siempre RESOURCE)")
+    type: Literal[EntityType.RESOURCE] = Field(EntityType.RESOURCE.value,
+                                               description="Tipo de entidad (siempre RESOURCE)")
     url: str | None = Field(default=None, description="URL web o ubicación donde se puede acceder al recurso")
     quotes: List[str] | None = Field(default=None, description="Citas o extractos notables del recurso")
     status: ResourceStatus | None = Field(default=None, description="Estado de consumo actual")
