@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, time
+from datetime import datetime, time
+from datetime import date as date_type
 from typing import List, Literal
 
 from pydantic import Field
@@ -11,7 +12,7 @@ from .enums import DocumentType
 
 
 class JournalEntry(Document):
-    date: date = Field(..., description="Fecha de la entrada del diario")
+    date: date_type = Field(..., description="Fecha de la entrada del diario")
     type: Literal[DocumentType.JOURNAL_ENTRY] = Field(DocumentType.JOURNAL_ENTRY.value,
                                                       description="Tipo de documento (siempre JOURNAL_ENTRY)")
     entry_text: str | None = Field(default=None, description="El texto principal de la entrada del diario")
@@ -104,14 +105,14 @@ class JournalEntry(Document):
 
         # Date
         journal_date = journal_date.split("-")
-        journal_entry['date'] = date(int(journal_date[0]), int(journal_date[1]), int(journal_date[2]))
+        journal_entry['date'] = date_type(int(journal_date[0]), int(journal_date[1]), int(journal_date[2]))
 
         # Narration
         journal_entry['text'] = re.search(r"(.+?)(?=\n*---\n*-\s*Imagen, Detalle:|\n*---.*## Noticias|\n*---.*## Sleep)",
                                           text, re.DOTALL).group(0)
 
         return cls(
-            id=date,
+            id=journal_date,
             date=journal_entry['date'],
             text=journal_entry['text'],
             fulltext=text,

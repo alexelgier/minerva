@@ -1,15 +1,15 @@
 # api/main.py
+import asyncio
 from contextlib import asynccontextmanager
+from typing import List, Dict, Any
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-from datetime import date
 
-from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator, PipelineState
-from minerva_backend.processing.curation_manager import CurationManager
 from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.processing.curation_manager import CurationManager
+from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator
 
 # Global instances
 orchestrator = PipelineOrchestrator()
@@ -55,6 +55,11 @@ async def submit_journal(submission: JournalSubmission):
         # Submit to Temporal workflow
         workflow_id = await orchestrator.submit_journal(journal_entry)
 
+        # Check the pipeline status
+        await asyncio.sleep(2)  # Give the workflow time to start
+        status = await orchestrator.get_pipeline_status(workflow_id)
+        print(f"Current pipeline stage: {status.stage.value}")
+
         return {
             "success": True,
             "workflow_id": workflow_id,
@@ -75,7 +80,7 @@ async def get_pipeline_status(workflow_id: str):
         status = await orchestrator.get_pipeline_status(workflow_id)
         return {
             "workflow_id": workflow_id,
-            "status": status.dict()
+            "status": status.to_dict()
         }
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Workflow not found: {str(e)}")
