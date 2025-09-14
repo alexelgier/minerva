@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 from uuid import uuid4
 
-from minerva_backend.graph.db import get_connection, Neo4jConnection
+from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import JournalEntry
 
 logger = logging.getLogger(__name__)
@@ -20,9 +20,9 @@ class TemporalRepository:
     Handles Year -> Month -> Day hierarchy and temporal relationships.
     """
 
-    def __init__(self, connection: Neo4jConnection = None):
+    def __init__(self, connection: Neo4jConnection):
         """Initialize repository with database connection."""
-        self.connection = connection or get_connection()
+        self.connection = connection
 
     def ensure_day_in_time_tree(self, target_date: date) -> str:
         """
