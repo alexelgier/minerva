@@ -20,6 +20,7 @@ class Settings:
     NEO4J_USER: str = os.environ.get("NEO4J_USER", "neo4j")
     NEO4J_PASSWORD: str = os.environ.get("NEO4J_PASSWORD", "Alxe342!")
     CURATION_DB_PATH: str = os.environ.get("CURATION_DB_PATH", "curation.db")
+    TEMPORAL_URI: str = os.environ.get("TEMPORAL_URI", "localhost:7233")
 
 
 # Singleton instance of settings

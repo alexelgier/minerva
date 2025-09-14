@@ -238,12 +238,13 @@ class JournalProcessingWorkflow:
 class PipelineOrchestrator:
     """Main interface for starting and monitoring journal processing pipelines"""
 
-    def __init__(self):
-        self.client = None
+    def __init__(self, temporal_uri: str):
+        self.temporal_uri = temporal_uri
+        self.client: Client | None = None
 
     async def initialize(self):
         """Connect to Temporal server"""
-        self.client = await Client.connect("localhost:7233")
+        self.client = await Client.connect(self.temporal_uri)
 
     async def submit_journal(self, journal_entry: JournalEntry) -> str:
         """Submit a journal entry for processing"""

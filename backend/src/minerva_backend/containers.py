@@ -31,4 +31,7 @@ class Container(containers.DeclarativeContainer):
         db_path=config.CURATION_DB_PATH,
     )
 
-    pipeline_orchestrator = providers.Singleton(PipelineOrchestrator)
+    pipeline_orchestrator = providers.Singleton(
+        PipelineOrchestrator,
+        temporal_uri=config.TEMPORAL_URI,
+    )

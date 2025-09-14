@@ -3,30 +3,38 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any
 
-from fastapi import FastAPI, HTTPException
+from dependency_injector.wiring import inject, Provide
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from minerva_backend.containers import Container
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.processing.curation_manager import CurationManager
 from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator
 
-# Global instances
-orchestrator = PipelineOrchestrator()
-curation_manager = CurationManager()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize connections on startup
-    await orchestrator.initialize()
-    await curation_manager.initialize()
+    # Initialize container and services on startup
+    container: Container = app.state.container
+    await container.curation_manager().initialize()
+    await container.pipeline_orchestrator().initialize()
 
     yield
-    # Clean up
 
+    # Clean up on shutdown
+    container.db_connection().close()
+
+
+# --- FastAPI App Initialization ---
+
+# Create the container
+container = Container()
 
 backend_app = FastAPI(title="Minerva Backend", version="0.1.0", lifespan=lifespan)
+backend_app.state.container = container
+backend_app.state.container.wire(modules=[__name__])
 
 # CORS for Vue.js dashboard
 backend_app.add_middleware(
@@ -46,7 +54,11 @@ class JournalSubmission(BaseModel):
 
 
 @backend_app.post("/api/journal/submit")
-async def submit_journal(submission: JournalSubmission):
+@inject
+async def submit_journal(
+        submission: JournalSubmission,
+        orchestrator: PipelineOrchestrator = Depends(Provide[Container.pipeline_orchestrator])
+):
     """Submit a journal entry for processing"""
     try:
         # Create JournalEntry model
@@ -74,7 +86,11 @@ async def submit_journal(submission: JournalSubmission):
 # ===== PIPELINE STATUS ENDPOINTS =====
 
 @backend_app.get("/api/pipeline/status/{workflow_id}")
-async def get_pipeline_status(workflow_id: str):
+@inject
+async def get_pipeline_status(
+        workflow_id: str,
+        orchestrator: PipelineOrchestrator = Depends(Provide[Container.pipeline_orchestrator])
+):
     """Get the current status of a journal processing pipeline"""
     try:
         status = await orchestrator.get_pipeline_status(workflow_id)
@@ -87,7 +103,10 @@ async def get_pipeline_status(workflow_id: str):
 
 
 @backend_app.get("/api/pipeline/all-pending")
-async def get_all_pending_pipelines():
+@inject
+async def get_all_pending_pipelines(
+        orchestrator: PipelineOrchestrator = Depends(Provide[Container.pipeline_orchestrator])
+):
     """Get all pipelines currently in progress"""
     try:
         # This would be implemented to query Temporal for active workflows
@@ -100,7 +119,10 @@ async def get_all_pending_pipelines():
 # ===== CURATION ENDPOINTS =====
 
 @backend_app.get("/api/curation/pending")
-async def get_pending_curation():
+@inject
+async def get_pending_curation(
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
     """Get all pending curation tasks for the dashboard"""
     try:
         tasks = await curation_manager.get_all_pending_curation_tasks()
@@ -110,7 +132,10 @@ async def get_pending_curation():
 
 
 @backend_app.get("/api/curation/stats")
-async def get_curation_stats():
+@inject
+async def get_curation_stats(
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
     """Get curation statistics for dashboard"""
     try:
         stats = await curation_manager.get_curation_stats()
@@ -122,7 +147,11 @@ async def get_curation_stats():
 # ===== ENTITY CURATION ENDPOINTS =====
 
 @backend_app.get("/api/curation/entities/{journal_id}")
-async def get_entity_curation_task(journal_id: str):
+@inject
+async def get_entity_curation_task(
+        journal_id: str,
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
     """Get entity curation task for a specific journal entry"""
     try:
         tasks = await curation_manager.get_pending_entity_curation()
@@ -144,7 +173,12 @@ class EntityCurationResult(BaseModel):
 
 
 @backend_app.post("/api/curation/entities/{journal_id}/complete")
-async def complete_entity_curation(journal_id: str, result: EntityCurationResult):
+@inject
+async def complete_entity_curation(
+        journal_id: str,
+        result: EntityCurationResult,
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
     """Complete entity curation with user decisions"""
     try:
         await curation_manager.complete_entity_curation(journal_id, result.entities)
@@ -156,7 +190,11 @@ async def complete_entity_curation(journal_id: str, result: EntityCurationResult
 # ===== RELATIONSHIP CURATION ENDPOINTS =====
 
 @backend_app.get("/api/curation/relationships/{journal_id}")
-async def get_relationship_curation_task(journal_id: str):
+@inject
+async def get_relationship_curation_task(
+        journal_id: str,
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
     """Get relationship curation task for a specific journal entry"""
     try:
         tasks = await curation_manager.get_pending_relationship_curation()
@@ -175,7 +213,12 @@ class RelationshipCurationResult(BaseModel):
 
 
 @backend_app.post("/api/curation/relationships/{journal_id}/complete")
-async def complete_relationship_curation(journal_id: str, result: RelationshipCurationResult):
+@inject
+async def complete_relationship_curation(
+        journal_id: str,
+        result: RelationshipCurationResult,
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
     """Complete relationship curation with user decisions"""
     try:
         await curation_manager.complete_relationship_curation(journal_id, result.relationships)
@@ -187,7 +230,10 @@ async def complete_relationship_curation(journal_id: str, result: RelationshipCu
 # ===== HEALTH CHECKS =====
 
 @backend_app.get("/api/health")
-async def health_check():
+@inject
+async def health_check(
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
     """Health check endpoint"""
     try:
         # Basic health checks
