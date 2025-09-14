@@ -7,7 +7,9 @@ from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 import aiosqlite
 
+from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.enums import EntityType
+from minerva_backend.graph.models.relations import Relation
 
 
 class CurationManager:
@@ -57,7 +59,7 @@ class CurationManager:
 
     # ===== ENTITY CURATION =====
 
-    async def queue_entity_curation(self, journal_id: str, journal_text: str, entities: List[Dict[str, Any]]) -> None:
+    async def queue_entity_curation(self, journal_id: str, journal_text: str, entities: List[Entity]) -> None:
         """Add entities to curation queue"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
@@ -67,7 +69,7 @@ class CurationManager:
             """, (journal_id, journal_text, json.dumps(entities)))
             await db.commit()
 
-    async def get_entity_curation_result(self, journal_id: str) -> Optional[List[Dict[str, Any]]]:
+    async def get_entity_curation_result(self, journal_id: str) -> List[Entity] | None:
         """Check if entity curation is complete, return curated entities if done"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -126,8 +128,8 @@ class CurationManager:
 
     # ===== RELATIONSHIP CURATION =====
 
-    async def queue_relationship_curation(self, journal_id: str, journal_text: str,
-                                          relationships: List[Dict[str, Any]]) -> None:
+    async def queue_relationship_curation(self, journal_id: str, journal_text: str, entities: List[Entity],
+                                          relationships: List[Relation]) -> None:
         """Add relationships to curation queue"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
