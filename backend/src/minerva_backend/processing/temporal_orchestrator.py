@@ -239,11 +239,10 @@ class PipelineOrchestrator:
     async def submit_journal(self, journal_entry: JournalEntry) -> str:
         """Submit a journal entry for processing"""
         workflow_id = f"journal-{journal_entry.date}-{journal_entry.uuid}"
-        created_at = datetime.now(UTC)
 
         await self.client.start_workflow(
             JournalProcessingWorkflow.run,
-            args=[journal_entry, created_at],
+            args=[journal_entry],
             id=workflow_id,
             task_queue="minerva-pipeline"
         )
