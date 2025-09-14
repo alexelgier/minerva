@@ -9,7 +9,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiosqlite (>=0.21.0,<0.22.0)",
-    "temporalio (>=1.17.0,<2.0.0)"
+    "temporalio (>=1.17.0,<2.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)",
+    "dependency-injector (>=4.48.1,<5.0.0)"
 ]
 
 
