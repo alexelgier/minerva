@@ -18,18 +18,20 @@ from minerva_backend.graph.models.relations import Relation
 class PipelineStage(str, Enum):
     SUBMITTED = "SUBMITTED"
     ENTITY_PROCESSING = "ENTITY_PROCESSING"
-    ENTITY_CURATION = "ENTITY_CURATION"
+    SUBMIT_ENTITY_CURATION = "SUBMIT_ENTITY_CURATION"
+    WAIT_ENTITY_CURATION = "WAIT_ENTITY_CURATION"
     RELATION_PROCESSING = "RELATION_PROCESSING"
-    RELATION_CURATION = "RELATION_CURATION"
+    SUBMIT_RELATION_CURATION = "SUBMIT_RELATION_CURATION"
+    WAIT_RELATION_CURATION = "WAIT_RELATION_CURATION"
     DB_WRITE = "DB_WRITE"
     COMPLETED = "COMPLETED"
 
 
 @dataclass
 class PipelineState:
-    journal_entry: JournalEntry
     stage: PipelineStage
     created_at: datetime
+    journal_entry: JournalEntry = None
     entities_extracted: List[Entity] = None
     entities_curated: List[Entity] = None
     relationships_extracted: List[Relation] = None
@@ -42,50 +44,56 @@ class PipelineState:
 @activity.defn
 async def extract_entities(journal_entry: JournalEntry) -> List[Entity]:
     """Stage 1-2: Extract standalone and relational entities using LLM"""
-    # This will call your Ollama extraction pipeline
-    from pipeline.llm_extractor import LLMExtractor
 
-    extractor = LLMExtractor()
-    entities = await extractor.extract_all_entities(journal_text)
-    return [entity.dict() for entity in entities]
+    # This will call your Ollama extraction pipeline
+    return []
 
 
 @activity.defn
 async def extract_relationships(journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
     """Stage 3: Extract relationships between entities"""
-    from pipeline.llm_extractor import LLMExtractor
 
-    extractor = LLMExtractor()
-    relationships = await extractor.extract_relationships(entities)
-    return [rel.dict() for rel in relationships]
+    # This will call your Ollama extraction pipeline
+    return []
 
 
 @activity.defn
-async def submit_entity_curation(journal_entry: JournalEntry, entities: List[Entity]) -> List[Dict[str, Any]]:
+async def submit_entity_curation(journal_entry: JournalEntry, entities: List[Entity]) -> None:
     """Human-in-the-loop: Wait for user to curate entities"""
     from minerva_backend.processing.curation_manager import CurationManager
 
     curation_mgr = CurationManager()
 
     # Add to curation queue
-    await curation_mgr.queue_entity_curation(journal_entry, entities)
+    await curation_mgr.queue_entity_curation(journal_entry.uuid, journal_entry.entry_text, entities)
 
 
 @activity.defn
-async def wait_for_entity_curation(journal_entry: JournalEntry, entities: List[Entity]) -> List[Dict[str, Any]]:
+async def wait_for_entity_curation(journal_entry: JournalEntry) -> List[Entity]:
     """Human-in-the-loop: Wait for user to curate entities"""
     from minerva_backend.processing.curation_manager import CurationManager
 
     curation_mgr = CurationManager()
     # Poll until user completes curation (with heartbeat to keep workflow alive)
     while True:
-        result = await curation_mgr.get_entity_curation_result(journal_entry)
+        result = await curation_mgr.get_entity_curation_result(journal_entry.uuid)
         if result:
             return result
-
         # Temporal heartbeat to prevent timeout
         activity.heartbeat()
         await asyncio.sleep(30)  # Check every 30 seconds
+
+
+@activity.defn
+async def submit_relationship_curation(journal_entry: JournalEntry, entities: List[Entity],
+                                       relations: List[Relation]) -> None:
+    """Human-in-the-loop: Wait for user to curate entities"""
+    from minerva_backend.processing.curation_manager import CurationManager
+
+    curation_mgr = CurationManager()
+
+    # Add to curation queue
+    await curation_mgr.queue_relationship_curation(journal_entry.uuid, journal_entry.entry_text, entities, relations)
 
 
 @activity.defn
@@ -94,13 +102,10 @@ async def wait_for_relationship_curation(journal_id: str, relationships: List[Di
     from minerva_backend.processing.curation_manager import CurationManager
 
     curation_mgr = CurationManager()
-    await curation_mgr.queue_relationship_curation(journal_id, relationships)
-
     while True:
         result = await curation_mgr.get_relationship_curation_result(journal_id)
         if result:
             return result
-
         activity.heartbeat()
         await asyncio.sleep(30)
 
@@ -113,14 +118,6 @@ async def write_to_knowledge_graph(journal_id: str, entities: List[Dict[str, Any
 
     kg_service = KnowledgeGraphService()
     # Convert back to Pydantic models and save
-    for entity_data in entities:
-        entity = Entity.parse_obj(entity_data)  # You'll need entity factory here
-        await db.create_entity(entity)
-
-    for rel_data in relationships:
-        # Create relationships in Neo4j
-        await db.create_relationship(rel_data)
-    kg_service.add_journal_entry()
     return True
 
 
@@ -132,14 +129,13 @@ class JournalProcessingWorkflow:
 
     def __init__(self):
         self.state = PipelineState(
-            journal_id="",
             stage=PipelineStage.SUBMITTED,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
 
     @workflow.run
     async def run(self, journal_entry: JournalEntry) -> PipelineState:
-        self.state.journal_id = journal_entry.uuid
+        self.state.journal_entry = journal_entry
 
         # Configure retry policy for LLM activities
         llm_retry_policy = RetryPolicy(
@@ -159,9 +155,14 @@ class JournalProcessingWorkflow:
             )
 
             # Stage 3.0: Submit Entities for curation
+            self.state.stage = PipelineStage.SUBMIT_ENTITY_CURATION
+            self.state.entities_curated = await workflow.execute_activity(
+                submit_entity_curation,
+                args=[journal_entry, self.state.entities_extracted],
+            )
 
             # Stage 3: Entity Curation (Human)
-            self.state.stage = PipelineStage.ENTITY_CURATION
+            self.state.stage = PipelineStage.WAIT_ENTITY_CURATION
             self.state.entities_curated = await workflow.execute_activity(
                 wait_for_entity_curation,
                 args=[journal_entry, self.state.entities_extracted],
@@ -173,13 +174,20 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.RELATION_PROCESSING
             self.state.relationships_extracted = await workflow.execute_activity(
                 extract_relationships,
-                args=[journal_id, self.state.entities_curated],
+                args=[journal_entry, self.state.entities_curated],
                 schedule_to_close_timeout=timedelta(minutes=10),
                 retry_policy=llm_retry_policy,
             )
 
+            # Stage 5.0: Submit Relations for curation
+            self.state.stage = PipelineStage.SUBMIT_RELATION_CURATION
+            self.state.entities_curated = await workflow.execute_activity(
+                submit_entity_curation,
+                args=[journal_entry, self.state.entities_extracted],
+            )
+
             # Stage 5: Relationship Curation (Human)
-            self.state.stage = PipelineStage.RELATION_CURATION
+            self.state.stage = PipelineStage.WAIT_RELATION_CURATION
             self.state.relationships_curated = await workflow.execute_activity(
                 wait_for_relationship_curation,
                 args=[journal_id, self.state.relationships_extracted],

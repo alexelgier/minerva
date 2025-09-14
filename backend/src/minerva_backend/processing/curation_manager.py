@@ -37,6 +37,7 @@ class CurationManager:
                 CREATE TABLE IF NOT EXISTS relationship_curation (
                     journal_id TEXT,
                     journal_text TEXT,
+                    entities_json TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     relationships_json TEXT,
                     curated_relationships_json TEXT NULL,
@@ -134,9 +135,9 @@ class CurationManager:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 INSERT OR REPLACE INTO relationship_curation 
-                (journal_id, journal_text, relationships_json, status) 
-                VALUES (?, ?, ?, 'PENDING')
-            """, (journal_id, journal_text, json.dumps(relationships)))
+                (journal_id, journal_text, entities_json, relationships_json, status) 
+                VALUES (?, ?, ?, ?, 'PENDING')
+            """, (journal_id, journal_text, json.dumps(entities), json.dumps(relationships)))
             await db.commit()
 
     async def get_relationship_curation_result(self, journal_id: str) -> Optional[List[Dict[str, Any]]]:
@@ -157,7 +158,7 @@ class CurationManager:
         """Get all pending relationship curation tasks, oldest first"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT journal_id, journal_text, relationships_json, created_at, status
+                SELECT journal_id, journal_text, entities_json, relationships_json, created_at, status
                 FROM relationship_curation 
                 WHERE status IN ('PENDING', 'IN_PROGRESS')
                 ORDER BY created_at ASC
@@ -168,9 +169,10 @@ class CurationManager:
                     {
                         "journal_id": row[0],
                         "journal_text": row[1],
-                        "relationships": json.loads(row[2]),
-                        "created_at": row[3],
-                        "status": row[4]
+                        "entities": json.loads(row[2]),
+                        "relationships": json.loads(row[3]),
+                        "created_at": row[4],
+                        "status": row[5]
                     }
                     for row in rows
                 ]
