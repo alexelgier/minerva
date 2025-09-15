@@ -5,34 +5,13 @@ import hashlib
 import json
 import logging
 from time import time
-from typing import Optional, List, ClassVar
+from typing import Optional, List, ClassVar, Dict, Any, Type, Union
 
 import ollama
 from diskcache import Cache
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
-
-
-class LLMRequest(BaseModel):
-    model: str
-    prompt: str
-    system_prompt: Optional[str] = None
-    temperature: Optional[float] = 0.0
-    max_tokens: Optional[int] = -1  # -1 for unlimited
-    top_p: Optional[float] = 0.9
-    top_k: Optional[int] = 40
-    repeat_penalty: Optional[float] = 1.15
-    repeat_last_n: Optional[int] = 128
-    num_ctx: Optional[int] = 16384
-    response_format: Optional[str] = None  # e.g., 'json'
-
-
-class LLMResponse(BaseModel):
-    text: str
-    model: str
-    total_duration: Optional[int] = None
-    load_duration: Optional[int] = None
 
 
 class LLMService:
@@ -78,50 +57,47 @@ class LLMService:
             return True
         return False
 
-    def _get_cache_key(self, request: LLMRequest) -> str:
-        key_data = request.model_dump()
+    def _get_cache_key(self, model: str, prompt: str, system_prompt: Optional[str],
+                         response_model: Optional[Type[BaseModel]], options: Optional[Dict[str, Any]]) -> str:
+        key_data = {
+            "model": model,
+            "prompt": prompt,
+            "system_prompt": system_prompt,
+            "response_model": response_model.__name__ if response_model else None,
+            "options": options or {}
+        }
         key_string = json.dumps(key_data, sort_keys=True, default=str)
         return hashlib.sha256(key_string.encode()).hexdigest()
 
-    async def generate(self, request: LLMRequest) -> LLMResponse:
+    async def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None,
+                         response_model: Optional[Type[BaseModel]] = None,
+                         options: Optional[Dict[str, Any]] = None) -> Union[Dict[str, Any], str]:
         """
         Generate LLM response with streaming, monitoring, caching, and retry logic.
         """
         retry_count = 0
         last_error = None
+        merged_options = options or {}
 
         # Check Cache
-        cache_key = self._get_cache_key(request)
+        cache_key = self._get_cache_key(model, prompt, system_prompt, response_model, merged_options)
         if self.cache_enabled and self.cache.get(cache_key):
-            cached_resp_dict = self.cache.get(cache_key)
+            cached_resp = self.cache.get(cache_key)
             logger.debug("✅ Using cached response")
-            return LLMResponse(**cached_resp_dict)
+            if response_model and isinstance(cached_resp, dict):
+                return cached_resp
+            elif not response_model and isinstance(cached_resp, str):
+                return cached_resp
 
         while retry_count <= self.MAX_RETRIES:
             try:
                 start_time = time()
-                messages = []
-                if request.system_prompt:
-                    messages.append({'role': 'system', 'content': request.system_prompt})
-                messages.append({'role': 'user', 'content': request.prompt})
-
-                options = {
-                    'temperature': request.temperature,
-                    'num_predict': request.max_tokens,
-                    'top_p': request.top_p,
-                    'top_k': request.top_k,
-                    'repeat_penalty': request.repeat_penalty,
-                    'repeat_last_n': request.repeat_last_n,
-                    'num_ctx': request.num_ctx,
-                }
-                # Filter out None values
-                options = {k: v for k, v in options.items() if v is not None}
 
                 logger.debug("=" * 70)
                 logger.debug("=" * 31 + " LLM REQ " + "=" * 30)
-                logger.debug(f"Model: {request.model}, Options: {options}")
-                logger.debug(f"System Prompt:\n{request.system_prompt}")
-                logger.debug(f"User Prompt:\n{request.prompt}")
+                logger.debug(f"Model: {model}, Options: {merged_options}")
+                logger.debug(f"System Prompt:\n{system_prompt}")
+                logger.debug(f"User Prompt:\n{prompt}")
                 logger.debug("=" * 70)
                 logger.debug("🚀 Starting model inference...")
 
@@ -129,20 +105,22 @@ class LLMService:
                 token_count = 0
                 last_log_time = time()
                 last_repetition_check = time()
-                effective_max_tokens = request.max_tokens if request.max_tokens and request.max_tokens > 0 else 8192
+                effective_max_tokens = merged_options.get('num_predict', -1)
+                if effective_max_tokens is None or effective_max_tokens <= 0:
+                    effective_max_tokens = 8192
 
-                stream = await self.client.chat(
-                    model=request.model,
-                    messages=messages,
+                stream = await self.client.generate(
+                    model=model,
+                    prompt=prompt,
+                    system=system_prompt,
                     stream=True,
-                    format=request.response_format,
-                    options=options
+                    format='json' if response_model else None,
+                    options=merged_options
                 )
 
-                final_response_dict = {}
                 async for chunk in stream:
-                    if 'message' in chunk and 'content' in chunk['message']:
-                        full_response_content += chunk['message']['content']
+                    if 'response' in chunk:
+                        full_response_content += chunk['response']
                         token_count += 1
 
                     current_time = time()
@@ -169,28 +147,30 @@ class LLMService:
                         last_log_time = current_time
 
                     if chunk.get('done'):
-                        final_response_dict = chunk
                         break
-                
+
                 logger.debug(f"✅ Generation complete! Total tokens: {token_count}")
 
                 if not full_response_content.strip():
                     raise Exception("Empty response received")
 
-                response = LLMResponse(
-                    text=full_response_content,
-                    model=final_response_dict.get('model', request.model),
-                    total_duration=final_response_dict.get('total_duration'),
-                    load_duration=final_response_dict.get('load_duration'),
-                )
-
-                if self.cache_enabled:
-                    logger.debug("💾 Caching response...")
-                    self.cache.set(cache_key, response.model_dump())
-                
-                duration = time() - start_time
-                logger.debug(f'🎯 Ollama response completed in {int(duration // 60)}m{int(duration % 60)}s')
-                return response
+                if response_model:
+                    try:
+                        result = json.loads(full_response_content)
+                        response_model.model_validate(result)  # Validate against the model
+                        if self.cache_enabled:
+                            logger.debug("💾 Caching structured response...")
+                            self.cache.set(cache_key, result)
+                        return result
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logger.error(f"❌ Failed to parse or validate JSON response: {e}")
+                        logger.error(f"Raw response: {full_response_content[:500]}...")
+                        raise e
+                else:
+                    if self.cache_enabled:
+                        logger.debug("💾 Caching raw text response...")
+                        self.cache.set(cache_key, full_response_content)
+                    return full_response_content
 
             except Exception as e:
                 last_error = e
