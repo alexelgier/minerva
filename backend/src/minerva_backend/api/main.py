@@ -71,7 +71,7 @@ async def submit_journal(
         # Check the pipeline status
         await asyncio.sleep(2)  # Give the workflow time to start
         status = await orchestrator.get_pipeline_status(workflow_id)
-        print(f"Current pipeline stage: {status.stage.value}")
+        print(f"Current pipeline stage: {status['stage']}")
 
         return {
             "success": True,

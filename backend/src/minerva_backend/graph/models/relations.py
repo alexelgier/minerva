@@ -14,6 +14,7 @@ class Relation(Edge):
     target: str = Field(..., description="UUID of the target entity")
     type: Literal[RelationshipType.RELATED_TO] = Field(RelationshipType.RELATED_TO.value,
                                                        description="Type of the relationship (always RELATED_TO for entity relations)")
+    sub_type: str = Field(..., description="Subtipo propuesto para la relación")
     summary_short: str = Field(..., description="Resumen de la relación. Máximo 30 palabras")
     summary: str = Field(..., description="Resumen de la relación. Máximo 300 palabras")
     partition: Literal[PartitionType.DOMAIN] = Field(PartitionType.DOMAIN.value,

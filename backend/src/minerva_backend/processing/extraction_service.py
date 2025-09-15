@@ -10,7 +10,6 @@ from minerva_backend.processing.llm_service import LLMService
 from minerva_backend.prompt.extract_people import ExtractPeoplePrompt, People
 from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships, SimpleRelationship
 from minerva_backend.prompt.hydrate_person import HydratePersonPrompt
-from minerva_backend.prompt.hydrate_relationship import HydrateRelationshipPrompt
 
 
 class ExtractionService:
@@ -98,9 +97,11 @@ class ExtractionService:
             return []
 
         # 1. Detection: Find potential relationships
-        entity_context = "\n".join([f"- {e.name} ({e.type.value if hasattr(e, 'type') else 'Unknown Type'})" for e in entities])
+        entity_context = "\n".join(
+            [f"- {e.name} ({e.type.value if hasattr(e, 'type') else 'Unknown Type'})" for e in entities])
         detected_relationships_result = await self.llm_service.generate(
-            prompt=ExtractRelationshipsPrompt.user_prompt({'text': journal_entry.entry_text, 'entities': entity_context}),
+            prompt=ExtractRelationshipsPrompt.user_prompt(
+                {'text': journal_entry.entry_text, 'entities': entity_context}),
             system_prompt=ExtractRelationshipsPrompt.system_prompt(),
             response_model=ExtractRelationshipsPrompt.response_model()
         )
@@ -112,22 +113,13 @@ class ExtractionService:
         if not detected_relationships:
             return []
 
-        # 2. Hydration: Fill in details for each detected relationship
-        hydrated_relationships: List[Relation] = []
-        entity_uuid_map = {e.name: e.uuid for e in entities}
-
+        relations = []
         for rel in detected_relationships:
-            source_uuid = entity_uuid_map.get(rel.source_entity_name)
-            target_uuid = entity_uuid_map.get(rel.target_entity_name)
+            # TODO: parse each rel into a Relation class
+            # Skip if we can't map detected source/target uuids to curated ones (something is malformed)
+            pass
 
-            if not source_uuid or not target_uuid:
-                continue  # Skip if we can't map detected entities to curated ones
-
-            hydrated_relation = await self._hydrate_relationship(journal_entry, rel, source_uuid, target_uuid)
-            if hydrated_relation:
-                hydrated_relationships.append(hydrated_relation)
-
-        return hydrated_relationships
+        return relations
 
     async def extract_people(self, journal_entry: JournalEntry, link_entities: List[Dict]) -> People | None:
         link_people = [p for p in link_entities if p['entity_type'] == EntityType.PERSON]
@@ -150,26 +142,6 @@ class ExtractionService:
         )
         if result:
             return Person(**result)
-        return None
-
-    async def _hydrate_relationship(self, journal_entry: JournalEntry, simple_relation: SimpleRelationship,
-                                      source_uuid: str, target_uuid: str) -> Relation | None:
-        """Hydrates a single relationship with more details using an LLM call."""
-        result = await self.llm_service.generate(
-            prompt=HydrateRelationshipPrompt.user_prompt({
-                'text': journal_entry.entry_text,
-                'source': simple_relation.source_entity_name,
-                'target': simple_relation.target_entity_name,
-                'description': simple_relation.description
-            }),
-            system_prompt=HydrateRelationshipPrompt.system_prompt(),
-            response_model=HydrateRelationshipPrompt.response_model()
-        )
-        if result:
-            hydrated_data = result
-            hydrated_data['source_uuid'] = source_uuid
-            hydrated_data['target_uuid'] = target_uuid
-            return Relation(**hydrated_data)
         return None
 
     async def _filter_glossary(self, journal_entry: JournalEntry, glossary: Dict[str, str]):
