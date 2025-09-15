@@ -162,6 +162,26 @@ class ObsidianService:
         return cache.get(name)
 
     def construct_glossary(self, links: List[Dict]) -> Dict[str, str]:
-        # Make dict of entity_name: summary, for each link
-        # for each passed link use the file_path if present to extract "short_summary" from yaml frontmatter of note
-        pass
+        """
+        Constructs a glossary of short summaries for linked entities.
+
+        Args:
+            links: A list of resolved link dictionaries.
+
+        Returns:
+            A dictionary mapping entity names to their short summaries.
+        """
+        glossary = {}
+        for link in links:
+            file_path = link.get('file_path')
+            entity_name = link.get('entity_name')
+
+            if not file_path or not entity_name:
+                continue
+
+            frontmatter = self._parse_yaml_frontmatter(file_path)
+            if frontmatter:
+                short_summary = frontmatter.get('short_summary')
+                if short_summary:
+                    glossary[entity_name] = short_summary
+        return glossary
