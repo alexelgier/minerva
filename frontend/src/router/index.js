@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import CurationQueueView from '../views/curation/CurationQueueView.vue'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(process.env.VUE_APP_BASE_URL),
   routes: [
     {
       path: '/',
