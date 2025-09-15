@@ -10,6 +10,7 @@ from temporalio.common import RetryPolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
+from minerva_backend.graph.models.base import Span
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
@@ -60,7 +61,7 @@ class PipelineState:
 class PipelineActivities:
 
     @activity.defn
-    async def extract_entities(self, journal_entry: JournalEntry) -> List[Entity]:
+    async def extract_entities(self, journal_entry: JournalEntry) -> Dict[Entity, List[Span]]:
         """Extract entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -76,7 +77,7 @@ class PipelineActivities:
         return await container.extraction_service().extract_relationships(journal_entry, entities)
 
     @activity.defn
-    async def submit_entity_curation(self, journal_entry: JournalEntry, entities: List[Entity]) -> None:
+    async def submit_entity_curation(self, journal_entry: JournalEntry, entities: Dict[Entity, List[Span]]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -88,6 +89,7 @@ class PipelineActivities:
     @activity.defn
     async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[Entity]:
         """Human-in-the-loop: Wait for user to curate entities"""
+        # TODO: return a Dict[Entity,Span]. Add logic to pull spans for curated entities.
         from minerva_backend.containers import Container
         container = Container()
         # Poll until user completes curation (with heartbeat to keep workflow alive)
@@ -109,6 +111,7 @@ class PipelineActivities:
 
     @activity.defn
     async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[Relation]:
+        # TODO: return a Dict[Relation,Span]. Add logic to pull spans for curated relations.
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
@@ -214,7 +217,8 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.DB_WRITE
             success = await workflow.execute_activity(
                 PipelineActivities.write_to_knowledge_graph,
-                args=[journal_entry, self.state.entities_curated, self.state.relationships_curated], # TODO add lexical parts
+                args=[journal_entry, self.state.entities_curated, self.state.relationships_curated],
+                # TODO add lexical parts
                 schedule_to_close_timeout=timedelta(minutes=5),
                 retry_policy=llm_retry_policy,
             )

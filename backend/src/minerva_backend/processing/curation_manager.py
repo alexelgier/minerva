@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import aiosqlite
 
+from minerva_backend.graph.models.base import Span
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
 
@@ -111,7 +112,8 @@ class CurationManager:
 
     # ===== ENTITY CURATION =====
 
-    async def queue_entities_for_curation(self, journal_uuid: str, journal_text: str, entities: List[Entity]) -> None:
+    async def queue_entities_for_curation(self, journal_uuid: str, journal_text: str,
+                                          entities: Dict[Entity, List[Span]]) -> None:
         """Add entities to curation queue"""
         # First ensure journal exists
         await self.create_journal_for_curation(journal_uuid, journal_text)
@@ -176,7 +178,8 @@ class CurationManager:
                     for row in rows
                 ]
 
-    async def accept_entity(self, journal_uuid: str, entity_uuid: str, curated_data: Dict[str, Any], is_user_added: bool = False) -> str:
+    async def accept_entity(self, journal_uuid: str, entity_uuid: str, curated_data: Dict[str, Any],
+                            is_user_added: bool = False) -> str:
         """Accept an entity with optional modifications"""
         async with aiosqlite.connect(self.db_path) as db:
             if is_user_added:
@@ -268,7 +271,8 @@ class CurationManager:
 
                 return relationships
 
-    async def accept_relationship(self, journal_uuid: str, relationship_uuid: str, curated_data: Dict[str, Any], is_user_added: bool = False) -> str:
+    async def accept_relationship(self, journal_uuid: str, relationship_uuid: str, curated_data: Dict[str, Any],
+                                  is_user_added: bool = False) -> str:
         """Accept a relationship with optional modifications"""
         async with aiosqlite.connect(self.db_path) as db:
             if is_user_added:
