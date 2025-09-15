@@ -92,6 +92,7 @@ class ExtractionService:
 
     async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
         """Stage 3: Extract relationships between entities"""
+
         pass
 
     async def extract_people(self, journal_entry: JournalEntry, link_entities: List[Dict]) -> People | None:
