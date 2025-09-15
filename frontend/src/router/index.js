@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import CurationQueueView from '../views/curation/CurationQueueView.vue'
+import CurationView from '../views/curation/CurationView.vue'
 
 const router = createRouter({
   history: createWebHistory(process.env.VUE_APP_BASE_URL),
@@ -16,8 +17,7 @@ const router = createRouter({
     {
       path: '/curation/:journalId',
       name: 'CurationView',
-      // TODO: Create a dedicated component for single journal curation
-      component: () => import('../views/curation/CurationQueueView.vue')
+      component: CurationView
     }
   ]
 })
