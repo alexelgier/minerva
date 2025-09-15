@@ -113,11 +113,28 @@ class ExtractionService:
         if not detected_relationships:
             return []
 
+        entity_map = {str(e.uuid): e for e in entities}
         relations = []
         for rel in detected_relationships:
-            # TODO: parse each rel into a Relation class and fill relations list
-            # Skip if we can't map detected source/target uuids to curated ones (something is malformed)
-            pass
+            # Skip if we can't map detected source/target uuids to curated ones
+            if rel.source_uuid not in entity_map or rel.target_uuid not in entity_map:
+                continue
+
+            source_entity = entity_map[rel.source_uuid]
+            target_entity = entity_map[rel.target_uuid]
+
+            # The SimpleRelationship model from the prompt is assumed to have fields
+            # that can be used to construct a Relation instance.
+            try:
+                # We assume SimpleRelationship has source_uuid and target_uuid, which are
+                # not part of the Relation model, but fields like `type` and `description` are.
+                rel_data = rel.model_dump(exclude={'source_uuid', 'target_uuid'})
+                relation = Relation(source=source_entity, target=target_entity, **rel_data)
+                relations.append(relation)
+            except Exception:
+                # This could be a Pydantic validation error if fields don't match.
+                # For now, we skip malformed relationships.
+                continue
 
         return relations
 

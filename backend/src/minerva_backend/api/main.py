@@ -245,6 +245,47 @@ async def get_relationship_curation_task(
         raise HTTPException(status_code=500, detail=f"Failed to get relationship curation: {str(e)}")
 
 
+@backend_app.post("/api/curation/relationships/{journal_id}/{relationship_id}/accept")
+@inject
+async def accept_relationship_curation(
+        journal_id: str,
+        relationship_id: str,
+        curated_data: Dict[str, Any],
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
+    """Accept a single relationship curation task"""
+    try:
+        updated_uuid = await curation_manager.accept_relationship(
+            journal_uuid=journal_id,
+            relationship_uuid=relationship_id,
+            curated_data=curated_data
+        )
+        if updated_uuid:
+            return {"success": True, "message": "Relationship accepted"}
+        else:
+            raise HTTPException(status_code=404, detail="Relationship not found or not in PENDING state")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to accept relationship: {str(e)}")
+
+
+@backend_app.post("/api/curation/relationships/{journal_id}/{relationship_id}/reject")
+@inject
+async def reject_relationship_curation(
+        journal_id: str,
+        relationship_id: str,
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
+    """Reject a single relationship curation task"""
+    try:
+        success = await curation_manager.reject_relationship(journal_uuid=journal_id, relationship_uuid=relationship_id)
+        if success:
+            return {"success": True, "message": "Relationship rejected"}
+        else:
+            raise HTTPException(status_code=404, detail="Relationship not found or not in PENDING state")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reject relationship: {str(e)}")
+
+
 class RelationshipCurationResult(BaseModel):
     relationships: List[Dict[str, Any]]
 
