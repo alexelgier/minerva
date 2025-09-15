@@ -33,10 +33,10 @@ class PipelineState:
     stage: PipelineStage
     created_at: datetime = None
     journal_entry: JournalEntry = None
-    entities_extracted: List[Entity] = None
-    entities_curated: List[Entity] = None
-    relationships_extracted: List[Relation] = None
-    relationships_curated: List[Relation] = None
+    entities_extracted: Dict[Entity, List[Span]] = None
+    entities_curated: Dict[Entity, List[Span]] = None
+    relationships_extracted: Dict[Relation, List[Span]] = None
+    relationships_curated: Dict[Relation, List[Span]] = None
     error_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -44,14 +44,17 @@ class PipelineState:
         return {
             "stage": self.stage.value,
             "created_at": self.created_at.isoformat(),
-            "journal_entry": self.journal_entry.model_dump_json() if self.journal_entry else None,
-            "entities_extracted": [e.model_dump_json() for e in
-                                   self.entities_extracted] if self.entities_extracted else None,
-            "entities_curated": [e.model_dump_json() for e in self.entities_curated] if self.entities_curated else None,
-            "relationships_extracted": [r.model_dump_json() for r in
-                                        self.relationships_extracted] if self.relationships_extracted else None,
-            "relationships_curated": [r.model_dump_json() for r in
-                                      self.relationships_curated] if self.relationships_curated else None,
+            "journal_entry": self.journal_entry.model_dump() if self.journal_entry else None,
+            "entities_extracted": [{"entity": e.model_dump(), "spans": [s.model_dump() for s in spans]} for e, spans
+                                   in self.entities_extracted.items()] if self.entities_extracted else None,
+            "entities_curated": [{"entity": e.model_dump(), "spans": [s.model_dump() for s in spans]} for e, spans in
+                                 self.entities_curated.items()] if self.entities_curated else None,
+            "relationships_extracted": [
+                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans]} for r, spans in
+                self.relationships_extracted.items()] if self.relationships_extracted else None,
+            "relationships_curated": [
+                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans]} for r, spans in
+                self.relationships_curated.items()] if self.relationships_curated else None,
             "error_count": self.error_count
         }
 
@@ -69,7 +72,8 @@ class PipelineActivities:
         return await container.extraction_service().extract_entities(journal_entry)
 
     @activity.defn
-    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
+    async def extract_relationships(self, journal_entry: JournalEntry,
+                                    entities: List[Entity]) -> Dict[Relation, List[Span]]:
         """Extract relationships between entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -87,22 +91,22 @@ class PipelineActivities:
                                                                        entities)
 
     @activity.defn
-    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[Entity]:
+    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[Dict[str, Any]]:
         """Human-in-the-loop: Wait for user to curate entities"""
-        # TODO: return a Dict[Entity,Span]. Add logic to pull spans for curated entities.
         from minerva_backend.containers import Container
         container = Container()
         # Poll until user completes curation (with heartbeat to keep workflow alive)
         while True:
             result = await container.curation_manager().get_journal_status(journal_entry.uuid)
             if result and result == "ENTITIES_DONE":
-                return await container.curation_manager().get_accepted_entities_for_journal(journal_entry.uuid)
+                return await container.curation_manager().get_accepted_entities_with_spans(journal_entry.uuid)
             # Temporal heartbeat to prevent timeout
             activity.heartbeat()
             await asyncio.sleep(30)  # Check every 30 seconds
 
     @activity.defn
-    async def submit_relationship_curation(self, journal_entry: JournalEntry, relations: List[Relation]) -> None:
+    async def submit_relationship_curation(self, journal_entry: JournalEntry,
+                                           relations: Dict[Relation, List[Span]]) -> None:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
@@ -110,8 +114,7 @@ class PipelineActivities:
         await container.curation_manager().queue_relationships_for_curation(journal_entry.uuid, relations)
 
     @activity.defn
-    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[Relation]:
-        # TODO: return a Dict[Relation,Span]. Add logic to pull spans for curated relations.
+    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[Dict[str, Any]]:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
@@ -119,7 +122,8 @@ class PipelineActivities:
         while True:
             result = await container.curation_manager().get_journal_status(journal_entry.uuid)
             if result and result == "COMPLETED":
-                return await container.curation_manager().get_accepted_relationships_for_journal(journal_entry.uuid)
+                return await container.curation_manager().get_accepted_relationships_with_spans(
+                    journal_entry.uuid)
             # Temporal heartbeat to prevent timeout
             activity.heartbeat()
             await asyncio.sleep(30)  # Check every 30 seconds
@@ -179,18 +183,19 @@ class JournalProcessingWorkflow:
 
             # Stage 3: Entity Curation (Human)
             self.state.stage = PipelineStage.WAIT_ENTITY_CURATION
-            self.state.entities_curated = await workflow.execute_activity(
+            curated_entities_list = await workflow.execute_activity(
                 PipelineActivities.wait_for_entity_curation,
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),  # User has 7 days
                 heartbeat_timeout=timedelta(minutes=2),  # Heartbeat every 2 min
             )
+            self.state.entities_curated = {item['entity']: item['spans'] for item in curated_entities_list}
 
             # Stage 4: Relationship Extraction (LLM)
             self.state.stage = PipelineStage.RELATION_PROCESSING
             self.state.relationships_extracted = await workflow.execute_activity(
                 PipelineActivities.extract_relationships,
-                args=[journal_entry, self.state.entities_curated],
+                args=[journal_entry, list(self.state.entities_curated.keys())],
                 start_to_close_timeout=timedelta(minutes=60),
                 retry_policy=llm_retry_policy,
             )
@@ -206,12 +211,14 @@ class JournalProcessingWorkflow:
 
             # Stage 5: Relationship Curation (Human)
             self.state.stage = PipelineStage.WAIT_RELATION_CURATION
-            self.state.relationships_curated = await workflow.execute_activity(
+            curated_relationships_list = await workflow.execute_activity(
                 PipelineActivities.wait_for_relationship_curation,
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),
                 heartbeat_timeout=timedelta(minutes=2),
             )
+            self.state.relationships_curated = {item['relationship']: item['spans'] for item in
+                                                curated_relationships_list}
 
             # Stage 6: Database Write
             self.state.stage = PipelineStage.DB_WRITE
