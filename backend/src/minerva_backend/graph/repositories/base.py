@@ -1,6 +1,6 @@
 """
 Base Repository Pattern for Minerva
-Provides common functionality for all entity repositories.
+Provides common functionality for all node repositories.
 """
 
 from abc import ABC, abstractmethod
@@ -9,18 +9,18 @@ from datetime import datetime
 import logging
 
 from minerva_backend.graph.db import Neo4jConnection
-from minerva_backend.graph.models.entities import Entity
+from minerva_backend.graph.models.base import Node
 
 logger = logging.getLogger(__name__)
 
-# Generic type for entities
-T = TypeVar('T', bound=Entity)
+# Generic type for nodes
+T = TypeVar('T', bound=Node)
 
 
 class BaseRepository(Generic[T], ABC):
     """
     Abstract base repository providing common CRUD operations.
-    All entity repositories should inherit from this class.
+    All node repositories should inherit from this class.
     """
 
     def __init__(self, connection: Neo4jConnection):
@@ -30,27 +30,27 @@ class BaseRepository(Generic[T], ABC):
     @property
     @abstractmethod
     def entity_label(self) -> str:
-        """Neo4j label for this entity type (e.g., 'Person', 'Event')."""
+        """Neo4j label for this node type (e.g., 'Person', 'Event')."""
         pass
 
     @property
     @abstractmethod
     def entity_class(self) -> type[T]:
-        """Pydantic model class for this entity type."""
+        """Pydantic model class for this node type."""
         pass
 
-    def _entity_to_properties(self, entity: T) -> Dict[str, Any]:
+    def _node_to_properties(self, node: T) -> Dict[str, Any]:
         """
-        Convert Pydantic entity to Neo4j properties.
+        Convert Pydantic node to Neo4j properties.
         Handles datetime serialization and other conversions.
 
         Args:
-            entity: Pydantic entity instance
+            node: Pydantic node instance
 
         Returns:
             Dict of properties ready for Neo4j storage
         """
-        properties = entity.model_dump()
+        properties = node.model_dump()
 
         # Convert datetime objects to ISO strings for Neo4j
         for key, value in properties.items():
@@ -59,15 +59,15 @@ class BaseRepository(Generic[T], ABC):
 
         return properties
 
-    def _properties_to_entity(self, properties: Dict[str, Any]) -> T:
+    def _properties_to_node(self, properties: Dict[str, Any]) -> T:
         """
-        Convert Neo4j properties back to Pydantic entity.
+        Convert Neo4j properties back to Pydantic node.
 
         Args:
             properties: Dictionary from Neo4j node
 
         Returns:
-            Pydantic entity instance
+            Pydantic node instance
         """
         # Convert ISO datetime strings back to datetime objects
         for key, value in properties.items():
@@ -80,20 +80,20 @@ class BaseRepository(Generic[T], ABC):
 
         return self.entity_class(**properties)
 
-    def create(self, entity: T) -> str:
+    def create(self, node: T) -> str:
         """
-        Create a new entity in the database.
+        Create a new node in the database.
 
         Args:
-            entity: Pydantic entity to create
+            node: Pydantic node to create
 
         Returns:
-            str: UUID of created entity
+            str: UUID of created node
 
         Raises:
             Exception: If creation fails
         """
-        properties = self._entity_to_properties(entity)
+        properties = self._node_to_properties(node)
 
         query = f"""
         CREATE (e:{self.entity_label} $properties)
@@ -108,9 +108,10 @@ class BaseRepository(Generic[T], ABC):
                 if not record:
                     raise Exception(f"Failed to create {self.entity_label}")
 
-                entity_uuid = record["uuid"]
-                logger.info(f"Created {self.entity_label}: {entity.name} (UUID: {entity_uuid})")
-                return entity_uuid
+                node_uuid = record["uuid"]
+                log_name = getattr(node, 'name', getattr(node, 'title', node_uuid))
+                logger.info(f"Created {self.entity_label}: {log_name} (UUID: {node_uuid})")
+                return node_uuid
 
             except Exception as e:
                 logger.error(f"Error creating {self.entity_label}: {e}")
@@ -118,13 +119,13 @@ class BaseRepository(Generic[T], ABC):
 
     def find_by_uuid(self, uuid: str) -> Optional[T]:
         """
-        Find entity by UUID.
+        Find node by UUID.
 
         Args:
-            uuid: Entity UUID
+            uuid: Node UUID
 
         Returns:
-            Entity instance or None if not found
+            Node instance or None if not found
         """
         query = f"MATCH (e:{self.entity_label} {{uuid: $uuid}}) RETURN e"
 
@@ -134,42 +135,20 @@ class BaseRepository(Generic[T], ABC):
 
             if record:
                 properties = dict(record["e"])
-                return self._properties_to_entity(properties)
-
-            return None
-
-    def find_by_name(self, name: str) -> Optional[T]:
-        """
-        Find entity by name (exact match).
-
-        Args:
-            name: Entity name
-
-        Returns:
-            Entity instance or None if not found
-        """
-        query = f"MATCH (e:{self.entity_label} {{name: $name}}) RETURN e"
-
-        with self.connection.session() as session:
-            result = session.run(query, name=name)
-            record = result.single()
-
-            if record:
-                properties = dict(record["e"])
-                return self._properties_to_entity(properties)
+                return self._properties_to_node(properties)
 
             return None
 
     def list_all(self, limit: int = 100, offset: int = 0) -> List[T]:
         """
-        List all entities with pagination.
+        List all nodes with pagination.
 
         Args:
-            limit: Maximum number of entities to return
-            offset: Number of entities to skip
+            limit: Maximum number of nodes to return
+            offset: Number of nodes to skip
 
         Returns:
-            List of entity instances
+            List of node instances
         """
         query = f"""
         MATCH (e:{self.entity_label})
@@ -180,20 +159,20 @@ class BaseRepository(Generic[T], ABC):
 
         with self.connection.session() as session:
             result = session.run(query, offset=offset, limit=limit)
-            entities = []
+            nodes = []
 
             for record in result:
                 properties = dict(record["e"])
-                entities.append(self._properties_to_entity(properties))
+                nodes.append(self._properties_to_node(properties))
 
-            return entities
+            return nodes
 
     def update(self, uuid: str, updates: Dict[str, Any]) -> bool:
         """
-        Update entity properties.
+        Update node properties.
 
         Args:
-            uuid: Entity UUID
+            uuid: Node UUID
             updates: Dictionary of properties to update
 
         Returns:
@@ -225,10 +204,10 @@ class BaseRepository(Generic[T], ABC):
 
     def delete(self, uuid: str) -> bool:
         """
-        Delete entity and all its relationships.
+        Delete node and all its relationships.
 
         Args:
-            uuid: Entity UUID
+            uuid: Node UUID
 
         Returns:
             bool: True if deletion succeeded
@@ -256,7 +235,7 @@ class BaseRepository(Generic[T], ABC):
 
     def count(self) -> int:
         """
-        Count total number of entities of this type.
+        Count total number of nodes of this type.
 
         Returns:
             int: Total count
@@ -270,14 +249,14 @@ class BaseRepository(Generic[T], ABC):
 
     def search_by_text(self, search_term: str, limit: int = 50) -> List[T]:
         """
-        Search entities by text across string properties.
+        Search nodes by text across string properties.
 
         Args:
             search_term: Text to search for
             limit: Maximum results to return
 
         Returns:
-            List of matching entities
+            List of matching nodes
         """
         query = f"""
         MATCH (e:{self.entity_label})
@@ -289,23 +268,23 @@ class BaseRepository(Generic[T], ABC):
 
         with self.connection.session() as session:
             result = session.run(query, search_term=search_term, limit=limit)
-            entities = []
+            nodes = []
 
             for record in result:
                 properties = dict(record["e"])
-                entities.append(self._properties_to_entity(properties))
+                nodes.append(self._properties_to_node(properties))
 
-            return entities
+            return nodes
 
     def exists(self, uuid: str) -> bool:
         """
-        Check if entity exists by UUID.
+        Check if node exists by UUID.
 
         Args:
-            uuid: Entity UUID
+            uuid: Node UUID
 
         Returns:
-            bool: True if entity exists
+            bool: True if node exists
         """
         query = f"MATCH (e:{self.entity_label} {{uuid: $uuid}}) RETURN count(e) > 0 as exists"
 
