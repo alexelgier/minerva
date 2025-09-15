@@ -46,17 +46,40 @@ class ExtractionService:
         # Stage 1: Extract Person, Project, Concept, Resource, Event, Consumable, Place
         people = await self.extract_people(journal_entry, link_entities)
 
-        # dedupe
-        matches = []
-        unlinked = []
-        misses = []
+        if not people or not people.people:
+            return entities
+
+        # Deduplicate people based on Obsidian links and aliases
+        unique_people_to_hydrate: Dict[str, Dict[str, Any]] = {}
         for person in people.people:
             if person.name in names_map:
-                if names_map[person.name]['link_map']['entity_id']:
-                    matches[person.name] =
-                unlinked.append(names_map[person.name])
+                link_info = names_map[person.name]['link_map']
+                canonical_name = link_info['entity_long_name']
+                if canonical_name not in unique_people_to_hydrate:
+                    unique_people_to_hydrate[canonical_name] = {
+                        "name": canonical_name,
+                        "link_info": link_info
+                    }
             else:
-                misses.append(person)
+                # This person does not have an Obsidian note
+                if person.name not in unique_people_to_hydrate:
+                    unique_people_to_hydrate[person.name] = {
+                        "name": person.name,
+                        "link_info": None
+                    }
+
+        # Stage 2: Extract properties (hydration)
+        hydrated_people: List[Person] = []
+        for person_info in unique_people_to_hydrate.values():
+            hydrated_person = await self._hydrate_person(journal_entry, person_info['name'])
+
+            if hydrated_person:
+                # If person was linked to a note with a DB entry, preserve the ID
+                if person_info['link_info'] and person_info['link_info']['entity_id']:
+                    hydrated_person.uuid = person_info['link_info']['entity_id']
+                hydrated_people.append(hydrated_person)
+
+        entities.extend(hydrated_people)
 
         # projects = extract_projects()
         # concepts = extract_concepts()
@@ -66,8 +89,6 @@ class ExtractionService:
         # places = extract_places()
 
         # 1.1 (Optional) reflexion
-
-        # Stage 2: Extract properties (hydration)
 
         return entities
 
@@ -86,6 +107,15 @@ class ExtractionService:
         )
         if result:
             return People(**result)
+
+    async def _hydrate_person(self, journal_entry: JournalEntry, person_name: str) -> Person | None:
+        """Hydrates a single person entity with more details using an LLM call."""
+        # This would use a specific prompt for hydration, e.g., ExtractPersonDetailsPrompt
+        # An LLM call here would enrich the person object with occupation, relationship etc.
+        # For demonstration, we'll create a basic Person object.
+        print(f"Hydrating details for: {person_name} from journal entry.")
+        # The result of a real LLM call would be used here.
+        return Person(name=person_name, occupation=None, relationship=None)
 
     async def _filter_glossary(self, journal_entry: JournalEntry, glossary: Dict[str, str]):
         pass
