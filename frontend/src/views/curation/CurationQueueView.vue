@@ -3,24 +3,25 @@
     <header class="queue-header">
       <h1>Curation Queue</h1>
       <p v-if="isLoading">Loading tasks...</p>
-      <p v-if="!isLoading && journalGroups.length === 0">No pending curation tasks.</p>
+      <p v-if="!isLoading && error" class="error-message">{{ error }}</p>
+      <p v-if="!isLoading && !error && journalGroups.length === 0">No pending curation tasks.</p>
     </header>
 
-    <div v-if="!isLoading" class="journal-groups-container">
+    <div v-if="!isLoading && !error" class="journal-groups-container">
       <div v-for="group in journalGroups" :key="group.journal_id" class="journal-group-card">
         <div class="journal-header">
-          <h2>Journal Entry: {{ group.journal_date }}</h2>
+          <h2>Journal Entry: {{ formatDate(group.created_at) }}</h2>
           <div class="progress-container">
             <span>{{ group.tasks.length }} pending of {{ group.total_tasks }}</span>
             <progress :value="group.total_tasks - group.tasks.length" :max="group.total_tasks" class="curation-progress"></progress>
           </div>
         </div>
         <ul class="task-list">
-          <li v-for="(task, index) in group.tasks" :key="task.name" class="task-item">
+          <li v-for="(task, index) in group.tasks" :key="task.id" class="task-item">
             <div class="task-info">
               <div class="task-header-info">
                 <span class="task-name">{{ task.name }}</span>
-                <span class="task-type-badge">{{ task.type }}</span>
+                <span class="task-type-badge">{{ task.entity_type.toUpperCase() }}</span>
               </div>
               <p class="task-summary">{{ task.summary_short }}</p>
             </div>
@@ -45,44 +46,56 @@ import { useRouter } from 'vue-router';
 
 const router = useRouter();
 const isLoading = ref(true);
-const allTasks = ref([]);
+const error = ref(null);
+const apiResponse = ref({ entity_journals: [], relationship_journals: [] });
 
 const journalGroups = computed(() => {
-  if (!allTasks.value.length) return [];
-  
-  const groups = allTasks.value.reduce((acc, journal) => {
-    acc[journal.journal_id] = {
-      journal_id: journal.journal_id,
-      journal_date: journal.journal_date,
-      total_tasks: journal.total_tasks,
-      tasks: journal.entities,
-    };
-    return acc;
-  }, {});
-  
-  return Object.values(groups);
+  if (!apiResponse.value.entity_journals.length) return [];
+
+  return apiResponse.value.entity_journals.map(journal => ({
+    journal_id: journal.journal_id,
+    created_at: journal.created_at,
+    total_tasks: journal.pending_entities_count,
+    tasks: journal.pending_entities,
+  }));
 });
 
 onMounted(() => {
-  // TODO: Replace with actual API call to fetch pending curations
-  // For example:
-  // fetch('/api/curation/pending/entities')
-  //   .then(res => res.json())
-  //   .then(data => {
-  //     allTasks.value = data;
-  //   })
-  //   .catch(err => console.error("Failed to fetch curation tasks:", err))
-  //   .finally(() => isLoading.value = false);
-
-  // Using mock data for now
-  setTimeout(() => {
-    allTasks.value = mockPendingCurations;
-    isLoading.value = false;
-  }, 500);
+  fetchCurationData();
 });
 
+async function fetchCurationData() {
+  try {
+    isLoading.value = true;
+    error.value = null;
+
+    // Use the full URL to your API endpoint
+    const response = await fetch('http://127.0.0.1:8000/api/curation/pending');
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    apiResponse.value = data;
+  } catch (err) {
+    console.error("Failed to fetch curation tasks:", err);
+    error.value = `Failed to load data: ${err.message}. Make sure the API server is running on port 8000.`;
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
 function navigateToCuration(journalId) {
-  // Assuming a route like '/curation/:journalId' and named 'CurationView'
   router.push({ name: 'CurationView', params: { journalId } });
 }
 
@@ -101,74 +114,40 @@ function quickReject(group, taskIndex) {
   // On success, remove from list
   group.tasks.splice(taskIndex, 1);
 }
-
-function submitCuration(journalId) {
+async function submitCuration(journalId) {
   console.log('Submitting curation for journal', journalId);
-  // TODO: API call to submit/complete curation
-  const groupIndex = allTasks.value.findIndex(g => g.journal_id === journalId);
-  if (groupIndex > -1) {
-    allTasks.value.splice(groupIndex, 1);
+
+  try {
+    isLoading.value = true;
+    error.value = null;
+
+    // Use the full URL to your API endpoint with the journalId
+    const response = await fetch(`http://127.0.0.1:8000/api/curation/entities/${journalId}/complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Curation completed successfully:', data);
+
+    // Remove the completed journal from the list
+    const groupIndex = apiResponse.value.entity_journals.findIndex(g => g.journal_id === journalId);
+    if (groupIndex > -1) {
+      apiResponse.value.entity_journals.splice(groupIndex, 1);
+    }
+  } catch (err) {
+    console.error("Failed to complete curation:", err);
+    error.value = `Failed to complete curation: ${err.message}.`;
+  } finally {
+    isLoading.value = false;
   }
 }
-
-// Mock Data
-const mockPendingCurations = [
-  {
-    journal_id: "journal-abc-123",
-    journal_date: "2025-09-15",
-    total_tasks: 4,
-    entities: [
-      {
-        "name": "Alice",
-        "type": "PERSON",
-        "summary_short": "Colleague involved in Minerva Project.",
-        "summary": "Alice is a key stakeholder in the Minerva Project. We had a meeting today to discuss Q4 targets.",
-        "occupation": "Project Manager",
-        "birth_date": "1990-05-15"
-      },
-      {
-        "name": "Minerva Project",
-        "type": "PROJECT",
-        "summary_short": "A project discussed with Alice.",
-        "summary": "A project with Q4 targets. Progress seems to be on track.",
-        "status": "In Progress",
-        "start_date": "2025-07-01T00:00:00",
-        "target_completion": "2025-12-31T00:00:00",
-        "progress": 45.0
-      },
-    ]
-  },
-  {
-    journal_id: "journal-def-456",
-    journal_date: "2025-09-14",
-    total_tasks: 5,
-    entities: [
-      {
-        "name": "Project Phoenix Kickoff",
-        "type": "EVENT",
-        "summary_short": "Kickoff meeting for Project Phoenix.",
-        "summary": "Attended the kickoff meeting for the new 'Project Phoenix'. It was a long but informative session.",
-        "category": "Meeting",
-        "date": "2025-09-15T14:00:00",
-        "duration": "PT2H", // ISO 8601 duration format for 2 hours
-        "location": "Conference Room 4B"
-      },
-      {
-          "name": "Optimism",
-          "type": "EMOTION",
-          "summary_short": "Feeling optimistic about progress.",
-          "summary": "A feeling of optimism regarding the current project progress after today's meetings.",
-      },
-      {
-        "name": "Mate",
-        "type": "CONSUMABLE",
-        "summary_short": "A traditional South American caffeine-rich infused drink.",
-        "summary": "Drank mate in the morning while reading news.",
-        "category": "beverage"
-      }
-    ]
-  }
-];
 </script>
 
 <style scoped>
@@ -187,6 +166,15 @@ const mockPendingCurations = [
 .queue-header h1 {
   font-size: 2.5rem;
   color: #333;
+}
+
+.error-message {
+  color: #dc3545;
+  font-weight: 500;
+  background-color: #f8d7da;
+  padding: 0.75rem;
+  border-radius: 0.25rem;
+  border: 1px solid #f5c6cb;
 }
 
 .journal-groups-container {

@@ -1,17 +1,14 @@
-import json
 import re
 from typing import List, Dict, Any
 
-from pydantic import BaseModel, Field
-
 from minerva_backend.graph.models.documents import JournalEntry
-from minerva_backend.graph.models.entities import Person, Feeling, Emotion, Event, Project, Concept, Resource, \
-    Consumable, Place, Entity
+from minerva_backend.graph.models.entities import Person, Entity
 from minerva_backend.graph.models.enums import EntityType
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.llm_service import LLMService
 from minerva_backend.prompt.extract_people import ExtractPeoplePrompt, People
+from minerva_backend.prompt.hydrate_person import HydratePersonPrompt
 
 
 class ExtractionService:
@@ -25,6 +22,7 @@ class ExtractionService:
         # get [[links]] from text
         matches = re.findall(r'\[\[(.+?)\]\]', journal_entry.entry_text, re.MULTILINE)
         links = [self.obsidian_service.resolve_link(link) for link in matches]
+        links.append(self.obsidian_service.resolve_link("Alex Elgier"))
         links = list({d['entity_long_name']: d for d in links}.values())
         glossary = {x['entity_name']: x['short_summary'] for x in links if x['short_summary']}
         names_map = {}
@@ -110,12 +108,14 @@ class ExtractionService:
 
     async def _hydrate_person(self, journal_entry: JournalEntry, person_name: str) -> Person | None:
         """Hydrates a single person entity with more details using an LLM call."""
-        # This would use a specific prompt for hydration, e.g., ExtractPersonDetailsPrompt
-        # An LLM call here would enrich the person object with occupation, relationship etc.
-        # For demonstration, we'll create a basic Person object.
-        print(f"Hydrating details for: {person_name} from journal entry.")
-        # The result of a real LLM call would be used here.
-        return Person(name=person_name, occupation=None, relationship=None)
+        result = await self.llm_service.generate(
+            prompt=HydratePersonPrompt.user_prompt({'text': journal_entry.entry_text, 'name': person_name}),
+            system_prompt=HydratePersonPrompt.system_prompt(),
+            response_model=HydratePersonPrompt.response_model()
+        )
+        if result:
+            return Person(**result)
+        return None
 
     async def _filter_glossary(self, journal_entry: JournalEntry, glossary: Dict[str, str]):
         pass

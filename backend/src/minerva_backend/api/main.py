@@ -169,20 +169,15 @@ async def get_entity_curation_task(
         raise HTTPException(status_code=500, detail=f"Failed to get entity curation: {str(e)}")
 
 
-class EntityCurationResult(BaseModel):
-    entities: List[Dict[str, Any]]
-
-
 @backend_app.post("/api/curation/entities/{journal_id}/complete")
 @inject
 async def complete_entity_curation(
         journal_id: str,
-        result: EntityCurationResult,
         curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
 ):
     """Complete entity curation with user decisions"""
     try:
-        await curation_manager.complete_entity_curation(journal_id, result.entities)
+        await curation_manager.complete_entity_phase(journal_id)
         return {"success": True, "message": "Entity curation completed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to complete entity curation: {str(e)}")

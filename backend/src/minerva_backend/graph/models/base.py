@@ -18,7 +18,7 @@ class Node(BaseModel, ABC):
     """Entidad abstracta. Todos los nodos tienen al menos estos campos."""
     partition: PartitionType = Field(..., description='partición del grafo')
     uuid: str = Field(default_factory=lambda: str(uuid4()))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now())
 
     def __hash__(self):
         return hash(self.uuid)
@@ -29,7 +29,7 @@ class Node(BaseModel, ABC):
         return False
 
     class Config:
-        extra = "allow"  # allow schema evolution (new fields in future)
+        # extra = "allow"  # allow schema evolution (new fields in future)
         use_enum_values = True
 
 
@@ -37,7 +37,7 @@ class Edge(BaseModel, ABC):
     """Relación abstracta. Todas las aristas tienen al menos estos campos."""
     partition: PartitionType = Field(..., description='partición del grafo')
     uuid: str = Field(default_factory=lambda: str(uuid4()))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now())
 
     def __hash__(self):
         return hash(self.uuid)
@@ -48,7 +48,7 @@ class Edge(BaseModel, ABC):
         return False
 
     class Config:
-        extra = "allow"  # allow schema evolution (new fields in future)
+        # extra = "allow"  # allow schema evolution (new fields in future)
         use_enum_values = True
 
 

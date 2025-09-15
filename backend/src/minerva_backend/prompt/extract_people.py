@@ -23,12 +23,11 @@ class ExtractPeoplePrompt(Prompt):
 
     @staticmethod
     def system_prompt() -> str:
-        return """Extrae todas las personas mencionadas en esta entrada del diario, incluyendo el narrador (Alex Elgier)
+        return """Extrae todas las personas mencionadas en esta entrada del diario, incluyendo siempre al narrador (Alex Elgier), incluso si se refiere con pronombres como 'yo'.
 Para cada persona, incluye su nombre y todos los fragmentos de texto relevantes (chunks), citados directamente sin modificar.
-Un chunk debe ser:
-- Una oración o frase completa que mencione a la persona, máximo 3 oraciones.
-Cada persona aparece una vez con todos sus chunks.
-Incluye solo personas explícitamente mencionadas en el texto.
+Un chunk puede ser una frase completa o hasta tres frases consecutivas que mencionen a la persona.
+Incluye tanto menciones explícitas como referencias claras (ej. pronombres) a cada persona.
+Cada persona debe aparecer una sola vez con todos sus chunks.
 """
 
     @staticmethod
@@ -36,4 +35,4 @@ Incluye solo personas explícitamente mencionadas en el texto.
         return f"""<JOURNAL_ENTRY>
 {context['text']}
 </JOURNAL_ENTRY>
-Extrae todas las personas mencionadas en esta entrada del diario."""
+Extrae todas las personas mencionadas en esta entrada del diario, incluyendo al narrador (Alex Elgier)."""

@@ -1,4 +1,3 @@
-# pipeline/temporal_orchestrator.py
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -14,9 +13,6 @@ from temporalio.worker import Worker
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
-from minerva_backend.graph.services.knowledge_graph_service import KnowledgeGraphService
-from minerva_backend.processing.curation_manager import CurationManager
-from minerva_backend.processing.extraction_service import ExtractionService
 
 
 class PipelineStage(str, Enum):
@@ -47,13 +43,13 @@ class PipelineState:
         return {
             "stage": self.stage.value,
             "created_at": self.created_at.isoformat(),
-            "journal_entry": self.journal_entry.model_dump() if self.journal_entry else None,
-            "entities_extracted": [e.model_dump() for e in
+            "journal_entry": self.journal_entry.model_dump_json() if self.journal_entry else None,
+            "entities_extracted": [e.model_dump_json() for e in
                                    self.entities_extracted] if self.entities_extracted else None,
-            "entities_curated": [e.model_dump() for e in self.entities_curated] if self.entities_curated else None,
-            "relationships_extracted": [r.model_dump() for r in
+            "entities_curated": [e.model_dump_json() for e in self.entities_curated] if self.entities_curated else None,
+            "relationships_extracted": [r.model_dump_json() for r in
                                         self.relationships_extracted] if self.relationships_extracted else None,
-            "relationships_curated": [r.model_dump() for r in
+            "relationships_curated": [r.model_dump_json() for r in
                                       self.relationships_curated] if self.relationships_curated else None,
             "error_count": self.error_count
         }
@@ -86,7 +82,8 @@ class PipelineActivities:
         container = Container()
 
         # Add to curation queue
-        await container.curation_manager().queue_entity_curation(journal_entry.uuid, journal_entry.entry_text, entities)
+        await container.curation_manager().queue_entities_for_curation(journal_entry.uuid, journal_entry.entry_text,
+                                                                       entities)
 
     @activity.defn
     async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[Entity]:
@@ -95,9 +92,9 @@ class PipelineActivities:
         container = Container()
         # Poll until user completes curation (with heartbeat to keep workflow alive)
         while True:
-            result = await container.curation_manager().get_entity_curation_result(journal_entry.uuid)
-            if result:
-                return result
+            result = await container.curation_manager().get_journal_status(journal_entry.uuid)
+            if result and result == "ENTITIES_DONE":
+                return await container.curation_manager().get_accepted_entities_for_journal(journal_entry.uuid)
             # Temporal heartbeat to prevent timeout
             activity.heartbeat()
             await asyncio.sleep(30)  # Check every 30 seconds
@@ -105,26 +102,25 @@ class PipelineActivities:
     @activity.defn
     async def submit_relationship_curation(self, journal_entry: JournalEntry, entities: List[Entity],
                                            relations: List[Relation]) -> None:
-        """Human-in-the-loop: Wait for user to curate entities"""
+        """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
         # Add to curation queue
-        await container.curation_manager().queue_relationship_curation(journal_entry.uuid, journal_entry.entry_text,
-                                                                       entities,
-                                                                       relations)
+        await container.curation_manager().queue_relationships_for_curation(journal_entry.uuid, relations)
 
     @activity.defn
     async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[Relation]:
-        """Human-in-the-loop: Wait for user to curate relationships"""
+        """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
+        # Poll until user completes curation (with heartbeat to keep workflow alive)
         while True:
-            result = await container.curation_manager().get_relationship_curation_result(journal_entry.uuid)
-            if result:
-                return result
+            result = await container.curation_manager().get_journal_status(journal_entry.uuid)
+            if result and result == "COMPLETED":
+                return await container.curation_manager().get_accepted_relationships_for_journal(journal_entry.uuid)
+            # Temporal heartbeat to prevent timeout
             activity.heartbeat()
-            await asyncio.sleep(30)
-            return []
+            await asyncio.sleep(30)  # Check every 30 seconds
 
     @activity.defn
     async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[Entity],

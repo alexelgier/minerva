@@ -1,5 +1,6 @@
 import json
 from typing import List, Dict, Any, Optional
+from uuid import uuid4
 
 import aiosqlite
 
@@ -18,7 +19,8 @@ class CurationManager:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS journal_curation (
-                    journal_id TEXT PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT,
                     journal_text TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     overall_status TEXT DEFAULT 'PENDING_ENTITIES'
@@ -29,6 +31,7 @@ class CurationManager:
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS entity_curation_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT,
                     journal_id TEXT,
                     entity_type TEXT,
                     original_data_json TEXT,  -- NULL for user-added entities
@@ -36,13 +39,14 @@ class CurationManager:
                     status TEXT DEFAULT 'PENDING',  -- PENDING, ACCEPTED, REJECTED
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_user_added BOOLEAN DEFAULT FALSE,
-                    FOREIGN KEY (journal_id) REFERENCES journal_curation (journal_id)
+                    FOREIGN KEY (journal_id) REFERENCES journal_curation (uuid)
                 )
             """)
 
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS relationship_curation_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT,
                     journal_id TEXT,
                     relationship_type TEXT,
                     original_data_json TEXT,  -- NULL for user-added
@@ -50,7 +54,7 @@ class CurationManager:
                     status TEXT DEFAULT 'PENDING',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_user_added BOOLEAN DEFAULT FALSE,
-                    FOREIGN KEY (journal_id) REFERENCES journal_curation (journal_id)
+                    FOREIGN KEY (journal_id) REFERENCES journal_curation (uuid)
                 )
             """)
 
@@ -74,68 +78,68 @@ class CurationManager:
 
     # ===== JOURNAL MANAGEMENT =====
 
-    async def create_journal_for_curation(self, journal_id: str, journal_text: str) -> None:
+    async def create_journal_for_curation(self, journal_uuid: str, journal_text: str) -> None:
         """Create a new journal entry for curation"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
-                INSERT OR REPLACE INTO journal_curation 
-                (journal_id, journal_text, overall_status) 
+                INSERT INTO journal_curation 
+                (uuid, journal_text, overall_status) 
                 VALUES (?, ?, 'PENDING_ENTITIES')
-            """, (journal_id, journal_text))
+            """, (journal_uuid, journal_text))
             await db.commit()
 
-    async def get_journal_status(self, journal_id: str) -> Optional[str]:
+    async def get_journal_status(self, journal_uuid: str) -> Optional[str]:
         """Get the overall status of a journal"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT overall_status 
                 FROM journal_curation 
-                WHERE journal_id = ?
-            """, (journal_id,)) as cursor:
+                WHERE uuid = ?
+            """, (journal_uuid,)) as cursor:
                 row = await cursor.fetchone()
                 return row[0] if row else None
 
-    async def update_journal_status(self, journal_id: str, status: str) -> None:
+    async def update_journal_status(self, journal_uuid: str, status: str) -> None:
         """Update the overall status of a journal"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 UPDATE journal_curation 
                 SET overall_status = ? 
-                WHERE journal_id = ?
-            """, (status, journal_id))
+                WHERE uuid = ?
+            """, (status, journal_uuid))
             await db.commit()
 
     # ===== ENTITY CURATION =====
 
-    async def queue_entities_for_curation(self, journal_id: str, journal_text: str, entities: List[Entity]) -> None:
+    async def queue_entities_for_curation(self, journal_uuid: str, journal_text: str, entities: List[Entity]) -> None:
         """Add entities to curation queue"""
         # First ensure journal exists
-        await self.create_journal_for_curation(journal_id, journal_text)
+        await self.create_journal_for_curation(journal_uuid, journal_text)
 
         async with aiosqlite.connect(self.db_path) as db:
             for entity in entities:
                 await db.execute("""
                     INSERT INTO entity_curation_items 
-                    (journal_id, entity_type, original_data_json, status, is_user_added) 
-                    VALUES (?, ?, ?, 'PENDING', FALSE)
-                """, (journal_id, entity.get_type(), json.dumps(entity.dict())))
+                    (uuid, journal_id, entity_type, original_data_json, status, is_user_added) 
+                    VALUES (?, ?, ?, ?, 'PENDING', FALSE)
+                """, (str(entity.uuid), journal_uuid, entity.type, entity.model_dump_json()))
             await db.commit()
 
-    async def get_entities_for_journal(self, journal_id: str) -> List[Dict[str, Any]]:
+    async def get_entities_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
         """Get all entities for a journal (for curation interface)"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, entity_type, original_data_json, curated_data_json, status, is_user_added
+                SELECT uuid, entity_type, original_data_json, curated_data_json, status, is_user_added
                 FROM entity_curation_items 
                 WHERE journal_id = ? 
                 ORDER BY created_at ASC
-            """, (journal_id,)) as cursor:
+            """, (journal_uuid,)) as cursor:
                 rows = await cursor.fetchall()
 
                 entities = []
                 for row in rows:
                     entity_data = {
-                        "id": row[0],
+                        "id": row[0],  # uuid
                         "entity_type": row[1],
                         "status": row[4],
                         "is_user_added": bool(row[5])
@@ -151,20 +155,20 @@ class CurationManager:
 
                 return entities
 
-    async def get_pending_entities_for_journal(self, journal_id: str) -> List[Dict[str, Any]]:
+    async def get_pending_entities_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
         """Get only pending entities for a journal"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, entity_type, original_data_json, status
+                SELECT uuid, entity_type, original_data_json, status
                 FROM entity_curation_items 
                 WHERE journal_id = ? AND status = 'PENDING'
                 ORDER BY created_at ASC
-            """, (journal_id,)) as cursor:
+            """, (journal_uuid,)) as cursor:
                 rows = await cursor.fetchall()
 
                 return [
                     {
-                        "id": row[0],
+                        "id": row[0],  # uuid
                         "entity_type": row[1],
                         "status": row[3],
                         **json.loads(row[2])
@@ -172,84 +176,85 @@ class CurationManager:
                     for row in rows
                 ]
 
-    async def accept_entity(self, entity_id: int, curated_data: Dict[str, Any]) -> bool:
+    async def accept_entity(self, entity_uuid: str, curated_data: Dict[str, Any]) -> bool:
         """Accept an entity with optional modifications"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 UPDATE entity_curation_items 
                 SET curated_data_json = ?, status = 'ACCEPTED'
-                WHERE id = ? AND status = 'PENDING'
-            """, (json.dumps(curated_data), entity_id))
+                WHERE uuid = ? AND status = 'PENDING'
+            """, (json.dumps(curated_data), entity_uuid))
             await db.commit()
             return cursor.rowcount > 0
 
-    async def reject_entity(self, entity_id: int) -> bool:
+    async def reject_entity(self, entity_uuid: str) -> bool:
         """Reject an entity"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 UPDATE entity_curation_items 
                 SET status = 'REJECTED'
-                WHERE id = ? AND status = 'PENDING'
-            """, (entity_id,))
+                WHERE uuid = ? AND status = 'PENDING'
+            """, (entity_uuid,))
             await db.commit()
             return cursor.rowcount > 0
 
-    async def add_user_entity(self, journal_id: str, entity_data: Dict[str, Any]) -> int:
+    async def add_user_entity(self, journal_uuid: str, entity_data: Dict[str, Any]) -> str:
         """Add a new user-created entity (auto-accepted)"""
+        new_uuid = str(uuid4())
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("""
+            await db.execute("""
                 INSERT INTO entity_curation_items 
-                (journal_id, entity_type, curated_data_json, status, is_user_added) 
-                VALUES (?, ?, ?, 'ACCEPTED', TRUE)
-            """, (journal_id, entity_data.get('type', 'UNKNOWN'), json.dumps(entity_data)))
+                (uuid, journal_id, entity_type, curated_data_json, status, is_user_added) 
+                VALUES (?, ?, ?, ?, 'ACCEPTED', TRUE)
+            """, (new_uuid, journal_uuid, entity_data.get('type', 'UNKNOWN'), json.dumps(entity_data)))
             await db.commit()
-            return cursor.lastrowid
+            return new_uuid
 
-    async def get_accepted_entities_for_journal(self, journal_id: str) -> List[Dict[str, Any]]:
+    async def get_accepted_entities_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
         """Get all accepted entities for a journal (for relationship extraction)"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT curated_data_json
                 FROM entity_curation_items 
                 WHERE journal_id = ? AND status = 'ACCEPTED'
-            """, (journal_id,)) as cursor:
+            """, (journal_uuid,)) as cursor:
                 rows = await cursor.fetchall()
                 return [json.loads(row[0]) for row in rows]
 
-    async def complete_entity_phase(self, journal_id: str) -> None:
+    async def complete_entity_phase(self, journal_uuid: str) -> None:
         """Mark entity curation phase as complete and move to relationship phase"""
-        await self.update_journal_status(journal_id, 'ENTITIES_DONE')
+        await self.update_journal_status(journal_uuid, 'ENTITIES_DONE')
 
     # ===== RELATIONSHIP CURATION =====
 
-    async def queue_relationships_for_curation(self, journal_id: str, relationships: List[Relation]) -> None:
+    async def queue_relationships_for_curation(self, journal_uuid: str, relationships: List[Relation]) -> None:
         """Add relationships to curation queue"""
-        await self.update_journal_status(journal_id, 'PENDING_RELATIONS')
+        await self.update_journal_status(journal_uuid, 'PENDING_RELATIONS')
 
         async with aiosqlite.connect(self.db_path) as db:
             for relationship in relationships:
                 await db.execute("""
                     INSERT INTO relationship_curation_items 
-                    (journal_id, relationship_type, original_data_json, status, is_user_added) 
-                    VALUES (?, ?, ?, 'PENDING', FALSE)
-                """, (journal_id, relationship.get_type(), json.dumps(relationship.dict())))
+                    (uuid, journal_id, relationship_type, original_data_json, status, is_user_added) 
+                    VALUES (?, ?, ?, ?, 'PENDING', FALSE)
+                """, (str(relationship.uuid), journal_uuid, relationship.type, relationship.model_dump_json()))
             await db.commit()
 
-    async def get_relationships_for_journal(self, journal_id: str) -> List[Dict[str, Any]]:
+    async def get_relationships_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
         """Get all relationships for a journal"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, relationship_type, original_data_json, curated_data_json, status, is_user_added
+                SELECT uuid, relationship_type, original_data_json, curated_data_json, status, is_user_added
                 FROM relationship_curation_items 
                 WHERE journal_id = ? 
                 ORDER BY created_at ASC
-            """, (journal_id,)) as cursor:
+            """, (journal_uuid,)) as cursor:
                 rows = await cursor.fetchall()
 
                 relationships = []
                 for row in rows:
                     rel_data = {
-                        "id": row[0],
+                        "id": row[0],  # uuid
                         "relationship_type": row[1],
                         "status": row[4],
                         "is_user_added": bool(row[5])
@@ -265,105 +270,156 @@ class CurationManager:
 
                 return relationships
 
-    async def accept_relationship(self, relationship_id: int, curated_data: Dict[str, Any]) -> bool:
+    async def accept_relationship(self, relationship_uuid: str, curated_data: Dict[str, Any]) -> bool:
         """Accept a relationship with optional modifications"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 UPDATE relationship_curation_items 
                 SET curated_data_json = ?, status = 'ACCEPTED'
-                WHERE id = ? AND status = 'PENDING'
-            """, (json.dumps(curated_data), relationship_id))
+                WHERE uuid = ? AND status = 'PENDING'
+            """, (json.dumps(curated_data), relationship_uuid))
             await db.commit()
             return cursor.rowcount > 0
 
-    async def reject_relationship(self, relationship_id: int) -> bool:
+    async def reject_relationship(self, relationship_uuid: str) -> bool:
         """Reject a relationship"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 UPDATE relationship_curation_items 
                 SET status = 'REJECTED'
-                WHERE id = ? AND status = 'PENDING'
-            """, (relationship_id,))
+                WHERE uuid = ? AND status = 'PENDING'
+            """, (relationship_uuid,))
             await db.commit()
             return cursor.rowcount > 0
 
-    async def add_user_relationship(self, journal_id: str, relationship_data: Dict[str, Any]) -> int:
+    async def add_user_relationship(self, journal_uuid: str, relationship_data: Dict[str, Any]) -> str:
         """Add a new user-created relationship (auto-accepted)"""
+        new_uuid = str(uuid4())
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("""
+            await db.execute("""
                 INSERT INTO relationship_curation_items 
-                (journal_id, relationship_type, curated_data_json, status, is_user_added) 
-                VALUES (?, ?, ?, 'ACCEPTED', TRUE)
-            """, (journal_id, relationship_data.get('type', 'UNKNOWN'), json.dumps(relationship_data)))
+                (uuid, journal_id, relationship_type, curated_data_json, status, is_user_added) 
+                VALUES (?, ?, ?, ?, 'ACCEPTED', TRUE)
+            """, (new_uuid, journal_uuid, relationship_data.get('type', 'UNKNOWN'), json.dumps(relationship_data)))
             await db.commit()
-            return cursor.lastrowid
+            return new_uuid
 
-    async def get_accepted_relationships_for_journal(self, journal_id: str) -> List[Dict[str, Any]]:
+    async def get_accepted_relationships_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
         """Get all accepted relationships for a journal (for graph integration)"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT curated_data_json
                 FROM relationship_curation_items 
                 WHERE journal_id = ? AND status = 'ACCEPTED'
-            """, (journal_id,)) as cursor:
+            """, (journal_uuid,)) as cursor:
                 rows = await cursor.fetchall()
                 return [json.loads(row[0]) for row in rows]
 
-    async def complete_relationship_phase(self, journal_id: str) -> None:
+    async def complete_relationship_phase(self, journal_uuid: str) -> None:
         """Mark relationship curation phase as complete"""
-        await self.update_journal_status(journal_id, 'COMPLETED')
+        await self.update_journal_status(journal_uuid, 'COMPLETED')
 
     # ===== DASHBOARD API HELPERS =====
 
     async def get_journals_pending_entity_curation(self) -> List[Dict[str, Any]]:
-        """Get journals that need entity curation"""
+        """Get journals that need entity curation with detailed pending entities"""
         async with aiosqlite.connect(self.db_path) as db:
+            # First get the journal list with counts
             async with db.execute("""
-                SELECT j.journal_id, j.journal_text, j.created_at,
-                       COUNT(e.id) as pending_entities
+                SELECT j.uuid, j.journal_text, j.created_at,
+                       COUNT(e.uuid) as pending_entities_count
                 FROM journal_curation j
-                LEFT JOIN entity_curation_items e ON j.journal_id = e.journal_id AND e.status = 'PENDING'
+                LEFT JOIN entity_curation_items e ON j.uuid = e.journal_id AND e.status = 'PENDING'
                 WHERE j.overall_status = 'PENDING_ENTITIES'
-                GROUP BY j.journal_id, j.journal_text, j.created_at
+                GROUP BY j.uuid, j.journal_text, j.created_at
                 ORDER BY j.created_at ASC
             """) as cursor:
-                rows = await cursor.fetchall()
+                journal_rows = await cursor.fetchall()
 
-                return [
+            # Now get the detailed entities for each journal
+            journals_with_entities = []
+            for row in journal_rows:
+                journal_uuid = row[0]
+
+                # Get the detailed pending entities for this journal
+                async with db.execute("""
+                    SELECT uuid, entity_type, original_data_json, status
+                    FROM entity_curation_items 
+                    WHERE journal_id = ? AND status = 'PENDING'
+                    ORDER BY created_at ASC
+                """, (journal_uuid,)) as entity_cursor:
+                    entity_rows = await entity_cursor.fetchall()
+
+                pending_entities = [
                     {
-                        "journal_id": row[0],
-                        "journal_text": row[1],
-                        "created_at": row[2],
-                        "pending_entities": row[3],
-                        "phase": "entities"
+                        "id": entity_row[0],  # uuid
+                        "entity_type": entity_row[1],
+                        "status": entity_row[3],
+                        **json.loads(entity_row[2])
                     }
-                    for row in rows
+                    for entity_row in entity_rows
                 ]
+
+                journals_with_entities.append({
+                    "journal_id": row[0],  # uuid
+                    "journal_text": row[1],
+                    "created_at": row[2],
+                    "pending_entities_count": row[3],
+                    "pending_entities": pending_entities,
+                    "phase": "entities"
+                })
+
+            return journals_with_entities
 
     async def get_journals_pending_relationship_curation(self) -> List[Dict[str, Any]]:
-        """Get journals that need relationship curation"""
+        """Get journals that need relationship curation with detailed pending relationships"""
         async with aiosqlite.connect(self.db_path) as db:
+            # First get the journal list with counts
             async with db.execute("""
-                SELECT j.journal_id, j.journal_text, j.created_at,
-                       COUNT(r.id) as pending_relationships
+                SELECT j.uuid, j.journal_text, j.created_at,
+                       COUNT(r.uuid) as pending_relationships_count
                 FROM journal_curation j
-                LEFT JOIN relationship_curation_items r ON j.journal_id = r.journal_id AND r.status = 'PENDING'
+                LEFT JOIN relationship_curation_items r ON j.uuid = r.journal_id AND r.status = 'PENDING'
                 WHERE j.overall_status = 'PENDING_RELATIONS'
-                GROUP BY j.journal_id, j.journal_text, j.created_at
+                GROUP BY j.uuid, j.journal_text, j.created_at
                 ORDER BY j.created_at ASC
             """) as cursor:
-                rows = await cursor.fetchall()
+                journal_rows = await cursor.fetchall()
 
-                return [
+            # Now get the detailed relationships for each journal
+            journals_with_relationships = []
+            for row in journal_rows:
+                journal_uuid = row[0]
+
+                # Get the detailed pending relationships for this journal
+                async with db.execute("""
+                    SELECT uuid, relationship_type, original_data_json, status
+                    FROM relationship_curation_items 
+                    WHERE journal_id = ? AND status = 'PENDING'
+                    ORDER BY created_at ASC
+                """, (journal_uuid,)) as rel_cursor:
+                    rel_rows = await rel_cursor.fetchall()
+
+                pending_relationships = [
                     {
-                        "journal_id": row[0],
-                        "journal_text": row[1],
-                        "created_at": row[2],
-                        "pending_relationships": row[3],
-                        "phase": "relationships"
+                        "id": rel_row[0],  # uuid
+                        "relationship_type": rel_row[1],
+                        "status": rel_row[3],
+                        **json.loads(rel_row[2])
                     }
-                    for row in rows
+                    for rel_row in rel_rows
                 ]
+
+                journals_with_relationships.append({
+                    "journal_id": row[0],  # uuid
+                    "journal_text": row[1],
+                    "created_at": row[2],
+                    "pending_relationships_count": row[3],
+                    "pending_relationships": pending_relationships,
+                    "phase": "relationships"
+                })
+
+            return journals_with_relationships
 
     async def get_all_pending_curation_tasks(self) -> Dict[str, Any]:
         """Get all pending curation tasks for the dashboard"""
