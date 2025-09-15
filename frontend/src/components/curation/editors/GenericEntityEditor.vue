@@ -52,8 +52,12 @@ const editableEntity = ref({});
 
 // Separate standard fields from other properties
 const otherProperties = computed(() => {
-    const { name, summary_short, summary, type, ...rest } = props.entity;
-    return JSON.stringify(rest, null, 2);
+    const entityCopy = { ...props.entity };
+    delete entityCopy.name;
+    delete entityCopy.summary_short;
+    delete entityCopy.summary;
+    delete entityCopy.type;
+    return JSON.stringify(entityCopy, null, 2);
 });
 
 watch(() => props.entity, (newEntity) => {
