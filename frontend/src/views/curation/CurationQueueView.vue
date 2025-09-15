@@ -17,10 +17,13 @@
         </div>
         <ul class="task-list">
           <li v-for="(task, index) in group.tasks" :key="task.name" class="task-item">
-            <span class="task-info">
-              <span class="task-name">{{ task.name }}</span>
-              <span class="task-type-badge">{{ task.type }}</span>
-            </span>
+            <div class="task-info">
+              <div class="task-header-info">
+                <span class="task-name">{{ task.name }}</span>
+                <span class="task-type-badge">{{ task.type }}</span>
+              </div>
+              <p class="task-summary">{{ task.summary_short }}</p>
+            </div>
             <div class="task-actions">
               <button @click="quickAccept(group, index)" class="action-btn accept-btn" title="Quick Accept">✓</button>
               <button @click="quickReject(group, index)" class="action-btn reject-btn" title="Quick Reject">✗</button>
@@ -28,6 +31,9 @@
             </div>
           </li>
         </ul>
+        <div v-if="group.tasks.length === 0" class="card-footer">
+          <button @click="submitCuration(group.journal_id)" class="submit-btn">Complete Curation</button>
+        </div>
       </div>
     </div>
   </div>
@@ -94,6 +100,15 @@ function quickReject(group, taskIndex) {
   // TODO: API call to reject the entity
   // On success, remove from list
   group.tasks.splice(taskIndex, 1);
+}
+
+function submitCuration(journalId) {
+  console.log('Submitting curation for journal', journalId);
+  // TODO: API call to submit/complete curation
+  const groupIndex = allTasks.value.findIndex(g => g.journal_id === journalId);
+  if (groupIndex > -1) {
+    allTasks.value.splice(groupIndex, 1);
+  }
 }
 
 // Mock Data
@@ -233,9 +248,22 @@ const mockPendingCurations = [
 }
 
 .task-info {
+  flex-grow: 1;
+  padding-right: 1rem;
+}
+
+.task-header-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.task-summary {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin: 0;
+  padding-left: 2px; /* to align with task-name */
 }
 
 .task-name {
@@ -300,5 +328,28 @@ const mockPendingCurations = [
 }
 .reject-btn:hover {
   background-color: #c82333;
+}
+
+.card-footer {
+  padding: 1rem 1.5rem;
+  background-color: #f7f9fa;
+  text-align: right;
+  border-top: 1px solid #e0e0e0;
+}
+
+.submit-btn {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.submit-btn:hover {
+  background-color: #0056b3;
 }
 </style>

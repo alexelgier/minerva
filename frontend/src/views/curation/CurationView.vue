@@ -1,26 +1,34 @@
 <template>
-  <div class="curation-view">
-    <div class="journal-panel">
-      <JournalViewer :markdown="journalMarkdown" />
-    </div>
-    <div class="editor-panel">
-      <component
-        :is="editorComponent"
-        :entity="entityToEdit"
-        @accept="handleAccept"
-        @reject="handleReject"
-      />
+  <div>
+    <header class="curation-page-header">
+      <button @click="goBackToQueue" class="back-btn">&larr; Back to Queue</button>
+    </header>
+    <div class="curation-view">
+      <div class="journal-panel">
+        <JournalViewer :markdown="journalMarkdown" />
+      </div>
+      <div class="editor-panel">
+        <component
+          :is="editorComponent"
+          :entity="entityToEdit"
+          @accept="handleAccept"
+          @reject="handleReject"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import JournalViewer from '@/components/curation/JournalViewer.vue';
 import PersonEditor from '@/components/curation/editors/PersonEditor.vue';
 import EventEditor from '@/components/curation/editors/EventEditor.vue';
 import ProjectEditor from '@/components/curation/editors/ProjectEditor.vue';
 import GenericEntityEditor from '@/components/curation/editors/GenericEntityEditor.vue';
+
+const router = useRouter();
 
 // Mock Data
 const journalMarkdown = ref(`
@@ -82,6 +90,10 @@ const editorComponent = computed(() => {
   return editorMap[entityToEdit.value.type] || GenericEntityEditor;
 });
 
+function goBackToQueue() {
+  router.push({ name: 'CurationQueueView' });
+}
+
 function handleAccept(updatedEntity) {
   console.log('Accepted:', updatedEntity);
   // Here you would typically send the data to an API
@@ -101,9 +113,29 @@ function goToNextEntity() {
 </script>
 
 <style scoped>
+.curation-page-header {
+  padding: 0.75rem 1.5rem;
+  background-color: #fff;
+  border-bottom: 1px solid #dcdfe6;
+}
+
+.back-btn {
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  border: 1px solid #ced4da;
+  background-color: #f8f9fa;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.back-btn:hover {
+  background-color: #e9ecef;
+}
+
 .curation-view {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 62px);
   width: 100%;
   background-color: #f0f2f5;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
