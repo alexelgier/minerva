@@ -169,6 +169,47 @@ async def get_entity_curation_task(
         raise HTTPException(status_code=500, detail=f"Failed to get entity curation: {str(e)}")
 
 
+@backend_app.post("/api/curation/entities/{journal_id}/{entity_id}/accept")
+@inject
+async def accept_entity_curation(
+        journal_id: str,
+        entity_id: str,
+        curated_data: Dict[str, Any],
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
+    """Accept a single entity curation task"""
+    try:
+        updated_uuid = await curation_manager.accept_entity(
+            journal_uuid=journal_id,
+            entity_uuid=entity_id,
+            curated_data=curated_data
+        )
+        if updated_uuid:
+            return {"success": True, "message": "Entity accepted"}
+        else:
+            raise HTTPException(status_code=404, detail="Entity not found or not in PENDING state")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to accept entity: {str(e)}")
+
+
+@backend_app.post("/api/curation/entities/{journal_id}/{entity_id}/reject")
+@inject
+async def reject_entity_curation(
+        journal_id: str,
+        entity_id: str,
+        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
+):
+    """Reject a single entity curation task"""
+    try:
+        success = await curation_manager.reject_entity(journal_uuid=journal_id, entity_uuid=entity_id)
+        if success:
+            return {"success": True, "message": "Entity rejected"}
+        else:
+            raise HTTPException(status_code=404, detail="Entity not found or not in PENDING state")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reject entity: {str(e)}")
+
+
 @backend_app.post("/api/curation/entities/{journal_id}/complete")
 @inject
 async def complete_entity_curation(

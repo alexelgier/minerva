@@ -176,39 +176,37 @@ class CurationManager:
                     for row in rows
                 ]
 
-    async def accept_entity(self, entity_uuid: str, curated_data: Dict[str, Any]) -> bool:
+    async def accept_entity(self, journal_uuid: str, entity_uuid: str, curated_data: Dict[str, Any], is_user_added: bool = False) -> str:
         """Accept an entity with optional modifications"""
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("""
-                UPDATE entity_curation_items 
-                SET curated_data_json = ?, status = 'ACCEPTED'
-                WHERE uuid = ? AND status = 'PENDING'
-            """, (json.dumps(curated_data), entity_uuid))
-            await db.commit()
-            return cursor.rowcount > 0
+            if is_user_added:
+                new_uuid = str(uuid4())
+                await db.execute("""
+                    INSERT INTO entity_curation_items 
+                    (uuid, journal_id, entity_type, curated_data_json, status, is_user_added) 
+                    VALUES (?, ?, ?, ?, 'ACCEPTED', TRUE)
+                """, (new_uuid, journal_uuid, curated_data.get('type', 'UNKNOWN'), json.dumps(curated_data)))
+                await db.commit()
+                return new_uuid
+            else:
+                cursor = await db.execute("""
+                    UPDATE entity_curation_items 
+                    SET curated_data_json = ?, status = 'ACCEPTED'
+                    WHERE uuid = ? AND journal_id = ? AND status = 'PENDING'
+                """, (json.dumps(curated_data), entity_uuid, journal_uuid))
+                await db.commit()
+                return entity_uuid if cursor.rowcount > 0 else ""
 
-    async def reject_entity(self, entity_uuid: str) -> bool:
+    async def reject_entity(self, journal_uuid: str, entity_uuid: str) -> bool:
         """Reject an entity"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 UPDATE entity_curation_items 
                 SET status = 'REJECTED'
-                WHERE uuid = ? AND status = 'PENDING'
-            """, (entity_uuid,))
+                WHERE uuid = ? AND journal_id = ? AND status = 'PENDING'
+            """, (entity_uuid, journal_uuid))
             await db.commit()
             return cursor.rowcount > 0
-
-    async def add_user_entity(self, journal_uuid: str, entity_data: Dict[str, Any]) -> str:
-        """Add a new user-created entity (auto-accepted)"""
-        new_uuid = str(uuid4())
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                INSERT INTO entity_curation_items 
-                (uuid, journal_id, entity_type, curated_data_json, status, is_user_added) 
-                VALUES (?, ?, ?, ?, 'ACCEPTED', TRUE)
-            """, (new_uuid, journal_uuid, entity_data.get('type', 'UNKNOWN'), json.dumps(entity_data)))
-            await db.commit()
-            return new_uuid
 
     async def get_accepted_entities_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
         """Get all accepted entities for a journal (for relationship extraction)"""
@@ -270,39 +268,37 @@ class CurationManager:
 
                 return relationships
 
-    async def accept_relationship(self, relationship_uuid: str, curated_data: Dict[str, Any]) -> bool:
+    async def accept_relationship(self, journal_uuid: str, relationship_uuid: str, curated_data: Dict[str, Any], is_user_added: bool = False) -> str:
         """Accept a relationship with optional modifications"""
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("""
-                UPDATE relationship_curation_items 
-                SET curated_data_json = ?, status = 'ACCEPTED'
-                WHERE uuid = ? AND status = 'PENDING'
-            """, (json.dumps(curated_data), relationship_uuid))
-            await db.commit()
-            return cursor.rowcount > 0
+            if is_user_added:
+                new_uuid = str(uuid4())
+                await db.execute("""
+                    INSERT INTO relationship_curation_items 
+                    (uuid, journal_id, relationship_type, curated_data_json, status, is_user_added) 
+                    VALUES (?, ?, ?, ?, 'ACCEPTED', TRUE)
+                """, (new_uuid, journal_uuid, curated_data.get('type', 'UNKNOWN'), json.dumps(curated_data)))
+                await db.commit()
+                return new_uuid
+            else:
+                cursor = await db.execute("""
+                    UPDATE relationship_curation_items 
+                    SET curated_data_json = ?, status = 'ACCEPTED'
+                    WHERE uuid = ? AND journal_id = ? AND status = 'PENDING'
+                """, (json.dumps(curated_data), relationship_uuid, journal_uuid))
+                await db.commit()
+                return relationship_uuid if cursor.rowcount > 0 else ""
 
-    async def reject_relationship(self, relationship_uuid: str) -> bool:
+    async def reject_relationship(self, journal_uuid: str, relationship_uuid: str) -> bool:
         """Reject a relationship"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 UPDATE relationship_curation_items 
                 SET status = 'REJECTED'
-                WHERE uuid = ? AND status = 'PENDING'
-            """, (relationship_uuid,))
+                WHERE uuid = ? AND journal_id = ? AND status = 'PENDING'
+            """, (relationship_uuid, journal_uuid))
             await db.commit()
             return cursor.rowcount > 0
-
-    async def add_user_relationship(self, journal_uuid: str, relationship_data: Dict[str, Any]) -> str:
-        """Add a new user-created relationship (auto-accepted)"""
-        new_uuid = str(uuid4())
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                INSERT INTO relationship_curation_items 
-                (uuid, journal_id, relationship_type, curated_data_json, status, is_user_added) 
-                VALUES (?, ?, ?, ?, 'ACCEPTED', TRUE)
-            """, (new_uuid, journal_uuid, relationship_data.get('type', 'UNKNOWN'), json.dumps(relationship_data)))
-            await db.commit()
-            return new_uuid
 
     async def get_accepted_relationships_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
         """Get all accepted relationships for a journal (for graph integration)"""

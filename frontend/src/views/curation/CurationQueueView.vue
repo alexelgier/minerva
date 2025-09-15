@@ -99,20 +99,48 @@ function navigateToCuration(journalId) {
   router.push({ name: 'CurationView', params: { journalId } });
 }
 
-function quickAccept(group, taskIndex) {
+async function quickAccept(group, taskIndex) {
   const task = group.tasks[taskIndex];
-  console.log('Quick Accept:', task.name, 'from journal', group.journal_id);
-  // TODO: API call to accept the entity
-  // On success, remove from list
-  group.tasks.splice(taskIndex, 1);
+  try {
+    const response = await fetch(`http://127.0.0.1:8000/api/curation/entities/${group.journal_id}/${task.id}/accept`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(task)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    // On success, remove from list
+    group.tasks.splice(taskIndex, 1);
+  } catch (err) {
+    console.error("Failed to quick accept entity:", err);
+    error.value = `Failed to accept '${task.name}': ${err.message}.`;
+  }
 }
 
-function quickReject(group, taskIndex) {
+async function quickReject(group, taskIndex) {
   const task = group.tasks[taskIndex];
-  console.log('Quick Reject:', task.name, 'from journal', group.journal_id);
-  // TODO: API call to reject the entity
-  // On success, remove from list
-  group.tasks.splice(taskIndex, 1);
+  try {
+    const response = await fetch(`http://127.0.0.1:8000/api/curation/entities/${group.journal_id}/${task.id}/reject`, {
+      method: 'POST'
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    // On success, remove from list
+    group.tasks.splice(taskIndex, 1);
+  } catch (err) {
+    console.error("Failed to quick reject entity:", err);
+    error.value = `Failed to reject '${task.name}': ${err.message}.`;
+  }
 }
 async function submitCuration(journalId) {
   console.log('Submitting curation for journal', journalId);
