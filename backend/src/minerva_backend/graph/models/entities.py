@@ -71,7 +71,7 @@ class Concept(Entity):
 
 
 class Resource(Entity):
-    """Representa contenido externo (libros, artículos, videos) que sirve como fuente de información o entretenimiento."""
+    """Representa contenido (libros, artículos, videos, etc.) que sirve como fuente de información o entretenimiento."""
     title: str = Field(..., description="Título o nombre del recurso")
     category: ResourceType = Field(..., description="Categoría del recurso")
     type: Literal[EntityType.RESOURCE] = Field(EntityType.RESOURCE.value,
@@ -80,3 +80,9 @@ class Resource(Entity):
     quotes: List[str] | None = Field(default=None, description="Citas o extractos notables del recurso")
     status: ResourceStatus | None = Field(default=None, description="Estado de consumo actual")
     author: str | None = Field(default=None, description="Creador o autor del recurso")
+
+class Consumable(Entity):
+    pass
+
+class Place(Entity):
+    pass

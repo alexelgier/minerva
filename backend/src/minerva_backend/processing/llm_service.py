@@ -23,64 +23,22 @@ class LLMService:
         self.cache_enabled = cache
         self.cache = Cache('./llm_cache') if cache else None
 
-    @staticmethod
-    def _detect_exact_repetition(text: str, min_repeat_length: int = 20, min_repetitions: int = 3) -> bool:
-        """Detect if text ends with consecutive exact repetitions."""
-        required_length = min_repeat_length * min_repetitions
-        if len(text) < required_length:
-            return False
-        end_of_text = text[-required_length:]
-        for length in range(min_repeat_length, len(end_of_text) // min_repetitions + 1):
-            chunk = end_of_text[-length:]
-            repetitions = 1
-            for i in range(2, min_repetitions + 1):
-                start_idx = -i * length
-                end_idx = start_idx + length
-                if end_of_text[start_idx:end_idx] == chunk:
-                    repetitions += 1
-                else:
-                    break
-            if repetitions >= min_repetitions:
-                logger.warning(f"🔄 Repetition detected! Pattern: '{chunk[:50]}...' repeated {repetitions} times")
-                return True
-        return False
-
-    @staticmethod
-    def _detect_low_entropy(text: str, window_size: int = 100) -> bool:
-        """Detect low entropy (repetitive) content in recent text"""
-        if len(text) < window_size:
-            return False
-        recent = text[-window_size:]
-        unique_ratio = len(set(recent)) / len(recent)
-        if unique_ratio < 0.15:
-            logger.warning(f"🔄 Low entropy detected! Unique ratio: {unique_ratio:.2f}")
-            return True
-        return False
-
-    def _get_cache_key(self, model: str, prompt: str, system_prompt: Optional[str],
-                         response_model: Optional[Type[BaseModel]], options: Optional[Dict[str, Any]]) -> str:
-        key_data = {
-            "model": model,
-            "prompt": prompt,
-            "system_prompt": system_prompt,
-            "response_model": response_model.__name__ if response_model else None,
-            "options": options or {}
-        }
-        key_string = json.dumps(key_data, sort_keys=True, default=str)
-        return hashlib.sha256(key_string.encode()).hexdigest()
-
-    async def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None,
-                         response_model: Optional[Type[BaseModel]] = None,
-                         options: Optional[Dict[str, Any]] = None) -> Union[Dict[str, Any], str]:
+    async def generate(
+            self,
+            model: str,
+            prompt: str,
+            system_prompt: Optional[str] = None,
+            response_model: Optional[Type[BaseModel]] = None,
+            options: Optional[Dict[str, Any]] = None
+    ) -> Union[Dict[str, Any], str]:
         """
         Generate LLM response with streaming, monitoring, caching, and retry logic.
         """
         retry_count = 0
-        last_error = None
         merged_options = options or {}
 
         # Check Cache
-        cache_key = self._get_cache_key(model, prompt, system_prompt, response_model, merged_options)
+        cache_key = _get_cache_key(model, prompt, system_prompt, response_model, merged_options)
         if self.cache_enabled and self.cache.get(cache_key):
             cached_resp = self.cache.get(cache_key)
             logger.debug("✅ Using cached response")
@@ -133,7 +91,7 @@ class LLMService:
 
                     if ((current_time - last_repetition_check > 30.0) or (token_count % 100 == 0)) and len(
                             full_response_content) > 200:
-                        if self._detect_exact_repetition(full_response_content) or self._detect_low_entropy(
+                        if _detect_exact_repetition(full_response_content) or _detect_low_entropy(
                                 full_response_content):
                             raise Exception("Model stuck in repetitive loop")
                         last_repetition_check = current_time
@@ -186,7 +144,7 @@ class LLMService:
     async def create_embedding(self, text: str, model: str) -> List[float]:
         """Generate an embedding for a single piece of text."""
         result = await self.client.embeddings(model=model, prompt=text)
-        return result['embedding']
+        return list(result)
 
     async def create_embeddings_batch(self, texts: List[str], model: str) -> List[List[float]]:
         """Generate embeddings for a batch of texts."""
@@ -194,10 +152,51 @@ class LLMService:
         # We run them concurrently.
         tasks = [self.create_embedding(text, model) for text in texts]
         embeddings = await asyncio.gather(*tasks)
-        return embeddings
+        return list(embeddings)
 
-    async def close(self):
-        """Cleanup HTTP client and cache."""
-        await self.client._client.aclose()
-        if self.cache_enabled:
-            self.cache.close()
+
+def _get_cache_key(model: str, prompt: str, system_prompt: Optional[str],
+                   response_model: Optional[Type[BaseModel]], options: Optional[Dict[str, Any]]) -> str:
+    key_data = {
+        "model": model,
+        "prompt": prompt,
+        "system_prompt": system_prompt,
+        "response_model": response_model.__name__ if response_model else None,
+        "options": options or {}
+    }
+    key_string = json.dumps(key_data, sort_keys=True, default=str)
+    return hashlib.sha256(key_string.encode()).hexdigest()
+
+
+def _detect_exact_repetition(text: str, min_repeat_length: int = 20, min_repetitions: int = 3) -> bool:
+    """Detect if text ends with consecutive exact repetitions."""
+    required_length = min_repeat_length * min_repetitions
+    if len(text) < required_length:
+        return False
+    end_of_text = text[-required_length:]
+    for length in range(min_repeat_length, len(end_of_text) // min_repetitions + 1):
+        chunk = end_of_text[-length:]
+        repetitions = 1
+        for i in range(2, min_repetitions + 1):
+            start_idx = -i * length
+            end_idx = start_idx + length
+            if end_of_text[start_idx:end_idx] == chunk:
+                repetitions += 1
+            else:
+                break
+        if repetitions >= min_repetitions:
+            logger.warning(f"🔄 Repetition detected! Pattern: '{chunk[:50]}...' repeated {repetitions} times")
+            return True
+    return False
+
+
+def _detect_low_entropy(text: str, window_size: int = 100) -> bool:
+    """Detect low entropy (repetitive) content in recent text"""
+    if len(text) < window_size:
+        return False
+    recent = text[-window_size:]
+    unique_ratio = len(set(recent)) / len(recent)
+    if unique_ratio < 0.15:
+        logger.warning(f"🔄 Low entropy detected! Unique ratio: {unique_ratio:.2f}")
+        return True
+    return False

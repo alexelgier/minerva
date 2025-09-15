@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from datetime import date as date_type
 from typing import List, Literal
 
@@ -93,29 +93,35 @@ class JournalEntry(Document):
         if flour_match:
             journal_entry['flourishing'] = [int(val) for val in flour_match.groups()]
 
+        # Date
+        journal_date_str = journal_date
+        journal_date = journal_date.split("-")
+        base_date = date_type(int(journal_date[0]), int(journal_date[1]), int(journal_date[2]))
+        journal_entry['date'] = base_date
+
         # Wake / Bed
         wake_bed_match = re.search(
             r"Wake time:\s*(\d\d:?\d\d).*?Bedtime:\s*(\d\d:?\d\d)",
             text, re.DOTALL)
         if wake_bed_match:
             wake = "".join(wake_bed_match.groups()[0].split(":"))
-            bed = "".join(wake_bed_match.groups()[1].split(":"))
-            journal_entry['wake'] = time(int(wake[:2]), int(wake[2:]))
-            journal_entry['sleep'] = time(int(bed[:2]), int(bed[2:]))
-
-        # Date
-        journal_date = journal_date.split("-")
-        journal_entry['date'] = date_type(int(journal_date[0]), int(journal_date[1]), int(journal_date[2]))
+            wake = time(int(wake[:2]), int(wake[2:]))
+            sleep = "".join(wake_bed_match.groups()[1].split(":"))
+            sleep = time(int(sleep[:2]), int(sleep[2:]))
+            journal_entry['wake'] = datetime.combine(journal_entry['date'], wake)
+            journal_entry['sleep'] = datetime.combine(base_date + timedelta(days=1) if sleep < wake else base_date,
+                                                      sleep)
 
         # Narration
-        journal_entry['text'] = re.search(r"(.+?)(?=\n*---\n*-\s*Imagen, Detalle:|\n*---.*## Noticias|\n*---.*## Sleep)",
-                                          text, re.DOTALL).group(0)
+        journal_entry['text'] = re.search(
+            r"(.+?)(?=\n*---\n*-\s*Imagen, Detalle:|\n*---.*## Noticias|\n*---.*## Sleep)",
+            text, re.DOTALL).group(0)
 
         return cls(
-            id=journal_date,
+            id=journal_date_str,
             date=journal_entry['date'],
-            text=journal_entry['text'],
-            fulltext=text,
+            text=text,
+            entry_text=journal_entry['text'],
             panas_pos=journal_entry.get('panas_pos'),
             panas_neg=journal_entry.get('panas_neg'),
             bpns=journal_entry.get('bpns'),
@@ -123,5 +129,3 @@ class JournalEntry(Document):
             wake=journal_entry.get('wake'),
             sleep=journal_entry.get('sleep'),
         )
-
-

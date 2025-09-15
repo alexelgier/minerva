@@ -1,7 +1,7 @@
 # pipeline/temporal_orchestrator.py
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, Any, List
 
@@ -9,13 +9,14 @@ from temporalio import workflow, activity
 from temporalio.client import Client
 from temporalio.common import RetryPolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
-from temporalio.worker import Worker, WorkerConfig
+from temporalio.worker import Worker
 
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.graph.services.knowledge_graph_service import KnowledgeGraphService
 from minerva_backend.processing.curation_manager import CurationManager
+from minerva_backend.processing.extraction_service import ExtractionService
 
 
 class PipelineStage(str, Enum):
@@ -61,23 +62,21 @@ class PipelineState:
 # ===== ACTIVITIES (The actual work) =====
 
 class PipelineActivities:
-    def __init__(self, curation_manager: CurationManager, kg_service: KnowledgeGraphService):
+    def __init__(self, curation_manager: CurationManager, kg_service: KnowledgeGraphService,
+                 extraction_service: ExtractionService):
         self.curation_manager = curation_manager
         self.kg_service = kg_service
+        self.extraction_service = extraction_service
 
     @activity.defn
     async def extract_entities(self, journal_entry: JournalEntry) -> List[Entity]:
         """Stage 1-2: Extract standalone and relational entities using LLM"""
-
-        # This will call your Ollama extraction pipeline
-        return []
+        return await self.extraction_service.extract_entities(journal_entry)
 
     @activity.defn
     async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
         """Stage 3: Extract relationships between entities"""
-
-        # This will call your Ollama extraction pipeline
-        return []
+        return await self.extraction_service.extract_relationships(journal_entry, entities)
 
     @activity.defn
     async def submit_entity_curation(self, journal_entry: JournalEntry, entities: List[Entity]) -> None:
@@ -96,6 +95,8 @@ class PipelineActivities:
             # Temporal heartbeat to prevent timeout
             activity.heartbeat()
             await asyncio.sleep(30)  # Check every 30 seconds
+            await asyncio.sleep(30)  # Check every 30 seconds
+            return []
 
     @activity.defn
     async def submit_relationship_curation(self, journal_entry: JournalEntry, entities: List[Entity],
@@ -114,6 +115,7 @@ class PipelineActivities:
                 return result
             activity.heartbeat()
             await asyncio.sleep(30)
+            return []
 
     @activity.defn
     async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[Entity],
@@ -282,9 +284,10 @@ async def run_worker():
     curation_manager = container.curation_manager()
     await curation_manager.initialize()
     kg_service = container.kg_service()
+    extraction_service = container.extraction_service()
 
     # Create activity instance with dependencies
-    activities = PipelineActivities(curation_manager, kg_service)
+    activities = PipelineActivities(curation_manager, kg_service, extraction_service)
 
     client = await Client.connect(container.config.TEMPORAL_URI(), data_converter=pydantic_data_converter)
 

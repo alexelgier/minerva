@@ -2,7 +2,7 @@
 
 ## 1. Project Summary
 
-**Purpose:** Minerva is a personal knowledge management system designed to transform unstructured text, primarily from daily journal entries (like those in Obsidian), into a structured knowledge graph.
+**Purpose:** Minerva is a personal knowledge management system designed to transform unstructured text, primarily from daily journal entries (from Obsidian), into a structured knowledge graph.
 
 **Problem Solved:** It helps users uncover hidden connections, patterns, and insights within their personal data over time. It automates the tedious process of identifying key entities (people, projects, concepts) and their relationships, creating a queryable and analyzable second brain.
 
@@ -43,7 +43,6 @@ The knowledge graph consists of nodes and edges.
     -   **Time Nodes:** `Year`, `Month`, `Day` nodes create a time tree for chronological navigation.
 
 -   **Core Edges (Relationships):**
-    -   **`CONTAINS`:** A `JournalEntry` contains various `Entity` nodes.
     -   **`MENTIONS`:** An `Entity` is mentioned in a `JournalEntry`.
     -   **`RELATED_TO` (generic):** Represents relationships between different entities, extracted by the LLM.
 
