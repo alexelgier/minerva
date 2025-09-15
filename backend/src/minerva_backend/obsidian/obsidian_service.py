@@ -160,3 +160,8 @@ class ObsidianService:
         """Find a note file path by its name (without .md extension)."""
         cache = self._build_cache()
         return cache.get(name)
+
+    def construct_glossary(self, links: List[Dict]) -> Dict[str, str]:
+        # Make dict of entity_name: summary, for each link
+        # for each passed link use the file_path if present to extract "short_summary" from yaml frontmatter of note
+        pass
