@@ -160,7 +160,7 @@ class JournalProcessingWorkflow:
             # Stage 3.0: Submit Entities for curation
             self.state.stage = PipelineStage.SUBMIT_ENTITY_CURATION
             await workflow.execute_activity(
-                "submit_entity_curation",
+                PipelineActivities.submit_entity_curation,
                 args=[journal_entry, self.state.entities_extracted],
                 start_to_close_timeout=timedelta(minutes=1),
                 schedule_to_close_timeout=timedelta(minutes=5),
@@ -169,7 +169,7 @@ class JournalProcessingWorkflow:
             # Stage 3: Entity Curation (Human)
             self.state.stage = PipelineStage.WAIT_ENTITY_CURATION
             self.state.entities_curated = await workflow.execute_activity(
-                "wait_for_entity_curation",
+                PipelineActivities.wait_for_entity_curation,
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),  # User has 7 days
                 heartbeat_timeout=timedelta(minutes=2),  # Heartbeat every 2 min
@@ -178,7 +178,7 @@ class JournalProcessingWorkflow:
             # Stage 4: Relationship Extraction (LLM)
             self.state.stage = PipelineStage.RELATION_PROCESSING
             self.state.relationships_extracted = await workflow.execute_activity(
-                "extract_relationships",
+                PipelineActivities.extract_relationships,
                 args=[journal_entry, self.state.entities_curated],
                 start_to_close_timeout=timedelta(minutes=60),
                 retry_policy=llm_retry_policy,
@@ -187,7 +187,7 @@ class JournalProcessingWorkflow:
             # Stage 5.0: Submit Relations for curation
             self.state.stage = PipelineStage.SUBMIT_RELATION_CURATION
             await workflow.execute_activity(
-                "submit_relationship_curation",
+                PipelineActivities.submit_relationship_curation,
                 args=[journal_entry, self.state.entities_curated, self.state.relationships_extracted],
                 start_to_close_timeout=timedelta(minutes=1),
                 schedule_to_close_timeout=timedelta(minutes=5),
@@ -196,7 +196,7 @@ class JournalProcessingWorkflow:
             # Stage 5: Relationship Curation (Human)
             self.state.stage = PipelineStage.WAIT_RELATION_CURATION
             self.state.relationships_curated = await workflow.execute_activity(
-                "wait_for_relationship_curation",
+                PipelineActivities.wait_for_relationship_curation,
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),
                 heartbeat_timeout=timedelta(minutes=2),
@@ -205,7 +205,7 @@ class JournalProcessingWorkflow:
             # Stage 6: Database Write
             self.state.stage = PipelineStage.DB_WRITE
             success = await workflow.execute_activity(
-                "write_to_knowledge_graph",
+                PipelineActivities.write_to_knowledge_graph,
                 args=[journal_entry, self.state.entities_curated, self.state.relationships_curated],
                 schedule_to_close_timeout=timedelta(minutes=5),
                 retry_policy=llm_retry_policy,
