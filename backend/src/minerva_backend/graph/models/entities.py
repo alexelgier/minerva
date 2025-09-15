@@ -82,7 +82,15 @@ class Resource(Entity):
     author: str | None = Field(default=None, description="Creador o autor del recurso")
 
 class Consumable(Entity):
-    pass
+    """Representa un artículo que se puede consumir: comida, bebida, cigarrillos, medicamentos."""
+    type: Literal[EntityType.CONSUMABLE] = Field(EntityType.CONSUMABLE.value,
+                                                 description="Tipo de entidad (siempre CONSUMABLE)")
+    category: str | None = Field(default=None,
+                                   description="Categoría del consumible (p. ej., comida, bebida, medicamento)")
+
 
 class Place(Entity):
-    pass
+    """Representa una ubicación (mi casa, un parque, etc.)"""
+    type: Literal[EntityType.PLACE] = Field(EntityType.PLACE.value, description="Tipo de entidad (siempre PLACE)")
+    address: str | None = Field(default=None, description="Dirección o descripción de la ubicación")
+    category: str | None = Field(default=None, description="Categoría del lugar (p. ej., casa, parque, restaurante)")
