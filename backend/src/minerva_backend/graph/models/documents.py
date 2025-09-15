@@ -8,13 +8,13 @@ from typing import List, Literal
 from pydantic import Field
 
 from .base import Document
-from .enums import DocumentType
+from .enums import LexicalType
 
 
 class JournalEntry(Document):
     date: date_type = Field(..., description="Fecha de la entrada del diario")
-    type: Literal[DocumentType.JOURNAL_ENTRY] = Field(DocumentType.JOURNAL_ENTRY.value,
-                                                      description="Tipo de documento (siempre JOURNAL_ENTRY)")
+    type: Literal[LexicalType.JOURNAL_ENTRY] = Field(LexicalType.JOURNAL_ENTRY.value,
+                                                     description="Tipo de documento (siempre JOURNAL_ENTRY)")
     entry_text: str | None = Field(default=None, description="El texto principal de la entrada del diario")
     panas_pos: List[float] | None = Field(default=None, description="Puntuaciones positivas PANAS")
     panas_neg: List[float] | None = Field(default=None, description="Puntuaciones negativas PANAS")

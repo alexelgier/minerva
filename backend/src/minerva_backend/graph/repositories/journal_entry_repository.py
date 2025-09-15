@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from .base import BaseRepository
 from ..models.documents import JournalEntry
-from ..models.enums import DocumentType
+from ..models.enums import LexicalType
 
 
 class JournalEntryRepository(BaseRepository[JournalEntry]):
@@ -15,7 +15,7 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
 
     @property
     def entity_label(self) -> str:
-        return DocumentType.JOURNAL_ENTRY.value
+        return LexicalType.JOURNAL_ENTRY.value
 
     @property
     def entity_class(self) -> type[JournalEntry]:

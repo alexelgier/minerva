@@ -1,0 +1,148 @@
+{
+    "entity_journals": [],
+    "relationship_journals": [
+        {
+            "journal_id": "9045c5ed-1a7d-4381-9dfa-c381204e46c5",
+            "journal_text": "[[2025]] [[2025-09]] [[2025-09-10]]  Wednesday\n\n12:30, desperté, sin alarma. [[Ana Sorin|Ana]] me ayudo a despertarme, muy suave y amorosa. \n\nDejé mi celular anoche en lo de [[Federico Demarchi|Fede]].\n\n12:45, tomar [[Mate]] y ver [[Al Jazeera]]. [[Ana Sorin|Ana]] tiene que dar un seminario por [[remoto]], lo va hacer arriba en la habitación. \n\nCharlé poco con [[Sady Antonia Baez|Sady]]. Estuve con [[Minerva]].\n\n15:00, vino [[Ana Sorin|Ana]], bastante molesta, angustiada, en el curso habían unas mujeres irrespetuosas que la dejaron desanimada. En todo caso le fue bien de todas formas a pesar de eso. \n\nEstuvimos un rato charlando del curso, de [[Minerva]], leímos [[Vowels]] de [[Christian Bök]]. Pasamos un ratito lindo. Después estuvimos en el [[patio]] leyendo, yo [[Lenin]] [[Tomo IV]], [[Ana Sorin|Ana]] trabajando. \n\nLimpié las [[piedritas]] de [[los gatos]].\n\n[[Ana Sorin|Ana]] se fué a [[terapia]] (tuvo [[remoto]], caminando por la calle). Yo me quedé trabajando en [[Minerva]].\n\n19:30, llegó ana, amorosa. Me invitó a [[Sexo|Jugar]], fue lindo. Le dije que primero tenía que hacer algunas cosas, pero que con mucho gusto en un rato podíamos.\n\nMe fui a lo de [[Federico Demarchi|Fede]], a buscar el celular que olvidé ahi anoche, y [[Cannabis|Porro]]. A la vuelta pasé por el [[Chino]] y compré para la [[Cena]]. \n\nPuse a cocer [[Boniato]] y [[Remolacha]], y la invite a [[Ana Sorin|Ana]] a la habitación.\n\nTuvimos muy lindo [[Sexo]]. [[Ana Sorin|Ana]] esta muy sexy, la disfruté enormemente. \n\nCenamos [[Ensalada de Remolacha y Huevo]], [[Puré de Boniato]], [[Ensalada]], y [[Milanesa de Soja|Suelas]]. Vimos un capítulo de [[One Piece]]. \n\n[[Ana Sorin|Ana]] se quedo durmiendo en el sillón, y yo trabajando en [[Minerva]]. \n\n05:45, trabajé muchas horas en [[Minerva]]. Estoy haciendo [[Graph RAG]] aún. Me hice un fork de [[Graphiti]] y estoy haciendo mi propio flujo de ingesta de entradas de diario. Dejé de hacer tantas pruebas con el [[LLM]] (que es costoso y tarda) y me puse a programar mejor. Que quede una primera version funcional antes de correrlo. Le hice una UI para curaduría. \n\nCreo que va quedar muy bueno [[Minerva]].\n\n06:00, es tarde, tengo que dormir.",
+            "created_at": "2025-09-15 21:33:19",
+            "pending_relationships_count": 8,
+            "pending_relationships": [
+                {
+                    "id": "8c729743-4278-45f9-af54-6db1d595dc5e",
+                    "relationship_type": "RELATED_TO",
+                    "status": "PENDING",
+                    "partition": "DOMAIN",
+                    "uuid": "8c729743-4278-45f9-af54-6db1d595dc5e",
+                    "created_at": "2025-09-15T18:35:43.486782",
+                    "source": "712454a9-397b-4273-9ca4-8d39b77e3808",
+                    "target": "fe4f2d18-f7c6-4d16-936e-a4446cca5dbc",
+                    "type": "RELATED_TO",
+                    "sub_type": [
+                        "romantic_interaction",
+                        "emotional_support",
+                        "shared_activity"
+                    ],
+                    "summary_short": "Alex and Ana have a romantic and emotional bond with mutual affection and shared activities like reading and intimacy.",
+                    "summary": "Alex Elgier and Ana Sorin share a close emotional and romantic connection. They engage in intimate moments, read together, and provide emotional support. Ana is described as loving and sensitive, while Alex expresses deep appreciation and pleasure in their relationship. Their interactions include both casual conversations and intimate activities, such as playing together and sharing time in the patio. Ana also experiences emotional distress during her seminar but remains resilient, and Alex supports her through these moments. Their bond is central to the journal, marked by affection, mutual care, and shared intellectual and emotional experiences."
+                },
+                {
+                    "id": "7b05b6e3-00d4-4d3b-8759-aa549b0dd106",
+                    "relationship_type": "RELATED_TO",
+                    "status": "PENDING",
+                    "partition": "DOMAIN",
+                    "uuid": "7b05b6e3-00d4-4d3b-8759-aa549b0dd106",
+                    "created_at": "2025-09-15T18:36:41.455683",
+                    "source": "712454a9-397b-4273-9ca4-8d39b77e3808",
+                    "target": "168bdd68-e70c-4029-ae15-4481dd42f5c3",
+                    "type": "RELATED_TO",
+                    "sub_type": [
+                        "location_reference",
+                        "object_placement"
+                    ],
+                    "summary_short": "Alex left his phone at Federico's place overnight.",
+                    "summary": "Alex Elgier left his cellular device at Federico Demarchi's residence the previous night. This is explicitly mentioned as a physical action, indicating a temporary placement of personal property at another person's location. The act reflects a routine of shared or mobile presence, though no further interaction is described between Alex and Federico beyond this event."
+                },
+                {
+                    "id": "cf67c7af-45b0-42ce-b324-c7a75e973cac",
+                    "relationship_type": "RELATED_TO",
+                    "status": "PENDING",
+                    "partition": "DOMAIN",
+                    "uuid": "cf67c7af-45b0-42ce-b324-c7a75e973cac",
+                    "created_at": "2025-09-15T18:36:41.455683",
+                    "source": "712454a9-397b-4273-9ca4-8d39b77e3808",
+                    "target": "f1e25b85-8320-4847-97e1-6e2ebaac7c3d",
+                    "type": "RELATED_TO",
+                    "sub_type": [
+                        "brief_conversation"
+                    ],
+                    "summary_short": "Alex had a short conversation with Sady Antonia Baez.",
+                    "summary": "Alex Elgier briefly spoke with Sady Antonia Baez during the day. The interaction is described as minimal and unelaborated, indicating a casual encounter. No emotional depth or shared activities are mentioned, suggesting it is a passing contact rather than a significant relationship."
+                },
+                {
+                    "id": "ff4714d2-7bc1-44e4-ad04-df633fd5862e",
+                    "relationship_type": "RELATED_TO",
+                    "status": "PENDING",
+                    "partition": "DOMAIN",
+                    "uuid": "ff4714d2-7bc1-44e4-ad04-df633fd5862e",
+                    "created_at": "2025-09-15T18:36:41.455683",
+                    "source": "712454a9-397b-4273-9ca4-8d39b77e3808",
+                    "target": "0f164154-e156-4b5b-808c-d354c743a2e9",
+                    "type": "RELATED_TO",
+                    "sub_type": [
+                        "professional_work",
+                        "collaborative_activity"
+                    ],
+                    "summary_short": "Alex works extensively on Minerva, including Graph RAG and UI development.",
+                    "summary": "Alex Elgier is deeply engaged in the development of Minerva, a project involving Graph RAG (Graph-based Retrieval-Augmented Generation), a custom data ingestion pipeline, and a user interface for curation. He created a fork of Graphiti and focused on building a functional prototype before testing with LLMs. His work includes structured programming, reducing reliance on expensive and slow LLM evaluations, and creating a UI to support curatorial tasks. He expresses confidence in the final outcome, indicating a strong personal and professional investment in the project."
+                },
+                {
+                    "id": "fd4ba136-dab4-4af4-8f61-e04dd28e3422",
+                    "relationship_type": "RELATED_TO",
+                    "status": "PENDING",
+                    "partition": "DOMAIN",
+                    "uuid": "fd4ba136-dab4-4af4-8f61-e04dd28e3422",
+                    "created_at": "2025-09-15T18:36:41.455683",
+                    "source": "712454a9-397b-4273-9ca4-8d39b77e3808",
+                    "target": "b1d88e08-3853-4659-a798-6afc4a4498a8",
+                    "type": "RELATED_TO",
+                    "sub_type": [
+                        "shared_reading"
+                    ],
+                    "summary_short": "Alex and Ana read Christian Bök's 'Vowels' together.",
+                    "summary": "Alex Elgier and Ana Sorin read Christian Bök’s work 'Vowels' together during a moment of shared reading in the patio. This activity serves as a bonding experience, combining intellectual engagement with emotional connection. It reflects a collaborative and reflective moment in their interaction, emphasizing shared values and cultural interest. The reading occurs during a relaxed, intimate setting, contributing to the warmth and depth of their relationship."
+                },
+                {
+                    "id": "014fcaf5-cc7b-47e7-983e-2d54758e710e",
+                    "relationship_type": "RELATED_TO",
+                    "status": "PENDING",
+                    "partition": "DOMAIN",
+                    "uuid": "014fcaf5-cc7b-47e7-983e-2d54758e710e",
+                    "created_at": "2025-09-15T18:36:41.455683",
+                    "source": "712454a9-397b-4273-9ca4-8d39b77e3808",
+                    "target": "cf404928-6960-4e34-9841-186b4d78b2be",
+                    "type": "RELATED_TO",
+                    "sub_type": [
+                        "purchase_location",
+                        "supply_chain_interaction"
+                    ],
+                    "summary_short": "Alex passed by the Chino to buy food for dinner.",
+                    "summary": "Alex Elgier visited the 'Chino' to purchase ingredients for the evening meal. This act reflects a practical interaction in the daily routine, where he makes a stop to acquire supplies. The transaction is part of a broader sequence of events involving meal preparation and sharing with Ana, indicating a structured and community-oriented lifestyle."
+                },
+                {
+                    "id": "4f3121e2-09c9-4826-9328-ce070c494690",
+                    "relationship_type": "RELATED_TO",
+                    "status": "PENDING",
+                    "partition": "DOMAIN",
+                    "uuid": "4f3121e2-09c9-4826-9328-ce070c494690",
+                    "created_at": "2025-09-15T18:36:41.455683",
+                    "source": "712454a9-397b-4273-9ca4-8d39b77e3808",
+                    "target": "fe4f2d18-f7c6-4d16-936e-a4446cca5dbc",
+                    "type": "RELATED_TO",
+                    "sub_type": [
+                        "sexual_interaction"
+                    ],
+                    "summary_short": "Alex and Ana engaged in sexual activity, described as enjoyable and fulfilling.",
+                    "summary": "Alex Elgier and Ana Sorin had a romantic sexual encounter described as 'lindo' (nice and pleasant). Alex expresses strong pleasure and appreciation, noting that Ana is 'muy sexy' and that he 'disfruté enormemente'. This interaction occurs after a period of emotional tension and is framed as a positive, fulfilling moment in their relationship, reinforcing emotional intimacy and mutual attraction."
+                },
+                {
+                    "id": "f2750f23-7b3f-4c08-a367-616585aeb7b4",
+                    "relationship_type": "RELATED_TO",
+                    "status": "PENDING",
+                    "partition": "DOMAIN",
+                    "uuid": "f2750f23-7b3f-4c08-a367-616585aeb7b4",
+                    "created_at": "2025-09-15T18:36:41.455683",
+                    "source": "712454a9-397b-4273-9ca4-8d39b77e3808",
+                    "target": "fe4f2d18-f7c6-4d16-936e-a4446cca5dbc",
+                    "type": "RELATED_TO",
+                    "sub_type": [
+                        "emotional_distress_mitigation"
+                    ],
+                    "summary_short": "Ana was distressed by a disrespectful seminar environment, but Alex supported her emotionally.",
+                    "summary": "Ana Sorin reported being emotionally distressed by disrespectful behavior during her remote seminar. Despite this, she remained resilient, and Alex engaged in conversation with her, offering emotional support through shared reading and time together. This interaction demonstrates Alex’s role as a supportive companion during emotional challenges, reinforcing their bond through empathy and presence."
+                }
+            ],
+            "phase": "relationships"
+        }
+    ],
+    "total_pending_journals": 1
+}

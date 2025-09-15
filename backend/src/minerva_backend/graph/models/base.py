@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from .enums import DocumentType, PartitionType
+from .enums import LexicalType, PartitionType
 
 
 # ----------------------------
@@ -53,14 +53,15 @@ class Edge(BaseModel, ABC):
 
 
 class Document(Node, ABC):
-    type: DocumentType = Field(..., description="Tipo de documento")
+    type: LexicalType = Field(..., description="Tipo de documento")
     text: str = Field(..., description="El texto original del documento")
     partition: Literal[PartitionType.LEXICAL] = Field(PartitionType.LEXICAL.value,
                                                       description="Tipo de partición (siempre LEXICAL)")
 
 
-class Chunk(Node, ABC):
-    text: str = Field(..., description="El texto del fragmento")
-    partition: Literal[PartitionType.LEXICAL] = Field(PartitionType.LEXICAL.value,
-                                                      description="Tipo de partición (siempre LEXICAL)")
-    embedding: list[float] | None = Field(default=None, description='embedding del fragmento')
+class Span(Node):
+    """A span of text in a document."""
+    type: Literal[LexicalType.SPAN] = LexicalType.SPAN.value
+    start: int = Field(..., description="Character start index in the Document text")
+    end: int = Field(..., description="Character end index (exclusive)")
+    text: str = Field(..., description="The exact substring from the entry text")

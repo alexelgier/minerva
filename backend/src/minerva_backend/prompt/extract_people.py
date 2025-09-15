@@ -2,13 +2,14 @@ from typing import List, Type
 
 from pydantic import BaseModel, Field, conset
 
+from minerva_backend.graph.models.base import Span
 from minerva_backend.prompt.base import Prompt
 
 
 class Person(BaseModel):
     """A person extracted from a text."""
     name: str = Field(..., description="Name of person")
-    chunks: conset(str, min_length=1) = Field(..., description="Chunks of text where the person is mentioned")
+    spans: conset(Span, min_length=1) = Field(..., description="Spans in the document where the person is mentioned")
 
 
 class People(BaseModel):

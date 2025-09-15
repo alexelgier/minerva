@@ -17,8 +17,9 @@ class EntityType(str, Enum):
     PLACE = "Place"
 
 
-class DocumentType(str, Enum):
+class LexicalType(str, Enum):
     JOURNAL_ENTRY = "JournalEntry"
+    SPAN = "Span"
 
 
 class RelationshipType(str, Enum):

@@ -1,6 +1,7 @@
 import re
 from typing import List, Dict, Any
 
+from minerva_backend.graph.models.base import Span
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import Person, Entity
 from minerva_backend.graph.models.enums import EntityType
@@ -8,7 +9,7 @@ from minerva_backend.graph.models.relations import Relation
 from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.llm_service import LLMService
 from minerva_backend.prompt.extract_people import ExtractPeoplePrompt, People
-from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships, SimpleRelationship
+from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships
 from minerva_backend.prompt.hydrate_person import HydratePersonPrompt
 
 
@@ -17,8 +18,8 @@ class ExtractionService:
         self.llm_service = llm_service
         self.obsidian_service = obsidian_service
 
-    async def extract_entities(self, journal_entry: JournalEntry) -> List[Entity]:
-        """Stage 1-2: Extract standalone and relational entities using LLM"""
+    async def extract_entities(self, journal_entry: JournalEntry) -> Dict[Entity, List[Span]]:
+        """Stage 1-2: Extract entities and related spans"""
 
         # get [[links]] from text
         matches = re.findall(r'\[\[(.+?)\]\]', journal_entry.entry_text, re.MULTILINE)
@@ -46,7 +47,7 @@ class ExtractionService:
         people = await self.extract_people(journal_entry, link_entities)
 
         if not people or not people.people:
-            return entities
+            return {}
 
         # Deduplicate people based on Obsidian links and aliases
         unique_people_to_hydrate: Dict[str, Dict[str, Any]] = {}
@@ -57,14 +58,16 @@ class ExtractionService:
                 if canonical_name not in unique_people_to_hydrate:
                     unique_people_to_hydrate[canonical_name] = {
                         "name": canonical_name,
-                        "link_info": link_info
+                        "link_info": link_info,
+                        "spans": person.spans
                     }
             else:
                 # This person does not have an Obsidian note
                 if person.name not in unique_people_to_hydrate:
                     unique_people_to_hydrate[person.name] = {
                         "name": person.name,
-                        "link_info": None
+                        "link_info": None,
+                        "spans": person.spans
                     }
 
         # Stage 2: Extract properties (hydration)
@@ -89,7 +92,7 @@ class ExtractionService:
 
         # 1.1 (Optional) reflexion
 
-        return entities
+        return {e: unique_people_to_hydrate[e.name]['spans'] for e in entities}
 
     async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
         """Stage 3: Extract relationships between entities"""
@@ -117,19 +120,19 @@ class ExtractionService:
         relations = []
         for rel in detected_relationships:
             # Skip if we can't map detected source/target uuids to curated ones
-            if rel.source_uuid not in entity_map or rel.target_uuid not in entity_map:
-                continue
+            if rel.source_entity_uuid not in entity_map or rel.target_entity_uuid not in entity_map:
+                raise Exception("Invalid source/destination uuid's")
 
-            source_entity = entity_map[rel.source_uuid]
-            target_entity = entity_map[rel.target_uuid]
+            source_entity = entity_map[rel.source_entity_uuid]
+            target_entity = entity_map[rel.target_entity_uuid]
 
             # The SimpleRelationship model from the prompt is assumed to have fields
             # that can be used to construct a Relation instance.
             try:
                 # We assume SimpleRelationship has source_uuid and target_uuid, which are
                 # not part of the Relation model, but fields like `type` and `description` are.
-                rel_data = rel.model_dump(exclude={'source_uuid', 'target_uuid'})
-                relation = Relation(source=source_entity, target=target_entity, **rel_data)
+                rel_data = rel.model_dump(exclude={'source_entity_uuid', 'target_entity_uuid'})
+                relation = Relation(source=source_entity.uuid, target=target_entity.uuid, **rel_data)
                 relations.append(relation)
             except Exception:
                 # This could be a Pydantic validation error if fields don't match.
