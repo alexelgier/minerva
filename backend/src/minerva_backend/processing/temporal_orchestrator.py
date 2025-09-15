@@ -9,7 +9,7 @@ from temporalio import workflow, activity
 from temporalio.client import Client
 from temporalio.common import RetryPolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
-from temporalio.worker import Worker
+from temporalio.worker import Worker, WorkerConfig
 
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import Entity
@@ -33,7 +33,7 @@ class PipelineStage(str, Enum):
 @dataclass
 class PipelineState:
     stage: PipelineStage
-    created_at: datetime = datetime.now()
+    created_at: datetime = None
     journal_entry: JournalEntry = None
     entities_extracted: List[Entity] = None
     entities_curated: List[Entity] = None
@@ -151,9 +151,9 @@ class JournalProcessingWorkflow:
             # Stage 1-2: Entity Extraction (LLM)
             self.state.stage = PipelineStage.ENTITY_PROCESSING
             self.state.entities_extracted = await workflow.execute_activity(
-                "extract_entities",
+                PipelineActivities.extract_entities,
                 args=[journal_entry],
-                schedule_to_close_timeout=timedelta(minutes=60),  # Max 60 min for Entity Extraction
+                start_to_close_timeout=timedelta(minutes=60),  # Max 60 min for Entity Extraction
                 retry_policy=llm_retry_policy,
             )
 
@@ -162,6 +162,8 @@ class JournalProcessingWorkflow:
             await workflow.execute_activity(
                 "submit_entity_curation",
                 args=[journal_entry, self.state.entities_extracted],
+                start_to_close_timeout=timedelta(minutes=1),
+                schedule_to_close_timeout=timedelta(minutes=5),
             )
 
             # Stage 3: Entity Curation (Human)
@@ -178,7 +180,7 @@ class JournalProcessingWorkflow:
             self.state.relationships_extracted = await workflow.execute_activity(
                 "extract_relationships",
                 args=[journal_entry, self.state.entities_curated],
-                schedule_to_close_timeout=timedelta(minutes=10),
+                start_to_close_timeout=timedelta(minutes=60),
                 retry_policy=llm_retry_policy,
             )
 
@@ -187,6 +189,8 @@ class JournalProcessingWorkflow:
             await workflow.execute_activity(
                 "submit_relationship_curation",
                 args=[journal_entry, self.state.entities_curated, self.state.relationships_extracted],
+                start_to_close_timeout=timedelta(minutes=1),
+                schedule_to_close_timeout=timedelta(minutes=5),
             )
 
             # Stage 5: Relationship Curation (Human)
@@ -282,7 +286,7 @@ async def run_worker():
     # Create activity instance with dependencies
     activities = PipelineActivities(curation_manager, kg_service)
 
-    client = await Client.connect(container.config.TEMPORAL_URI())
+    client = await Client.connect(container.config.TEMPORAL_URI(), data_converter=pydantic_data_converter)
 
     worker = Worker(
         client,
@@ -297,6 +301,7 @@ async def run_worker():
             activities.wait_for_relationship_curation,
             activities.write_to_knowledge_graph,
         ],
+        debug_mode=True
     )
 
     print("🚀 Minerva pipeline worker started...")
