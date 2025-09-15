@@ -5,7 +5,7 @@ import hashlib
 import json
 import logging
 from time import time
-from typing import Optional, Dict, Any, List, ClassVar
+from typing import Optional, List, ClassVar
 
 import ollama
 from diskcache import Cache
