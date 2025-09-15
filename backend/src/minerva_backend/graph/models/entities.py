@@ -81,12 +81,13 @@ class Resource(Entity):
     status: ResourceStatus | None = Field(default=None, description="Estado de consumo actual")
     author: str | None = Field(default=None, description="Creador o autor del recurso")
 
+
 class Consumable(Entity):
     """Representa un artículo que se puede consumir: comida, bebida, cigarrillos, medicamentos."""
     type: Literal[EntityType.CONSUMABLE] = Field(EntityType.CONSUMABLE.value,
                                                  description="Tipo de entidad (siempre CONSUMABLE)")
     category: str | None = Field(default=None,
-                                   description="Categoría del consumible (p. ej., comida, bebida, medicamento)")
+                                 description="Categoría del consumible (p. ej., comida, bebida, medicamento)")
 
 
 class Place(Entity):
