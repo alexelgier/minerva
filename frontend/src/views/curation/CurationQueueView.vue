@@ -33,7 +33,7 @@
           </li>
         </ul>
         <div v-if="group.tasks.length === 0" class="card-footer">
-          <button @click="submitCuration(group.journal_id)" class="submit-btn">Complete Curation</button>
+          <button @click="submitCuration(group)" class="submit-btn">Complete Curation</button>
         </div>
       </div>
     </div>
@@ -50,14 +50,29 @@ const error = ref(null);
 const apiResponse = ref({ entity_journals: [], relationship_journals: [] });
 
 const journalGroups = computed(() => {
-  if (!apiResponse.value.entity_journals.length) return [];
-
-  return apiResponse.value.entity_journals.map(journal => ({
+  const entityGroups = (apiResponse.value.entity_journals || []).map(journal => ({
     journal_id: journal.journal_id,
     created_at: journal.created_at,
     total_tasks: journal.pending_entities_count,
     tasks: journal.pending_entities,
+    phase: 'entities',
   }));
+
+  const relationshipGroups = (apiResponse.value.relationship_journals || []).map(journal => ({
+    journal_id: journal.journal_id,
+    created_at: journal.created_at,
+    total_tasks: journal.pending_relationships_count,
+    tasks: (journal.pending_relationships || []).map(rel => ({
+      ...rel,
+      id: rel.id,
+      name: rel.sub_type ? rel.sub_type.join(', ') : rel.relationship_type,
+      entity_type: rel.relationship_type,
+      summary_short: rel.summary_short
+    })),
+    phase: 'relationships',
+  }));
+
+  return [...entityGroups, ...relationshipGroups];
 });
 
 onMounted(() => {
@@ -102,7 +117,7 @@ function navigateToCuration(journalId) {
 async function quickAccept(group, taskIndex) {
   const task = group.tasks[taskIndex];
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/curation/entities/${group.journal_id}/${task.id}/accept`, {
+    const response = await fetch(`http://127.0.0.1:8000/api/curation/${group.phase}/${group.journal_id}/${task.id}/accept`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -126,7 +141,7 @@ async function quickAccept(group, taskIndex) {
 async function quickReject(group, taskIndex) {
   const task = group.tasks[taskIndex];
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/curation/entities/${group.journal_id}/${task.id}/reject`, {
+    const response = await fetch(`http://127.0.0.1:8000/api/curation/${group.phase}/${group.journal_id}/${task.id}/reject`, {
       method: 'POST'
     });
 
@@ -142,15 +157,15 @@ async function quickReject(group, taskIndex) {
     error.value = `Failed to reject '${task.name}': ${err.message}.`;
   }
 }
-async function submitCuration(journalId) {
-  console.log('Submitting curation for journal', journalId);
+async function submitCuration(group) {
+  console.log(`Submitting ${group.phase} curation for journal`, group.journal_id);
 
   try {
     isLoading.value = true;
     error.value = null;
 
     // Use the full URL to your API endpoint with the journalId
-    const response = await fetch(`http://127.0.0.1:8000/api/curation/entities/${journalId}/complete`, {
+    const response = await fetch(`http://127.0.0.1:8000/api/curation/${group.phase}/${group.journal_id}/complete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -164,10 +179,17 @@ async function submitCuration(journalId) {
     const data = await response.json();
     console.log('Curation completed successfully:', data);
 
-    // Remove the completed journal from the list
-    const groupIndex = apiResponse.value.entity_journals.findIndex(g => g.journal_id === journalId);
-    if (groupIndex > -1) {
-      apiResponse.value.entity_journals.splice(groupIndex, 1);
+    // Remove the completed journal from the appropriate list
+    if (group.phase === 'entities') {
+      const groupIndex = apiResponse.value.entity_journals.findIndex(g => g.journal_id === group.journal_id);
+      if (groupIndex > -1) {
+        apiResponse.value.entity_journals.splice(groupIndex, 1);
+      }
+    } else if (group.phase === 'relationships') {
+      const groupIndex = apiResponse.value.relationship_journals.findIndex(g => g.journal_id === group.journal_id);
+      if (groupIndex > -1) {
+        apiResponse.value.relationship_journals.splice(groupIndex, 1);
+      }
     }
   } catch (err) {
     console.error("Failed to complete curation:", err);
