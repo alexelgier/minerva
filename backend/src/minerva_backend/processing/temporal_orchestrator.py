@@ -62,55 +62,64 @@ class PipelineState:
 # ===== ACTIVITIES (The actual work) =====
 
 class PipelineActivities:
-    def __init__(self, curation_manager: CurationManager, kg_service: KnowledgeGraphService,
-                 extraction_service: ExtractionService):
-        self.curation_manager = curation_manager
-        self.kg_service = kg_service
-        self.extraction_service = extraction_service
 
     @activity.defn
     async def extract_entities(self, journal_entry: JournalEntry) -> List[Entity]:
-        """Stage 1-2: Extract standalone and relational entities using LLM"""
-        return await self.extraction_service.extract_entities(journal_entry)
+        """Extract entities"""
+        from minerva_backend.containers import Container
+        container = Container()
+
+        return await container.extraction_service().extract_entities(journal_entry)
 
     @activity.defn
     async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
-        """Stage 3: Extract relationships between entities"""
-        return await self.extraction_service.extract_relationships(journal_entry, entities)
+        """Extract relationships between entities"""
+        from minerva_backend.containers import Container
+        container = Container()
+
+        return await container.extraction_service().extract_relationships(journal_entry, entities)
 
     @activity.defn
     async def submit_entity_curation(self, journal_entry: JournalEntry, entities: List[Entity]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
+        from minerva_backend.containers import Container
+        container = Container()
+
         # Add to curation queue
-        await self.curation_manager.queue_entity_curation(journal_entry.uuid, journal_entry.entry_text, entities)
+        await container.curation_manager().queue_entity_curation(journal_entry.uuid, journal_entry.entry_text, entities)
 
     @activity.defn
     async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[Entity]:
         """Human-in-the-loop: Wait for user to curate entities"""
+        from minerva_backend.containers import Container
+        container = Container()
         # Poll until user completes curation (with heartbeat to keep workflow alive)
         while True:
-            result = await self.curation_manager.get_entity_curation_result(journal_entry.uuid)
+            result = await container.curation_manager().get_entity_curation_result(journal_entry.uuid)
             if result:
                 return result
             # Temporal heartbeat to prevent timeout
             activity.heartbeat()
             await asyncio.sleep(30)  # Check every 30 seconds
-            await asyncio.sleep(30)  # Check every 30 seconds
-            return []
 
     @activity.defn
     async def submit_relationship_curation(self, journal_entry: JournalEntry, entities: List[Entity],
                                            relations: List[Relation]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
+        from minerva_backend.containers import Container
+        container = Container()
         # Add to curation queue
-        await self.curation_manager.queue_relationship_curation(journal_entry.uuid, journal_entry.entry_text, entities,
-                                                                relations)
+        await container.curation_manager().queue_relationship_curation(journal_entry.uuid, journal_entry.entry_text,
+                                                                       entities,
+                                                                       relations)
 
     @activity.defn
     async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[Relation]:
         """Human-in-the-loop: Wait for user to curate relationships"""
+        from minerva_backend.containers import Container
+        container = Container()
         while True:
-            result = await self.curation_manager.get_relationship_curation_result(journal_entry.uuid)
+            result = await container.curation_manager().get_relationship_curation_result(journal_entry.uuid)
             if result:
                 return result
             activity.heartbeat()
@@ -121,9 +130,11 @@ class PipelineActivities:
     async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[Entity],
                                        relationships: List[Relation]) -> bool:
         """Final stage: Write curated data to Neo4j"""
+        from minerva_backend.containers import Container
+        container = Container()
         # In a real implementation, you would also pass the entities and relationships
         # to the knowledge graph service to be persisted.
-        self.kg_service.add_journal_entry(journal_entry)
+        container.kg_service().add_journal_entry(journal_entry)
         return True
 
 
@@ -275,19 +286,10 @@ class PipelineOrchestrator:
 
 async def run_worker():
     """Start the Temporal worker that executes activities"""
-    # Create a container instance for the worker
     from minerva_backend.containers import Container
     container = Container()
-    container.wire(modules=[__name__])
-
-    # Instantiate services
-    curation_manager = container.curation_manager()
-    await curation_manager.initialize()
-    kg_service = container.kg_service()
-    extraction_service = container.extraction_service()
-
     # Create activity instance with dependencies
-    activities = PipelineActivities(curation_manager, kg_service, extraction_service)
+    activities = PipelineActivities()
 
     client = await Client.connect(container.config.TEMPORAL_URI(), data_converter=pydantic_data_converter)
 

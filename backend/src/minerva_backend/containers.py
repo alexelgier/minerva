@@ -8,6 +8,7 @@ from minerva_backend.graph.services.knowledge_graph_service import KnowledgeGrap
 from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.curation_manager import CurationManager
 from minerva_backend.processing.extraction_service import ExtractionService
+from minerva_backend.processing.llm_service import LLMService
 from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator
 
 
@@ -25,10 +26,6 @@ class Container(containers.DeclarativeContainer):
         password=config.NEO4J_PASSWORD,
     )
 
-    # NOTE: The services below likely depend on the database connection.
-    # This is a first step; they will need to be refactored to accept
-    # the connection as a dependency.
-
     curation_manager = providers.Singleton(
         CurationManager,
         db_path=config.CURATION_DB_PATH,
@@ -44,11 +41,17 @@ class Container(containers.DeclarativeContainer):
         connection=db_connection,
     )
 
+    llm_service = providers.Singleton(
+        LLMService,
+        cache=True
+    )
+
     obsidian_service = providers.Singleton(
-        ObsidianService,
+        ObsidianService
     )
 
     extraction_service = providers.Singleton(
         ExtractionService,
+        llm_service=llm_service,
         obsidian_service=obsidian_service
     )

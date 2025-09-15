@@ -7,7 +7,7 @@ import logging
 from time import time
 from typing import Optional, List, ClassVar, Dict, Any, Type, Union
 
-import ollama
+
 from diskcache import Cache
 from pydantic import BaseModel
 
@@ -19,14 +19,15 @@ class LLMService:
     MAX_RETRIES: ClassVar[int] = 3
 
     def __init__(self, ollama_url: str = "http://localhost:11434", cache: bool = False):
+        import ollama
         self.client = ollama.AsyncClient(host=ollama_url)
         self.cache_enabled = cache
         self.cache = Cache('./llm_cache') if cache else None
 
     async def generate(
             self,
-            model: str,
             prompt: str,
+            model: str = "hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:latest",
             system_prompt: Optional[str] = None,
             response_model: Optional[Type[BaseModel]] = None,
             options: Optional[Dict[str, Any]] = None
@@ -72,7 +73,7 @@ class LLMService:
                     prompt=prompt,
                     system=system_prompt,
                     stream=True,
-                    format='json' if response_model else None,
+                    format=response_model.model_json_schema() if response_model else None,
                     options=merged_options
                 )
 

@@ -113,15 +113,17 @@ class JournalEntry(Document):
                                                       sleep)
 
         # Narration
-        journal_entry['text'] = re.search(
+        journal_text = re.search(
             r"(.+?)(?=\n*---\n*-\s*Imagen, Detalle:|\n*---.*## Noticias|\n*---.*## Sleep)",
-            text, re.DOTALL).group(0)
+            text, re.DOTALL)
+        if journal_text:
+            journal_entry['text'] = journal_text.group(0)
 
         return cls(
             id=journal_date_str,
             date=journal_entry['date'],
             text=text,
-            entry_text=journal_entry['text'],
+            entry_text=journal_entry['text'] if 'text' in journal_entry else None,
             panas_pos=journal_entry.get('panas_pos'),
             panas_neg=journal_entry.get('panas_neg'),
             bpns=journal_entry.get('bpns'),

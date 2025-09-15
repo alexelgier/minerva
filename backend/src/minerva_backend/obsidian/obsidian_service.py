@@ -115,10 +115,12 @@ class ObsidianService:
         result = {
             'file_path': None,
             'entity_name': None,
+            'entity_long_name': target,
             'entity_id': None,
             'entity_type': None,
             'aliases': None,
-            'display_text': display_text.strip()
+            'display_text': display_text.strip(),
+            'short_summary': None
         }
 
         # Look up in cache
@@ -144,6 +146,7 @@ class ObsidianService:
             result['entity_id'] = frontmatter.get('entity_id')
             result['entity_type'] = frontmatter.get('entity_type')
             result['aliases'] = self._normalize_aliases(frontmatter.get('aliases'))
+            result['short_summary'] = frontmatter.get('short_summary')
 
         return result
 
@@ -160,28 +163,3 @@ class ObsidianService:
         """Find a note file path by its name (without .md extension)."""
         cache = self._build_cache()
         return cache.get(name)
-
-    def construct_glossary(self, links: List[Dict]) -> Dict[str, str]:
-        """
-        Constructs a glossary of short summaries for linked entities.
-
-        Args:
-            links: A list of resolved link dictionaries.
-
-        Returns:
-            A dictionary mapping entity names to their short summaries.
-        """
-        glossary = {}
-        for link in links:
-            file_path = link.get('file_path')
-            entity_name = link.get('entity_name')
-
-            if not file_path or not entity_name:
-                continue
-
-            frontmatter = self._parse_yaml_frontmatter(file_path)
-            if frontmatter:
-                short_summary = frontmatter.get('short_summary')
-                if short_summary:
-                    glossary[entity_name] = short_summary
-        return glossary
