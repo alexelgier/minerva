@@ -45,6 +45,8 @@ class ExtractionService:
 
         # Stage 1: Extract Person, Project, Concept, Resource, Event, Consumable, Place
         people = await self.extract_people(journal_entry, link_entities)
+
+        # dedupe
         matches = []
         unlinked = []
         misses = []
@@ -52,7 +54,7 @@ class ExtractionService:
             if person.name in names_map:
                 if names_map[person.name]['link_map']['entity_id']:
                     matches[person.name] =
-                matches.append(names_map[person.name])
+                unlinked.append(names_map[person.name])
             else:
                 misses.append(person)
 
@@ -65,7 +67,7 @@ class ExtractionService:
 
         # 1.1 (Optional) reflexion
 
-        # Stage 2: Extract
+        # Stage 2: Extract properties (hydration)
 
         return entities
 
