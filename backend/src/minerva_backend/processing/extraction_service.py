@@ -94,10 +94,11 @@ class ExtractionService:
 
         return {e: unique_people_to_hydrate[e.name]['spans'] for e in entities}
 
-    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> List[Relation]:
+    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> Dict[
+        Relation, List[Span]]:
         """Stage 3: Extract relationships between entities"""
         if not entities:
-            return []
+            return {}
 
         # 1. Detection: Find potential relationships
         entity_context = "\n".join(
@@ -110,14 +111,14 @@ class ExtractionService:
         )
 
         if not detected_relationships_result:
-            return []
+            return {}
 
         detected_relationships = Relationships(**detected_relationships_result).relationships
         if not detected_relationships:
-            return []
+            return {}
 
         entity_map = {str(e.uuid): e for e in entities}
-        relations = []
+        relations_with_spans = {}
         for rel in detected_relationships:
             # Skip if we can't map detected source/target uuids to curated ones
             if rel.source_entity_uuid not in entity_map or rel.target_entity_uuid not in entity_map:
@@ -129,17 +130,20 @@ class ExtractionService:
             # The SimpleRelationship model from the prompt is assumed to have fields
             # that can be used to construct a Relation instance.
             try:
-                # We assume SimpleRelationship has source_uuid and target_uuid, which are
+                # We assume SimpleRelationship has source_uuid, target_uuid and spans, which are
                 # not part of the Relation model, but fields like `type` and `description` are.
-                rel_data = rel.model_dump(exclude={'source_entity_uuid', 'target_entity_uuid'})
+                rel_data = rel.model_dump(exclude={'source_entity_uuid', 'target_entity_uuid', 'spans'})
                 relation = Relation(source=source_entity.uuid, target=target_entity.uuid, **rel_data)
-                relations.append(relation)
+
+                # The prompt model should return Span objects directly.
+                spans = rel.spans if hasattr(rel, 'spans') else []
+                relations_with_spans[relation] = spans
             except Exception:
                 # This could be a Pydantic validation error if fields don't match.
                 # For now, we skip malformed relationships.
                 continue
 
-        return relations
+        return relations_with_spans
 
     async def extract_people(self, journal_entry: JournalEntry, link_entities: List[Dict]) -> People | None:
         link_people = [p for p in link_entities if p['entity_type'] == EntityType.PERSON]
