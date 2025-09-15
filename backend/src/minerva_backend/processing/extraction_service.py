@@ -1,6 +1,8 @@
 import re
 from typing import List, Dict
 
+from pydantic import BaseModel, Field
+
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import Person, Feeling, Emotion, Event, Project, Concept, Resource, \
     Consumable, Place, Entity
@@ -10,6 +12,9 @@ from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.llm_service import LLMService
 
 
+class People(BaseModel):
+    """A list of people extracted from a text."""
+    people: List[Person] = Field(..., description="List of people mentioned in the text.")
 
 
 class ExtractionService:
@@ -50,12 +55,36 @@ class ExtractionService:
         """Stage 3: Extract relationships between entities"""
         pass
 
-    async def extract_people(self, journal_entry: JournalEntry, link_entities: List[Dict]):
+    async def extract_people(self, journal_entry: JournalEntry, link_entities: List[Dict]) -> List[Person]:
         link_people = [p for p in link_entities if p['entity_type'] == EntityType.PERSON]
-        # both prompts should live in some other file, something like
-        # prompt = prompts.extract_people.user(journal_entry.entry_text)
-        # system_prompt = prompts.extract_people.system()
-        return await self.llm_service.generate(prompt, system_prompt, prompts.extract_people.response_model)
+        link_people_names = [p['entity_name'] for p in link_people]
+
+        system_prompt = """You are an expert data extractor. Your task is to identify all individuals mentioned in the provided journal entry.
+- Extract the full name of each person.
+- Do not extract generic references like "my friend" or "the team" unless a specific name is mentioned.
+- If a person is mentioned who is already in the 'Known People' list, ensure they are included in your output.
+- Return an empty list if no people are mentioned."""
+
+        user_prompt = f"""Journal Entry Text:
+---
+{journal_entry.entry_text}
+---
+
+Known People (from document links):
+---
+{', '.join(link_people_names) if link_people_names else 'None'}
+---
+
+Based on the text and the list of known people, please extract all individuals mentioned."""
+
+        result = await self.llm_service.generate(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            response_model=People
+        )
+        if result:
+            return result.people
+        return []
 
     async def _filter_glossary(self, journal_entry: JournalEntry, glossary: Dict[str, str]):
         pass
