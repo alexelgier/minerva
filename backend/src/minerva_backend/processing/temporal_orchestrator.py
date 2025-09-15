@@ -100,8 +100,7 @@ class PipelineActivities:
             await asyncio.sleep(30)  # Check every 30 seconds
 
     @activity.defn
-    async def submit_relationship_curation(self, journal_entry: JournalEntry, entities: List[Entity],
-                                           relations: List[Relation]) -> None:
+    async def submit_relationship_curation(self, journal_entry: JournalEntry, relations: List[Relation]) -> None:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
@@ -197,7 +196,7 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.SUBMIT_RELATION_CURATION
             await workflow.execute_activity(
                 PipelineActivities.submit_relationship_curation,
-                args=[journal_entry, self.state.entities_curated, self.state.relationships_extracted],
+                args=[journal_entry, self.state.relationships_extracted],
                 start_to_close_timeout=timedelta(minutes=1),
                 schedule_to_close_timeout=timedelta(minutes=5),
             )
@@ -215,7 +214,7 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.DB_WRITE
             success = await workflow.execute_activity(
                 PipelineActivities.write_to_knowledge_graph,
-                args=[journal_entry, self.state.entities_curated, self.state.relationships_curated],
+                args=[journal_entry, self.state.entities_curated, self.state.relationships_curated], # TODO add lexical parts
                 schedule_to_close_timeout=timedelta(minutes=5),
                 retry_policy=llm_retry_policy,
             )

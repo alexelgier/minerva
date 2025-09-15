@@ -71,7 +71,7 @@ async def submit_journal(
         # Check the pipeline status
         await asyncio.sleep(2)  # Give the workflow time to start
         status = await orchestrator.get_pipeline_status(workflow_id)
-        print(f"Current pipeline stage: {status['stage']}")
+        print(f"Current pipeline stage: {status.stage}")
 
         return {
             "success": True,
@@ -253,12 +253,11 @@ class RelationshipCurationResult(BaseModel):
 @inject
 async def complete_relationship_curation(
         journal_id: str,
-        result: RelationshipCurationResult,
         curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
 ):
     """Complete relationship curation with user decisions"""
     try:
-        await curation_manager.complete_relationship_curation(journal_id, result.relationships)
+        await curation_manager.complete_relationship_phase(journal_id)
         return {"success": True, "message": "Relationship curation completed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to complete relationship curation: {str(e)}")

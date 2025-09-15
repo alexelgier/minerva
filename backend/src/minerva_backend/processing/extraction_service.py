@@ -98,7 +98,7 @@ class ExtractionService:
 
         # 1. Detection: Find potential relationships
         entity_context = "\n".join(
-            [f"- {e.name} ({e.type.value if hasattr(e, 'type') else 'Unknown Type'})" for e in entities])
+            [f"- {e.name} ({e.type}) uuid:'{e.uuid}' short summary:'{e.summary_short}'" for e in entities])
         detected_relationships_result = await self.llm_service.generate(
             prompt=ExtractRelationshipsPrompt.user_prompt(
                 {'text': journal_entry.entry_text, 'entities': entity_context}),
@@ -115,7 +115,7 @@ class ExtractionService:
 
         relations = []
         for rel in detected_relationships:
-            # TODO: parse each rel into a Relation class
+            # TODO: parse each rel into a Relation class and fill relations list
             # Skip if we can't map detected source/target uuids to curated ones (something is malformed)
             pass
 
