@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel
 import ollama
 
+
 class LLMRequest(BaseModel):
     model: str
     prompt: str
