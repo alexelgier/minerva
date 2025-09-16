@@ -20,7 +20,6 @@ from minerva_backend.graph.models.entities import (
 )
 from minerva_backend.graph.models.relations import Relation
 
-
 ENTITY_TYPE_MAP = {
     EntityType.PERSON.value: Person,
     EntityType.EMOTION.value: Emotion,
@@ -299,7 +298,8 @@ class CurationManager:
 
     # ===== RELATIONSHIP CURATION =====
 
-    async def queue_relationships_for_curation(self, journal_uuid: str, relationships: Dict[Relation, List[Span]]) -> None:
+    async def queue_relationships_for_curation(self, journal_uuid: str,
+                                               relationships: Dict[Relation, List[Span]]) -> None:
         """Add relationships to curation queue"""
         await self.update_journal_status(journal_uuid, 'PENDING_RELATIONS')
 
