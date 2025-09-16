@@ -2,7 +2,7 @@ from typing import List, Type
 
 from pydantic import BaseModel, Field, conset
 
-from minerva_backend.graph.models.base import Span
+from minerva_backend.graph.models.documents import Span
 from minerva_backend.prompt.base import Prompt
 
 

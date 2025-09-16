@@ -1,22 +1,28 @@
-from typing import Type, List
+from typing import Type, List, Optional
 
-from pydantic import BaseModel, Field, conlist
+from minerva_backend.graph.models.relations import Relation
+from pydantic import BaseModel, Field, conlist, conset
 
+from minerva_backend.graph.models.documents import Span
 from minerva_backend.prompt.base import Prompt
 
 
-class SimpleRelationship(BaseModel):
-    """Una relación simple entre dos entidades."""
-    source_entity_uuid: str = Field(..., description="El UUID de la entidad origen")
-    target_entity_uuid: str = Field(..., description="El UUID de la entidad destino")
+class RelationshipContext(BaseModel):
+    """Una entidad relacionada de alguna manera con la relación"""
+    entity_uuid: str = Field(..., description="El UUID de la entidad")
     sub_type: conlist(str, min_length=1) = Field(..., description="Propuestas de subtipo para la relación")
-    summary_short: str = Field(..., description="Resumen breve de la relación. Máximo 30 palabras")
-    summary: str = Field(..., description="Resumen detallado de la relación. Máximo 300 palabras")
+
+
+class Relationship(Relation):
+    """Una relación entre dos entidades encontrada en el texto."""
+    spans: conset(Span, min_length=1) = Field(..., description="Spans in the document where the person is mentioned")
+    context: Optional[List[RelationshipContext]] = Field(default=None, description="Entidades relacionadas de alguna "
+                                                                                   "manera con la relación")
 
 
 class Relationships(BaseModel):
     """Una lista de relaciones encontradas en el texto."""
-    relationships: List[SimpleRelationship] = Field(..., description="Una lista de relaciones")
+    relationships: List[Relationship] = Field(..., description="Una lista de relaciones")
 
 
 class ExtractRelationshipsPrompt(Prompt):
@@ -38,7 +44,7 @@ Para cada relación extrae:
 - El UUID de la entidad destino
 - Al menos una propuesta de subtipo para la relación
 - Un resumen breve de la relación (máximo 30 palabras)
-- Un resumen detallado de la relación (máximo 300 palabras)"""
+- Un resumen detallado de la relación (máximo 100 palabras)"""
 
     @staticmethod
     def user_prompt(context: dict[str, str]) -> str:

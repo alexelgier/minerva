@@ -58,10 +58,3 @@ class Document(Node, ABC):
     partition: Literal[PartitionType.LEXICAL] = Field(PartitionType.LEXICAL.value,
                                                       description="Tipo de partición (siempre LEXICAL)")
 
-
-class Span(Node):
-    """A span of text in a document."""
-    type: Literal[LexicalType.SPAN] = LexicalType.SPAN.value
-    start: int = Field(..., description="Character start index in the Document text")
-    end: int = Field(..., description="Character end index (exclusive)")
-    text: str = Field(..., description="The exact substring from the entry text")

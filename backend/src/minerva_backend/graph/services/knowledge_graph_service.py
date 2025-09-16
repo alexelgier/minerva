@@ -1,8 +1,10 @@
 from datetime import date
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from minerva_backend.graph.db import Neo4jConnection
-from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.graph.models.documents import JournalEntry, Span
+from minerva_backend.graph.models.entities import Entity
+from minerva_backend.graph.models.relations import Relation
 from minerva_backend.graph.repositories.concept_repository import ConceptRepository
 from minerva_backend.graph.repositories.emotion_repository import EmotionRepository
 from minerva_backend.graph.repositories.event_repository import EventRepository
@@ -14,6 +16,7 @@ from minerva_backend.graph.repositories.person_repository import PersonRepositor
 from minerva_backend.graph.repositories.project_repository import ProjectRepository
 from minerva_backend.graph.repositories.resource_repository import ResourceRepository
 from minerva_backend.graph.repositories.temporal_repository import TemporalRepository
+from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 
 class KnowledgeGraphService:
@@ -37,21 +40,23 @@ class KnowledgeGraphService:
         self.journal_entry_repository = JournalEntryRepository(self.connection)
         self.temporal_repository = TemporalRepository(self.connection)
 
-    def add_journal_entry(self, journal_entry: JournalEntry, ) -> str:
+    def add_journal_entry(self, journal_entry: JournalEntry, entities_spans: Dict[Entity, List[Span]],
+                          relationships_spans: Dict[Relation, Tuple[List[Span], List[RelationshipContext] | None]]) -> str:
         """
-        Adds a new journal entry and connects it to the time tree.
+
 
         Args:
             journal_entry: The JournalEntry object to add.
+            entities_spans: Entities extracted with their corresponding spans.
+            relationships_spans: Relationships extracted with their corresponding spans.
 
         Returns:
             The UUID of the created journal entry.
         """
+        # Ensure time tree has corresponding nodes
         day_uuid = self.temporal_repository.ensure_day_in_time_tree(journal_entry.date)
         journal_uuid = self.journal_entry_repository.create(journal_entry)
-        # The summary for JournalEntryRepository does not list its methods, but
-        # connecting a journal entry to its corresponding day node is a
-        # reasonable specialized operation for this repository.
+
         self.journal_entry_repository.connect_to_day(journal_uuid, day_uuid)
         return journal_uuid
 

@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from uuid import uuid4
 
 import aiosqlite
@@ -16,9 +16,10 @@ from minerva_backend.graph.models.entities import (
     Person,
     Place,
     Project,
-    Resource,
+    Content,
 )
 from minerva_backend.graph.models.relations import Relation
+from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 ENTITY_TYPE_MAP = {
     EntityType.PERSON.value: Person,
@@ -27,7 +28,7 @@ ENTITY_TYPE_MAP = {
     EntityType.EVENT.value: Event,
     EntityType.PROJECT.value: Project,
     EntityType.CONCEPT.value: Concept,
-    EntityType.RESOURCE.value: Resource,
+    EntityType.CONTENT.value: Content,
     EntityType.CONSUMABLE.value: Consumable,
     EntityType.PLACE.value: Place,
 }
@@ -94,6 +95,8 @@ class CurationManager:
                     FOREIGN KEY (journal_id) REFERENCES journal_curation (uuid)
                 )
             """)
+
+            # TODO: add Relation context table
 
             # Indexes
             await db.execute("""
@@ -299,24 +302,26 @@ class CurationManager:
     # ===== RELATIONSHIP CURATION =====
 
     async def queue_relationships_for_curation(self, journal_uuid: str,
-                                               relationships: Dict[Relation, List[Span]]) -> None:
+                                               relationships: Dict[Relation, Tuple[
+                                                   List[Span], Optional[List[RelationshipContext]]]]) -> None:
         """Add relationships to curation queue"""
         await self.update_journal_status(journal_uuid, 'PENDING_RELATIONS')
 
         async with aiosqlite.connect(self.db_path) as db:
-            for relationship, spans in relationships.items():
+            for relationship, spans_and_context in relationships.items():
                 await db.execute("""
                     INSERT INTO relationship_curation_items 
                     (uuid, journal_id, relationship_type, original_data_json, status, is_user_added) 
                     VALUES (?, ?, ?, ?, 'PENDING', FALSE)
                 """, (str(relationship.uuid), journal_uuid, relationship.type, relationship.model_dump_json()))
 
-                for span in spans:
+                for span in spans_and_context[0]:
                     await db.execute("""
                         INSERT INTO span_curation_items
                         (uuid, journal_id, owner_uuid, span_data_json)
                         VALUES (?, ?, ?, ?)
                     """, (str(span.uuid), journal_uuid, str(relationship.uuid), span.model_dump_json()))
+                # TODO: add RelationshipContext insertion into DB
             await db.commit()
 
     async def get_relationships_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:

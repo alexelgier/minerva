@@ -36,7 +36,7 @@ class PipelineState:
     entities_extracted: Dict[Entity, List[Span]] = None
     entities_curated: Dict[Entity, List[Span]] = None
     relationships_extracted: Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]] = None
-    relationships_curated: Dict[Relation, List[Span]] = None
+    relationships_curated: Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]] = None
     error_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -55,7 +55,9 @@ class PipelineState:
                 for r, (spans, context) in
                 self.relationships_extracted.items()] if self.relationships_extracted else None,
             "relationships_curated": [
-                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans]} for r, spans in
+                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans],
+                 "context": [c.model_dump() for c in context] if context else None}
+                for r, (spans, context) in
                 self.relationships_curated.items()] if self.relationships_curated else None,
             "error_count": self.error_count
         }
@@ -74,8 +76,7 @@ class PipelineActivities:
         return await container.extraction_service().extract_entities(journal_entry)
 
     @activity.defn
-    async def extract_relationships(self, journal_entry: JournalEntry,
-                                    entities: List[Entity]) -> Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]]:
+    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]]:
         """Extract relationships between entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -83,8 +84,7 @@ class PipelineActivities:
         return await container.extraction_service().extract_relationships(journal_entry, entities)
 
     @activity.defn
-    async def submit_entity_curation(self, journal_entry: JournalEntry,
-                                     entities_spans: Dict[Entity, List[Span]]) -> None:
+    async def submit_entity_curation(self, journal_entry: JournalEntry, entities_spans: Dict[Entity, List[Span]]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -109,15 +109,17 @@ class PipelineActivities:
 
     @activity.defn
     async def submit_relationship_curation(self, journal_entry: JournalEntry,
-                                           relations_spans: Dict[Relation, List[Span]]) -> None:
+                                           relations: Dict[Relation, Tuple[
+                                               List[Span], Optional[List[RelationshipContext]]]]) -> None:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
         # Add to curation queue
-        await container.curation_manager().queue_relationships_for_curation(journal_entry.uuid, relations_spans)
+        await container.curation_manager().queue_relationships_for_curation(journal_entry.uuid, relations)
 
     @activity.defn
-    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> Dict[Relation, List[Span]]:
+    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> Dict[
+        Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]]:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
@@ -131,12 +133,13 @@ class PipelineActivities:
             await asyncio.sleep(30)  # Check every 30 seconds
 
     @activity.defn
-    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities_spans: Dict[Entity, List[Span]],
-                                       relationships_spans: Dict[Relation, List[Span]]) -> bool:
+    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: Dict[Entity, List[Span]],
+                                       relationships: Dict[
+                                           Relation, Tuple[List[Span], List[RelationshipContext] | None]]) -> bool:
         """Final stage: Write curated data to Neo4j"""
         from minerva_backend.containers import Container
         container = Container()
-        container.kg_service().add_journal_entry(journal_entry, entities_spans, relationships_spans)
+        container.kg_service().add_journal_entry(journal_entry, entities, relationships)
         return True
 
 

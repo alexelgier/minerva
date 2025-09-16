@@ -14,7 +14,7 @@ class Entity(Node, ABC):
     name: str = Field(..., description='nombre de la entidad')
     type: EntityType = Field(..., description="Tipo de entidad (Persona, Evento, etc)")
     summary_short: str = Field(..., description="Resumen de la entidad. Máximo 30 palabras")
-    summary: str = Field(..., description="Resumen de la entidad. Máximo 300 palabras")
+    summary: str = Field(..., description="Resumen de la entidad. Máximo 100 palabras")
     partition: Literal[PartitionType.DOMAIN] = PartitionType.DOMAIN.value
     name_embedding: list[float] | None = Field(default=None, description='embedding del nombre')
 
@@ -69,11 +69,11 @@ class Concept(Entity):
     type: Literal[EntityType.CONCEPT] = EntityType.CONCEPT.value
 
 
-class Resource(Entity):
+class Content(Entity):
     """Representa contenido (libros, artículos, videos, etc.) que sirve como fuente de información o entretenimiento."""
     title: str = Field(..., description="Título o nombre del recurso")
     category: ResourceType = Field(..., description="Categoría del recurso")
-    type: Literal[EntityType.RESOURCE] = EntityType.RESOURCE.value
+    type: Literal[EntityType.CONTENT] = EntityType.CONTENT.value
     url: str | None = Field(default=None, description="URL web o ubicación donde se puede acceder al recurso")
     quotes: List[str] | None = Field(default=None, description="Citas o extractos notables del recurso")
     status: ResourceStatus | None = Field(default=None, description="Estado de consumo actual")

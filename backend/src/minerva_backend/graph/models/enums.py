@@ -12,7 +12,7 @@ class EntityType(str, Enum):
     EVENT = "Event"
     PROJECT = "Project"
     CONCEPT = "Concept"
-    RESOURCE = "Resource"
+    CONTENT = "Content"
     CONSUMABLE = "Consumable"
     PLACE = "Place"
 

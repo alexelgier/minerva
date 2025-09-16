@@ -5,22 +5,22 @@ Handles all Resource entity database operations.
 from typing import List
 
 from .base import BaseRepository
-from ..models.entities import Resource
+from ..models.entities import Content
 from ..models.enums import ResourceType, ResourceStatus, EntityType
 
 
-class ResourceRepository(BaseRepository[Resource]):
+class ResourceRepository(BaseRepository[Content]):
     """Repository for Resource entities with specialized resource operations."""
 
     @property
     def entity_label(self) -> str:
-        return EntityType.RESOURCE.value
+        return EntityType.CONTENT.value
 
     @property
-    def entity_class(self) -> type[Resource]:
-        return Resource
+    def entity_class(self) -> type[Content]:
+        return Content
 
-    def find_by_category(self, category: ResourceType) -> List[Resource]:
+    def find_by_category(self, category: ResourceType) -> List[Content]:
         """
         Find all resources in a specific category.
 
@@ -46,7 +46,7 @@ class ResourceRepository(BaseRepository[Resource]):
 
             return resources
 
-    def find_by_status(self, status: ResourceStatus) -> List[Resource]:
+    def find_by_status(self, status: ResourceStatus) -> List[Content]:
         """
         Find all resources with a specific status.
 
@@ -69,7 +69,7 @@ class ResourceRepository(BaseRepository[Resource]):
                 resources.append(self._properties_to_entity(properties))
             return resources
 
-    def find_by_author(self, author: str) -> List[Resource]:
+    def find_by_author(self, author: str) -> List[Content]:
         """
         Find all resources by a specific author.
 
@@ -93,7 +93,7 @@ class ResourceRepository(BaseRepository[Resource]):
                 resources.append(self._properties_to_entity(properties))
             return resources
 
-    def search_by_title_partial(self, partial_title: str) -> List[Resource]:
+    def search_by_title_partial(self, partial_title: str) -> List[Content]:
         """
         Search for resources by partial title match (case-insensitive).
 
