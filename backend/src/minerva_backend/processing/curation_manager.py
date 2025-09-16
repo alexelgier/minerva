@@ -365,7 +365,6 @@ class CurationManager:
                     ] if context_rows else None
 
                 results[relation] = (spans, contexts)
-            # TODO add relationshipcontext logic
             return results
 
     async def complete_relationship_phase(self, journal_uuid: str) -> None:
