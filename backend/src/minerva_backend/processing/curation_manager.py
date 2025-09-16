@@ -382,7 +382,7 @@ class CurationManager:
             await db.commit()
             return cursor.rowcount > 0
 
-    async def get_accepted_relationships_with_spans(self, journal_uuid: str) -> List[Dict[str, Any]]:
+    async def get_accepted_relationships_with_spans(self, journal_uuid: str) -> Dict[Relation, List[Span]]:
         """Get all accepted relationships for a journal with their spans"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -392,20 +392,20 @@ class CurationManager:
             """, (journal_uuid,)) as cursor:
                 relationship_rows = await cursor.fetchall()
 
-            results = []
+            results = {}
             for rel_uuid, rel_json in relationship_rows:
+                relation = Relation.model_validate(json.loads(rel_json))
+
                 async with db.execute("""
                     SELECT span_data_json
                     FROM span_curation_items
                     WHERE owner_uuid = ?
                 """, (rel_uuid,)) as span_cursor:
                     span_rows = await span_cursor.fetchall()
-                    spans = [json.loads(row[0]) for row in span_rows]
+                    spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
 
-                results.append({
-                    "relationship": json.loads(rel_json),
-                    "spans": spans
-                })
+                results[relation] = spans
+
             return results
 
     async def complete_relationship_phase(self, journal_uuid: str) -> None:
