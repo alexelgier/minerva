@@ -10,8 +10,7 @@ from temporalio.common import RetryPolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
-from minerva_backend.graph.models.base import Span
-from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.graph.models.documents import JournalEntry, Span
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
 
@@ -81,17 +80,18 @@ class PipelineActivities:
         return await container.extraction_service().extract_relationships(journal_entry, entities)
 
     @activity.defn
-    async def submit_entity_curation(self, journal_entry: JournalEntry, entities: Dict[Entity, List[Span]]) -> None:
+    async def submit_entity_curation(self, journal_entry: JournalEntry,
+                                     entities_spans: Dict[Entity, List[Span]]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
         from minerva_backend.containers import Container
         container = Container()
 
         # Add to curation queue
         await container.curation_manager().queue_entities_for_curation(journal_entry.uuid, journal_entry.entry_text,
-                                                                       entities)
+                                                                       entities_spans)
 
     @activity.defn
-    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[Dict[str, Any]]:
+    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> Dict[Entity, List[Span]]:
         """Human-in-the-loop: Wait for user to curate entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -106,15 +106,15 @@ class PipelineActivities:
 
     @activity.defn
     async def submit_relationship_curation(self, journal_entry: JournalEntry,
-                                           relations: Dict[Relation, List[Span]]) -> None:
+                                           relations_spans: Dict[Relation, List[Span]]) -> None:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
         # Add to curation queue
-        await container.curation_manager().queue_relationships_for_curation(journal_entry.uuid, relations)
+        await container.curation_manager().queue_relationships_for_curation(journal_entry.uuid, relations_spans)
 
     @activity.defn
-    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[Dict[str, Any]]:
+    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> Dict[Relation, List[Span]]:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
@@ -122,21 +122,18 @@ class PipelineActivities:
         while True:
             result = await container.curation_manager().get_journal_status(journal_entry.uuid)
             if result and result == "COMPLETED":
-                return await container.curation_manager().get_accepted_relationships_with_spans(
-                    journal_entry.uuid)
+                return await container.curation_manager().get_accepted_relationships_with_spans(journal_entry.uuid)
             # Temporal heartbeat to prevent timeout
             activity.heartbeat()
             await asyncio.sleep(30)  # Check every 30 seconds
 
     @activity.defn
-    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[Entity],
-                                       relationships: List[Relation]) -> bool:
+    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities_spans: Dict[Entity, List[Span]],
+                                       relationships_spans: Dict[Relation, List[Span]]) -> bool:
         """Final stage: Write curated data to Neo4j"""
         from minerva_backend.containers import Container
         container = Container()
-        # In a real implementation, you would also pass the entities and relationships
-        # to the knowledge graph service to be persisted.
-        container.kg_service().add_journal_entry(journal_entry)
+        container.kg_service().add_journal_entry(journal_entry, entities_spans, relationships_spans)
         return True
 
 
@@ -165,7 +162,7 @@ class JournalProcessingWorkflow:
         try:
             # Stage 1-2: Entity Extraction (LLM)
             self.state.stage = PipelineStage.ENTITY_PROCESSING
-            self.state.entities_extracted = await workflow.execute_activity(
+            self.state.entities_and_spans_extracted = await workflow.execute_activity(
                 PipelineActivities.extract_entities,
                 args=[journal_entry],
                 start_to_close_timeout=timedelta(minutes=60),  # Max 60 min for Entity Extraction
@@ -176,26 +173,25 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.SUBMIT_ENTITY_CURATION
             await workflow.execute_activity(
                 PipelineActivities.submit_entity_curation,
-                args=[journal_entry, self.state.entities_extracted],
+                args=[journal_entry, self.state.entities_and_spans_extracted],
                 start_to_close_timeout=timedelta(minutes=1),
                 schedule_to_close_timeout=timedelta(minutes=5),
             )
 
             # Stage 3: Entity Curation (Human)
             self.state.stage = PipelineStage.WAIT_ENTITY_CURATION
-            curated_entities_list = await workflow.execute_activity(
+            self.state.entities_and_spans_curated = await workflow.execute_activity(
                 PipelineActivities.wait_for_entity_curation,
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),  # User has 7 days
                 heartbeat_timeout=timedelta(minutes=2),  # Heartbeat every 2 min
             )
-            self.state.entities_curated = {item['entity']: item['spans'] for item in curated_entities_list}
 
             # Stage 4: Relationship Extraction (LLM)
             self.state.stage = PipelineStage.RELATION_PROCESSING
-            self.state.relationships_extracted = await workflow.execute_activity(
+            self.state.relationships_and_spans_extracted = await workflow.execute_activity(
                 PipelineActivities.extract_relationships,
-                args=[journal_entry, list(self.state.entities_curated.keys())],
+                args=[journal_entry, list(self.state.entities_and_spans_curated.keys())],
                 start_to_close_timeout=timedelta(minutes=60),
                 retry_policy=llm_retry_policy,
             )
@@ -204,28 +200,25 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.SUBMIT_RELATION_CURATION
             await workflow.execute_activity(
                 PipelineActivities.submit_relationship_curation,
-                args=[journal_entry, self.state.relationships_extracted],
+                args=[journal_entry, self.state.relationships_and_spans_extracted],
                 start_to_close_timeout=timedelta(minutes=1),
                 schedule_to_close_timeout=timedelta(minutes=5),
             )
 
             # Stage 5: Relationship Curation (Human)
             self.state.stage = PipelineStage.WAIT_RELATION_CURATION
-            curated_relationships_list = await workflow.execute_activity(
+            self.state.relationships_and_spans_curated = await workflow.execute_activity(
                 PipelineActivities.wait_for_relationship_curation,
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),
                 heartbeat_timeout=timedelta(minutes=2),
             )
-            self.state.relationships_curated = {item['relationship']: item['spans'] for item in
-                                                curated_relationships_list}
 
             # Stage 6: Database Write
             self.state.stage = PipelineStage.DB_WRITE
             success = await workflow.execute_activity(
                 PipelineActivities.write_to_knowledge_graph,
-                args=[journal_entry, self.state.entities_curated, self.state.relationships_curated],
-                # TODO add lexical parts
+                args=[journal_entry, self.state.entities_and_spans_curated, self.state.relationships_and_spans_curated],
                 schedule_to_close_timeout=timedelta(minutes=5),
                 retry_policy=llm_retry_policy,
             )

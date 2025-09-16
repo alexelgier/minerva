@@ -1,15 +1,14 @@
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple, Optional
 
-from minerva_backend.graph.models.base import Span
-from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.graph.models.documents import JournalEntry, Span
 from minerva_backend.graph.models.entities import Person, Entity
 from minerva_backend.graph.models.enums import EntityType
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.llm_service import LLMService
 from minerva_backend.prompt.extract_people import ExtractPeoplePrompt, People
-from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships
+from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships, RelationshipContext
 from minerva_backend.prompt.hydrate_person import HydratePersonPrompt
 
 
@@ -94,8 +93,7 @@ class ExtractionService:
 
         return {e: unique_people_to_hydrate[e.name]['spans'] for e in entities}
 
-    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> Dict[
-        Relation, List[Span]]:
+    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> Dict[Relation, Tuple[List[Span], List[RelationshipContext] | None]]:
         """Stage 3: Extract relationships between entities"""
         if not entities:
             return {}
@@ -120,20 +118,25 @@ class ExtractionService:
         entity_map = {str(e.uuid): e for e in entities}
         relations_with_spans = {}
         for rel in detected_relationships:
-            # Skip if we can't map detected source/target uuids to curated ones
-            if rel.source_entity_uuid not in entity_map or rel.target_entity_uuid not in entity_map:
-                raise Exception("Invalid source/destination uuid's")
+            # Raise exception if we can't map detected source/target/context uuids to curated ones
+            # Gather all UUIDs to validate
+            uuids_to_check = [rel.source, rel.target]
+            if rel.context:
+                uuids_to_check.extend([ctx.entity_uuid for ctx in rel.context])
 
-            source_entity = entity_map[rel.source_entity_uuid]
-            target_entity = entity_map[rel.target_entity_uuid]
+            # Check all UUIDs at once
+            invalid_uuids = [uuid for uuid in uuids_to_check if uuid not in entity_map]
+            if invalid_uuids:
+                raise ValueError(f"Invalid UUID(s) detected: {invalid_uuids}")
 
-            # The SimpleRelationship model from the prompt is assumed to have fields
-            # that can be used to construct a Relation instance.
+            source_entity = entity_map[rel.source]
+            target_entity = entity_map[rel.target]
+
             try:
                 # We assume SimpleRelationship has source_uuid, target_uuid and spans, which are
                 # not part of the Relation model, but fields like `type` and `description` are.
-                rel_data = rel.model_dump(exclude={'source_entity_uuid', 'target_entity_uuid', 'spans'})
-                relation = Relation(source=source_entity.uuid, target=target_entity.uuid, **rel_data)
+                rel_data = rel.model_dump(exclude={'context', 'target_entity_uuid', 'spans'})
+                relation = Relation(**rel_data)
 
                 # The prompt model should return Span objects directly.
                 spans = rel.spans if hasattr(rel, 'spans') else []
