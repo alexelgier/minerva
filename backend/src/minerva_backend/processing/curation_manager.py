@@ -5,8 +5,33 @@ from uuid import uuid4
 import aiosqlite
 
 from minerva_backend.graph.models.documents import Span
-from minerva_backend.graph.models.entities import Entity
+from minerva_backend.graph.models.entities import (
+    Concept,
+    Consumable,
+    Emotion,
+    Entity,
+    EntityType,
+    Event,
+    Feeling,
+    Person,
+    Place,
+    Project,
+    Resource,
+)
 from minerva_backend.graph.models.relations import Relation
+
+
+ENTITY_TYPE_MAP = {
+    EntityType.PERSON.value: Person,
+    EntityType.EMOTION.value: Emotion,
+    EntityType.FEELING.value: Feeling,
+    EntityType.EVENT.value: Event,
+    EntityType.PROJECT.value: Project,
+    EntityType.CONCEPT.value: Concept,
+    EntityType.RESOURCE.value: Resource,
+    EntityType.CONSUMABLE.value: Consumable,
+    EntityType.PLACE.value: Place,
+}
 
 
 class CurationManager:
@@ -244,20 +269,28 @@ class CurationManager:
             """, (journal_uuid,)) as cursor:
                 entity_rows = await cursor.fetchall()
 
-            results = []
+            results = {}
             for entity_uuid, entity_json in entity_rows:
+                entity_data = json.loads(entity_json)
+                entity_type = entity_data.get('type')
+                EntityClass = ENTITY_TYPE_MAP.get(entity_type)
+
+                if not EntityClass:
+                    # skipping unknown entity type
+                    continue
+
+                entity = EntityClass.model_validate(entity_data)
+
                 async with db.execute("""
                     SELECT span_data_json
                     FROM span_curation_items
                     WHERE owner_uuid = ?
                 """, (entity_uuid,)) as span_cursor:
                     span_rows = await span_cursor.fetchall()
-                    spans = [json.loads(row[0]) for row in span_rows]
+                    spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
 
-                results.append({
-                    "entity": json.loads(entity_json),
-                    "spans": spans
-                })
+                results[entity] = spans
+
             return results
 
     async def complete_entity_phase(self, journal_uuid: str) -> None:
