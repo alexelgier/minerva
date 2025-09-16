@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import aiosqlite
 
-from minerva_backend.graph.models.base import Span
+from minerva_backend.graph.models.documents import Span
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
 
@@ -234,7 +234,7 @@ class CurationManager:
             await db.commit()
             return cursor.rowcount > 0
 
-    async def get_accepted_entities_with_spans(self, journal_uuid: str) -> List[Dict[str, Any]]:
+    async def get_accepted_entities_with_spans(self, journal_uuid: str) -> Dict[Entity, List[Span]]:
         """Get all accepted entities for a journal with their spans"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
