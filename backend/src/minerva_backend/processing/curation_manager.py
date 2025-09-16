@@ -177,57 +177,6 @@ class CurationManager:
                     """, (str(span.uuid), journal_uuid, str(entity.uuid), span.model_dump_json()))
             await db.commit()
 
-    async def get_entities_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
-        """Get all entities for a journal (for curation interface)"""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute("""
-                SELECT uuid, entity_type, original_data_json, curated_data_json, status, is_user_added
-                FROM entity_curation_items 
-                WHERE journal_id = ? 
-                ORDER BY created_at ASC
-            """, (journal_uuid,)) as cursor:
-                rows = await cursor.fetchall()
-
-                entities = []
-                for row in rows:
-                    entity_data = {
-                        "id": row[0],  # uuid
-                        "entity_type": row[1],
-                        "status": row[4],
-                        "is_user_added": bool(row[5])
-                    }
-
-                    # Use curated data if available, otherwise original
-                    if row[3]:  # curated_data_json
-                        entity_data.update(json.loads(row[3]))
-                    elif row[2]:  # original_data_json
-                        entity_data.update(json.loads(row[2]))
-
-                    entities.append(entity_data)
-
-                return entities
-
-    async def get_pending_entities_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
-        """Get only pending entities for a journal"""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute("""
-                SELECT uuid, entity_type, original_data_json, status
-                FROM entity_curation_items 
-                WHERE journal_id = ? AND status = 'PENDING'
-                ORDER BY created_at ASC
-            """, (journal_uuid,)) as cursor:
-                rows = await cursor.fetchall()
-
-                return [
-                    {
-                        "id": row[0],  # uuid
-                        "entity_type": row[1],
-                        "status": row[3],
-                        **json.loads(row[2])
-                    }
-                    for row in rows
-                ]
-
     async def accept_entity(self, journal_uuid: str, entity_uuid: str, curated_data: Dict[str, Any],
                             is_user_added: bool = False) -> str:
         """Accept an entity with optional modifications"""
@@ -324,36 +273,6 @@ class CurationManager:
                 # TODO: add RelationshipContext insertion into DB
             await db.commit()
 
-    async def get_relationships_for_journal(self, journal_uuid: str) -> List[Dict[str, Any]]:
-        """Get all relationships for a journal"""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute("""
-                SELECT uuid, relationship_type, original_data_json, curated_data_json, status, is_user_added
-                FROM relationship_curation_items 
-                WHERE journal_id = ? 
-                ORDER BY created_at ASC
-            """, (journal_uuid,)) as cursor:
-                rows = await cursor.fetchall()
-
-                relationships = []
-                for row in rows:
-                    rel_data = {
-                        "id": row[0],  # uuid
-                        "relationship_type": row[1],
-                        "status": row[4],
-                        "is_user_added": bool(row[5])
-                    }
-
-                    # Use curated data if available, otherwise original
-                    if row[3]:  # curated_data_json
-                        rel_data.update(json.loads(row[3]))
-                    elif row[2]:  # original_data_json
-                        rel_data.update(json.loads(row[2]))
-
-                    relationships.append(rel_data)
-
-                return relationships
-
     async def accept_relationship(self, journal_uuid: str, relationship_uuid: str, curated_data: Dict[str, Any],
                                   is_user_added: bool = False) -> str:
         """Accept a relationship with optional modifications"""
@@ -387,7 +306,8 @@ class CurationManager:
             await db.commit()
             return cursor.rowcount > 0
 
-    async def get_accepted_relationships_with_spans(self, journal_uuid: str) -> Dict[Relation, List[Span]]:
+    async def get_accepted_relationships_with_spans(self, journal_uuid: str) -> Dict[Relation, Tuple[
+        List[Span], Optional[List[RelationshipContext]]]]:
         """Get all accepted relationships for a journal with their spans"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -410,7 +330,7 @@ class CurationManager:
                     spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
 
                 results[relation] = spans
-
+            # TODO add relationshipcontext logic
             return results
 
     async def complete_relationship_phase(self, journal_uuid: str) -> None:
