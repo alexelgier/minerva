@@ -139,8 +139,8 @@ class ExtractionService:
                 relation = Relation(**rel_data)
 
                 # The prompt model should return Span objects directly.
-                spans = rel.spans if hasattr(rel, 'spans') else []
-                relations_with_spans[relation] = spans
+                spans = list(rel.spans) if hasattr(rel, 'spans') else []
+                relations_with_spans[relation] = (spans, rel.context)
             except Exception:
                 # This could be a Pydantic validation error if fields don't match.
                 # For now, we skip malformed relationships.

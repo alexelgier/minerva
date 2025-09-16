@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Tuple
 
 from temporalio import workflow, activity
 from temporalio.client import Client
@@ -13,6 +13,7 @@ from temporalio.worker import Worker
 from minerva_backend.graph.models.documents import JournalEntry, Span
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
+from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 
 class PipelineStage(str, Enum):
@@ -34,7 +35,7 @@ class PipelineState:
     journal_entry: JournalEntry = None
     entities_extracted: Dict[Entity, List[Span]] = None
     entities_curated: Dict[Entity, List[Span]] = None
-    relationships_extracted: Dict[Relation, List[Span]] = None
+    relationships_extracted: Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]] = None
     relationships_curated: Dict[Relation, List[Span]] = None
     error_count: int = 0
 
@@ -49,7 +50,9 @@ class PipelineState:
             "entities_curated": [{"entity": e.model_dump(), "spans": [s.model_dump() for s in spans]} for e, spans in
                                  self.entities_curated.items()] if self.entities_curated else None,
             "relationships_extracted": [
-                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans]} for r, spans in
+                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans],
+                 "context": [c.model_dump() for c in context] if context else None}
+                for r, (spans, context) in
                 self.relationships_extracted.items()] if self.relationships_extracted else None,
             "relationships_curated": [
                 {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans]} for r, spans in
@@ -72,7 +75,7 @@ class PipelineActivities:
 
     @activity.defn
     async def extract_relationships(self, journal_entry: JournalEntry,
-                                    entities: List[Entity]) -> Dict[Relation, List[Span]]:
+                                    entities: List[Entity]) -> Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]]:
         """Extract relationships between entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -162,7 +165,7 @@ class JournalProcessingWorkflow:
         try:
             # Stage 1-2: Entity Extraction (LLM)
             self.state.stage = PipelineStage.ENTITY_PROCESSING
-            self.state.entities_and_spans_extracted = await workflow.execute_activity(
+            self.state.entities_extracted = await workflow.execute_activity(
                 PipelineActivities.extract_entities,
                 args=[journal_entry],
                 start_to_close_timeout=timedelta(minutes=60),  # Max 60 min for Entity Extraction
@@ -173,14 +176,14 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.SUBMIT_ENTITY_CURATION
             await workflow.execute_activity(
                 PipelineActivities.submit_entity_curation,
-                args=[journal_entry, self.state.entities_and_spans_extracted],
+                args=[journal_entry, self.state.entities_extracted],
                 start_to_close_timeout=timedelta(minutes=1),
                 schedule_to_close_timeout=timedelta(minutes=5),
             )
 
             # Stage 3: Entity Curation (Human)
             self.state.stage = PipelineStage.WAIT_ENTITY_CURATION
-            self.state.entities_and_spans_curated = await workflow.execute_activity(
+            self.state.entities_curated = await workflow.execute_activity(
                 PipelineActivities.wait_for_entity_curation,
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),  # User has 7 days
@@ -189,25 +192,28 @@ class JournalProcessingWorkflow:
 
             # Stage 4: Relationship Extraction (LLM)
             self.state.stage = PipelineStage.RELATION_PROCESSING
-            self.state.relationships_and_spans_extracted = await workflow.execute_activity(
+            self.state.relationships_extracted = await workflow.execute_activity(
                 PipelineActivities.extract_relationships,
-                args=[journal_entry, list(self.state.entities_and_spans_curated.keys())],
+                args=[journal_entry, list(self.state.entities_curated.keys())],
                 start_to_close_timeout=timedelta(minutes=60),
                 retry_policy=llm_retry_policy,
             )
 
             # Stage 5.0: Submit Relations for curation
+            relations_for_curation = {
+                relation: spans for relation, (spans, context) in self.state.relationships_extracted.items()
+            }
             self.state.stage = PipelineStage.SUBMIT_RELATION_CURATION
             await workflow.execute_activity(
                 PipelineActivities.submit_relationship_curation,
-                args=[journal_entry, self.state.relationships_and_spans_extracted],
+                args=[journal_entry, relations_for_curation],
                 start_to_close_timeout=timedelta(minutes=1),
                 schedule_to_close_timeout=timedelta(minutes=5),
             )
 
             # Stage 5: Relationship Curation (Human)
             self.state.stage = PipelineStage.WAIT_RELATION_CURATION
-            self.state.relationships_and_spans_curated = await workflow.execute_activity(
+            self.state.relationships_curated = await workflow.execute_activity(
                 PipelineActivities.wait_for_relationship_curation,
                 args=[journal_entry],
                 schedule_to_close_timeout=timedelta(days=7),
@@ -218,7 +224,7 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.DB_WRITE
             success = await workflow.execute_activity(
                 PipelineActivities.write_to_knowledge_graph,
-                args=[journal_entry, self.state.entities_and_spans_curated, self.state.relationships_and_spans_curated],
+                args=[journal_entry, self.state.entities_curated, self.state.relationships_curated],
                 schedule_to_close_timeout=timedelta(minutes=5),
                 retry_policy=llm_retry_policy,
             )
