@@ -96,7 +96,18 @@ class CurationManager:
                 )
             """)
 
-            # TODO: add Relation context table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS relationship_context_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    journal_id TEXT,
+                    relationship_uuid TEXT,
+                    entity_uuid TEXT,
+                    sub_type_json TEXT, -- JSON array of strings
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (journal_id) REFERENCES journal_curation (uuid),
+                    FOREIGN KEY (relationship_uuid) REFERENCES relationship_curation_items (uuid)
+                )
+            """)
 
             # Indexes
             await db.execute("""
@@ -117,6 +128,11 @@ class CurationManager:
             await db.execute("""
                 CREATE INDEX IF NOT EXISTS idx_span_items_owner
                 ON span_curation_items (owner_uuid)
+            """)
+
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_relationship_context_items_relationship_uuid
+                ON relationship_context_items (relationship_uuid)
             """)
 
             await db.commit()
@@ -270,7 +286,15 @@ class CurationManager:
                         (uuid, journal_id, owner_uuid, span_data_json)
                         VALUES (?, ?, ?, ?)
                     """, (str(span.uuid), journal_uuid, str(relationship.uuid), span.model_dump_json()))
-                # TODO: add RelationshipContext insertion into DB
+                contexts = spans_and_context[1]
+                if contexts:
+                    for context in contexts:
+                        await db.execute("""
+                            INSERT INTO relationship_context_items
+                            (journal_id, relationship_uuid, entity_uuid, sub_type_json)
+                            VALUES (?, ?, ?, ?)
+                        """, (journal_uuid, str(relationship.uuid), context.entity_uuid,
+                              json.dumps(context.sub_type)))
             await db.commit()
 
     async def accept_relationship(self, journal_uuid: str, relationship_uuid: str, curated_data: Dict[str, Any],
@@ -329,7 +353,18 @@ class CurationManager:
                     span_rows = await span_cursor.fetchall()
                     spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
 
-                results[relation] = spans
+                async with db.execute("""
+                    SELECT entity_uuid, sub_type_json
+                    FROM relationship_context_items
+                    WHERE relationship_uuid = ?
+                """, (rel_uuid,)) as context_cursor:
+                    context_rows = await context_cursor.fetchall()
+                    contexts = [
+                        RelationshipContext(entity_uuid=row[0], sub_type=json.loads(row[1]))
+                        for row in context_rows
+                    ] if context_rows else None
+
+                results[relation] = (spans, contexts)
             # TODO add relationshipcontext logic
             return results
 
