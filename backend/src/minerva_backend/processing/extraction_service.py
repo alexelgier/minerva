@@ -7,6 +7,7 @@ from minerva_backend.graph.models.enums import EntityType
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.llm_service import LLMService
+from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_people import ExtractPeoplePrompt, People
 from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships, RelationshipContext
 from minerva_backend.prompt.hydrate_person import HydratePersonPrompt
@@ -17,7 +18,7 @@ class ExtractionService:
         self.llm_service = llm_service
         self.obsidian_service = obsidian_service
 
-    async def extract_entities(self, journal_entry: JournalEntry) -> Dict[Entity, List[Span]]:
+    async def extract_entities(self, journal_entry: JournalEntry) -> List[EntitySpanMapping]:
         """Stage 1-2: Extract entities and related spans"""
 
         # get [[links]] from text
@@ -35,18 +36,14 @@ class ExtractionService:
                 for alias in link['aliases']:
                     names_map[alias] = {'link_map': link}
 
-        # pick top 5 glossary entries
+        # TODO pick top 5 glossary entries and use
         filtered_glossary = await self._filter_glossary(journal_entry, glossary)
 
+        # TODO not using links
         link_entities = [link for link in links if link['entity_id']]
 
-        entities = []
-
         # Stage 1: Extract Person, Project, Concept, Resource, Event, Consumable, Place
-        people = await self.extract_people(journal_entry, link_entities)
-
-        if not people or not people.people:
-            return {}
+        people = await self.extract_people(journal_entry)
 
         # Deduplicate people based on Obsidian links and aliases
         unique_people_to_hydrate: Dict[str, Dict[str, Any]] = {}
@@ -79,8 +76,10 @@ class ExtractionService:
                 if person_info['link_info'] and person_info['link_info']['entity_id']:
                     hydrated_person.uuid = person_info['link_info']['entity_id']
                 hydrated_people.append(hydrated_person)
+        people_spans = [EntitySpanMapping(e, unique_people_to_hydrate[e.name]['spans']) for e in hydrated_people]
 
-        entities.extend(hydrated_people)
+        entities_spans = []
+        entities_spans.extend(people_spans)
 
         # projects = extract_projects()
         # concepts = extract_concepts()
@@ -91,16 +90,16 @@ class ExtractionService:
 
         # 1.1 (Optional) reflexion
 
-        return {e: unique_people_to_hydrate[e.name]['spans'] for e in entities}
+        return entities_spans
 
-    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> Dict[Relation, Tuple[List[Span], List[RelationshipContext] | None]]:
+    async def extract_relationships(self, journal_entry: JournalEntry,
+                                    entities: List[EntitySpanMapping]) -> List[RelationSpanContextMapping]:
         """Stage 3: Extract relationships between entities"""
-        if not entities:
-            return {}
 
         # 1. Detection: Find potential relationships
         entity_context = "\n".join(
-            [f"- {e.name} ({e.type}) uuid:'{e.uuid}' short summary:'{e.summary_short}'" for e in entities])
+            [f"- {e.entity.name} ({e.entity.type}) uuid:'{e.entity.uuid}' short summary:'{e.entity.summary_short}'" for
+             e in entities])
         detected_relationships_result = await self.llm_service.generate(
             prompt=ExtractRelationshipsPrompt.user_prompt(
                 {'text': journal_entry.entry_text, 'entities': entity_context}),
@@ -108,15 +107,10 @@ class ExtractionService:
             response_model=ExtractRelationshipsPrompt.response_model()
         )
 
-        if not detected_relationships_result:
-            return {}
-
         detected_relationships = Relationships(**detected_relationships_result).relationships
-        if not detected_relationships:
-            return {}
 
-        entity_map = {str(e.uuid): e for e in entities}
-        relations_with_spans = {}
+        entity_map = {str(e.entity.uuid): e.entity for e in entities}
+        result = []
         for rel in detected_relationships:
             # Raise exception if we can't map detected source/target/context uuids to curated ones
             # Gather all UUIDs to validate
@@ -128,30 +122,12 @@ class ExtractionService:
             invalid_uuids = [uuid for uuid in uuids_to_check if uuid not in entity_map]
             if invalid_uuids:
                 raise ValueError(f"Invalid UUID(s) detected: {invalid_uuids}")
+            rel_data = rel.model_dump(exclude={'context', 'spans'})
+            relation = Relation(**rel_data)
+            result.append(RelationSpanContextMapping(relation, rel.spans, rel.context))
+        return result
 
-            source_entity = entity_map[rel.source]
-            target_entity = entity_map[rel.target]
-
-            try:
-                # We assume SimpleRelationship has source_uuid, target_uuid and spans, which are
-                # not part of the Relation model, but fields like `type` and `description` are.
-                rel_data = rel.model_dump(exclude={'context', 'target_entity_uuid', 'spans'})
-                relation = Relation(**rel_data)
-
-                # The prompt model should return Span objects directly.
-                spans = list(rel.spans) if hasattr(rel, 'spans') else []
-                relations_with_spans[relation] = (spans, rel.context)
-            except Exception:
-                # This could be a Pydantic validation error if fields don't match.
-                # For now, we skip malformed relationships.
-                continue
-
-        return relations_with_spans
-
-    async def extract_people(self, journal_entry: JournalEntry, link_entities: List[Dict]) -> People | None:
-        link_people = [p for p in link_entities if p['entity_type'] == EntityType.PERSON]
-        link_people_names = [p['entity_name'] for p in link_people]
-
+    async def extract_people(self, journal_entry: JournalEntry) -> People | None:
         result = await self.llm_service.generate(
             prompt=ExtractPeoplePrompt.user_prompt({'text': journal_entry.entry_text}),
             system_prompt=ExtractPeoplePrompt.system_prompt(),

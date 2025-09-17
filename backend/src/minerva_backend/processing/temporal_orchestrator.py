@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List
 
 from temporalio import workflow, activity
 from temporalio.client import Client
@@ -10,10 +10,8 @@ from temporalio.common import RetryPolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
-from minerva_backend.graph.models.documents import JournalEntry, Span
-from minerva_backend.graph.models.entities import Entity
-from minerva_backend.graph.models.relations import Relation
-from minerva_backend.prompt.extract_relationships import RelationshipContext
+from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 
 
 class PipelineStage(str, Enum):
@@ -33,33 +31,16 @@ class PipelineState:
     stage: PipelineStage
     created_at: datetime = None
     journal_entry: JournalEntry = None
-    entities_extracted: Dict[Entity, List[Span]] = None
-    entities_curated: Dict[Entity, List[Span]] = None
-    relationships_extracted: Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]] = None
-    relationships_curated: Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]] = None
+    entities_extracted: List[EntitySpanMapping] = None
+    entities_curated: List[EntitySpanMapping] = None
+    relationships_extracted: List[RelationSpanContextMapping] = None
+    relationships_curated: List[RelationSpanContextMapping] = None
     error_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to a JSON-serializable dictionary"""
         return {
-            "stage": self.stage.value,
-            "created_at": self.created_at.isoformat(),
-            "journal_entry": self.journal_entry.model_dump() if self.journal_entry else None,
-            "entities_extracted": [{"entity": e.model_dump(), "spans": [s.model_dump() for s in spans]} for e, spans
-                                   in self.entities_extracted.items()] if self.entities_extracted else None,
-            "entities_curated": [{"entity": e.model_dump(), "spans": [s.model_dump() for s in spans]} for e, spans in
-                                 self.entities_curated.items()] if self.entities_curated else None,
-            "relationships_extracted": [
-                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans],
-                 "context": [c.model_dump() for c in context] if context else None}
-                for r, (spans, context) in
-                self.relationships_extracted.items()] if self.relationships_extracted else None,
-            "relationships_curated": [
-                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans],
-                 "context": [c.model_dump() for c in context] if context else None}
-                for r, (spans, context) in
-                self.relationships_curated.items()] if self.relationships_curated else None,
-            "error_count": self.error_count
+            # TODO
         }
 
 
@@ -68,7 +49,7 @@ class PipelineState:
 class PipelineActivities:
 
     @activity.defn
-    async def extract_entities(self, journal_entry: JournalEntry) -> Dict[Entity, List[Span]]:
+    async def extract_entities(self, journal_entry: JournalEntry) -> List[EntitySpanMapping]:
         """Extract entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -76,7 +57,7 @@ class PipelineActivities:
         return await container.extraction_service().extract_entities(journal_entry)
 
     @activity.defn
-    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[Entity]) -> Dict[Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]]:
+    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[EntitySpanMapping]) -> List[RelationSpanContextMapping]:
         """Extract relationships between entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -84,7 +65,8 @@ class PipelineActivities:
         return await container.extraction_service().extract_relationships(journal_entry, entities)
 
     @activity.defn
-    async def submit_entity_curation(self, journal_entry: JournalEntry, entities_spans: Dict[Entity, List[Span]]) -> None:
+    async def submit_entity_curation(self, journal_entry: JournalEntry,
+                                     entities_spans: List[EntitySpanMapping]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -94,7 +76,7 @@ class PipelineActivities:
                                                                        entities_spans)
 
     @activity.defn
-    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> Dict[Entity, List[Span]]:
+    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[EntitySpanMapping]:
         """Human-in-the-loop: Wait for user to curate entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -109,8 +91,7 @@ class PipelineActivities:
 
     @activity.defn
     async def submit_relationship_curation(self, journal_entry: JournalEntry,
-                                           relations: Dict[Relation, Tuple[
-                                               List[Span], Optional[List[RelationshipContext]]]]) -> None:
+                                           relations: List[RelationSpanContextMapping]) -> None:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
@@ -118,8 +99,7 @@ class PipelineActivities:
         await container.curation_manager().queue_relationships_for_curation(journal_entry.uuid, relations)
 
     @activity.defn
-    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> Dict[
-        Relation, Tuple[List[Span], Optional[List[RelationshipContext]]]]:
+    async def wait_for_relationship_curation(self, journal_entry: JournalEntry) -> List[RelationSpanContextMapping]:
         """Human-in-the-loop: Wait for user to curate relations"""
         from minerva_backend.containers import Container
         container = Container()
@@ -133,9 +113,8 @@ class PipelineActivities:
             await asyncio.sleep(30)  # Check every 30 seconds
 
     @activity.defn
-    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: Dict[Entity, List[Span]],
-                                       relationships: Dict[
-                                           Relation, Tuple[List[Span], List[RelationshipContext] | None]]) -> bool:
+    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[EntitySpanMapping],
+                                       relationships: List[RelationSpanContextMapping]) -> bool:
         """Final stage: Write curated data to Neo4j"""
         from minerva_backend.containers import Container
         container = Container()
@@ -197,19 +176,16 @@ class JournalProcessingWorkflow:
             self.state.stage = PipelineStage.RELATION_PROCESSING
             self.state.relationships_extracted = await workflow.execute_activity(
                 PipelineActivities.extract_relationships,
-                args=[journal_entry, list(self.state.entities_curated.keys())],
+                args=[journal_entry, self.state.entities_curated],
                 start_to_close_timeout=timedelta(minutes=60),
                 retry_policy=llm_retry_policy,
             )
 
             # Stage 5.0: Submit Relations for curation
-            relations_for_curation = {
-                relation: spans for relation, (spans, context) in self.state.relationships_extracted.items()
-            }
             self.state.stage = PipelineStage.SUBMIT_RELATION_CURATION
             await workflow.execute_activity(
                 PipelineActivities.submit_relationship_curation,
-                args=[journal_entry, relations_for_curation],
+                args=[journal_entry, self.state.relationships_extracted],
                 start_to_close_timeout=timedelta(minutes=1),
                 schedule_to_close_timeout=timedelta(minutes=5),
             )

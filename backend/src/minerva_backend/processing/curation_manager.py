@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from uuid import uuid4
 
 import aiosqlite
@@ -9,7 +9,6 @@ from minerva_backend.graph.models.entities import (
     Concept,
     Consumable,
     Emotion,
-    Entity,
     EntityType,
     Event,
     Feeling,
@@ -19,6 +18,7 @@ from minerva_backend.graph.models.entities import (
     Content,
 )
 from minerva_backend.graph.models.relations import Relation
+from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 ENTITY_TYPE_MAP = {
@@ -173,19 +173,20 @@ class CurationManager:
     # ===== ENTITY CURATION =====
 
     async def queue_entities_for_curation(self, journal_uuid: str, journal_text: str,
-                                          entities: Dict[Entity, List[Span]]) -> None:
+                                          entities: List[EntitySpanMapping]) -> None:
         """Add entities to curation queue"""
         # First ensure journal exists
         await self.create_journal_for_curation(journal_uuid, journal_text)
 
         async with aiosqlite.connect(self.db_path) as db:
-            for entity, spans in entities.items():
+            for entity_spans in entities:
+                entity = entity_spans.entity
                 await db.execute("""
                     INSERT INTO entity_curation_items 
                     (uuid, journal_id, entity_type, original_data_json, status, is_user_added) 
                     VALUES (?, ?, ?, ?, 'PENDING', FALSE)
                 """, (str(entity.uuid), journal_uuid, entity.type, entity.model_dump_json()))
-                for span in spans:
+                for span in entity_spans.spans:
                     await db.execute("""
                         INSERT INTO span_curation_items
                         (uuid, journal_id, owner_uuid, span_data_json)
@@ -226,7 +227,7 @@ class CurationManager:
             await db.commit()
             return cursor.rowcount > 0
 
-    async def get_accepted_entities_with_spans(self, journal_uuid: str) -> Dict[Entity, List[Span]]:
+    async def get_accepted_entities_with_spans(self, journal_uuid: str) -> List[EntitySpanMapping]:
         """Get all accepted entities for a journal with their spans"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -236,7 +237,7 @@ class CurationManager:
             """, (journal_uuid,)) as cursor:
                 entity_rows = await cursor.fetchall()
 
-            results = {}
+            results = []
             for entity_uuid, entity_json in entity_rows:
                 entity_data = json.loads(entity_json)
                 entity_type = entity_data.get('type')
@@ -254,9 +255,9 @@ class CurationManager:
                     WHERE owner_uuid = ?
                 """, (entity_uuid,)) as span_cursor:
                     span_rows = await span_cursor.fetchall()
-                    spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
+                    spans = {Span.model_validate(json.loads(row[0])) for row in span_rows}
 
-                results[entity] = spans
+                results.append(EntitySpanMapping(entity, spans))
 
             return results
 
@@ -267,26 +268,27 @@ class CurationManager:
     # ===== RELATIONSHIP CURATION =====
 
     async def queue_relationships_for_curation(self, journal_uuid: str,
-                                               relationships: Dict[Relation, Tuple[
-                                                   List[Span], Optional[List[RelationshipContext]]]]) -> None:
+                                               relationships: List[RelationSpanContextMapping]) -> None:
         """Add relationships to curation queue"""
         await self.update_journal_status(journal_uuid, 'PENDING_RELATIONS')
 
         async with aiosqlite.connect(self.db_path) as db:
-            for relationship, spans_and_context in relationships.items():
+            for r in relationships:
+                relationship = r.relation
+                spans = r.spans
+                contexts = r.context
                 await db.execute("""
                     INSERT INTO relationship_curation_items 
                     (uuid, journal_id, relationship_type, original_data_json, status, is_user_added) 
                     VALUES (?, ?, ?, ?, 'PENDING', FALSE)
                 """, (str(relationship.uuid), journal_uuid, relationship.type, relationship.model_dump_json()))
 
-                for span in spans_and_context[0]:
+                for span in spans:
                     await db.execute("""
                         INSERT INTO span_curation_items
                         (uuid, journal_id, owner_uuid, span_data_json)
                         VALUES (?, ?, ?, ?)
                     """, (str(span.uuid), journal_uuid, str(relationship.uuid), span.model_dump_json()))
-                contexts = spans_and_context[1]
                 if contexts:
                     for context in contexts:
                         await db.execute("""
@@ -330,8 +332,7 @@ class CurationManager:
             await db.commit()
             return cursor.rowcount > 0
 
-    async def get_accepted_relationships_with_spans(self, journal_uuid: str) -> Dict[Relation, Tuple[
-        List[Span], Optional[List[RelationshipContext]]]]:
+    async def get_accepted_relationships_with_spans(self, journal_uuid: str) -> List[RelationSpanContextMapping]:
         """Get all accepted relationships for a journal with their spans"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -341,7 +342,7 @@ class CurationManager:
             """, (journal_uuid,)) as cursor:
                 relationship_rows = await cursor.fetchall()
 
-            results = {}
+            results = []
             for rel_uuid, rel_json in relationship_rows:
                 relation = Relation.model_validate(json.loads(rel_json))
 
@@ -351,7 +352,7 @@ class CurationManager:
                     WHERE owner_uuid = ?
                 """, (rel_uuid,)) as span_cursor:
                     span_rows = await span_cursor.fetchall()
-                    spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
+                    spans = {Span.model_validate(json.loads(row[0])) for row in span_rows}
 
                 async with db.execute("""
                     SELECT entity_uuid, sub_type_json
@@ -359,12 +360,12 @@ class CurationManager:
                     WHERE relationship_uuid = ?
                 """, (rel_uuid,)) as context_cursor:
                     context_rows = await context_cursor.fetchall()
-                    contexts = [
+                    contexts = {
                         RelationshipContext(entity_uuid=row[0], sub_type=json.loads(row[1]))
                         for row in context_rows
-                    ] if context_rows else None
+                    } if context_rows else None
 
-                results[relation] = (spans, contexts)
+                results.append(RelationSpanContextMapping(relation, spans, contexts))
             return results
 
     async def complete_relationship_phase(self, journal_uuid: str) -> None:

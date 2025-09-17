@@ -1,4 +1,4 @@
-from typing import Type, List, Optional
+from typing import Type, List, Optional, Set
 
 from minerva_backend.graph.models.relations import Relation
 from pydantic import BaseModel, Field, conlist, conset
@@ -10,14 +10,14 @@ from minerva_backend.prompt.base import Prompt
 class RelationshipContext(BaseModel):
     """Una entidad relacionada de alguna manera con la relación"""
     entity_uuid: str = Field(..., description="El UUID de la entidad")
-    sub_type: conlist(str, min_length=1) = Field(..., description="Propuestas de subtipo para la relación")
+    sub_type: conset(str, min_length=1) = Field(..., description="Propuestas de subtipo para la relación")
 
 
 class Relationship(Relation):
     """Una relación entre dos entidades encontrada en el texto."""
     spans: conset(Span, min_length=1) = Field(..., description="Spans in the document where the person is mentioned")
-    context: Optional[List[RelationshipContext]] = Field(default=None, description="Entidades relacionadas de alguna "
-                                                                                   "manera con la relación")
+    context: Optional[Set[RelationshipContext]] = Field(default=None, description="Entidades relacionadas de alguna "
+                                                                                  "manera con la relación")
 
 
 class Relationships(BaseModel):
