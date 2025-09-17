@@ -147,28 +147,6 @@ async def get_curation_stats(
 
 # ===== ENTITY CURATION ENDPOINTS =====
 
-@backend_app.get("/api/curation/entities/{journal_id}")
-@inject
-async def get_entity_curation_task(
-        journal_id: str,
-        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
-):
-    """Get entity curation task for a specific journal entry"""
-    try:
-        tasks = await curation_manager.get_pending_entity_curation()
-
-        # Find the specific journal
-        for task in tasks:
-            if task["journal_id"] == journal_id:
-                # Mark as in progress
-                await curation_manager.mark_entity_curation_in_progress(journal_id)
-                return task
-
-        raise HTTPException(status_code=404, detail="Entity curation task not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get entity curation: {str(e)}")
-
-
 @backend_app.post("/api/curation/entities/{journal_id}/{entity_id}/accept")
 @inject
 async def accept_entity_curation(
@@ -225,25 +203,6 @@ async def complete_entity_curation(
 
 
 # ===== RELATIONSHIP CURATION ENDPOINTS =====
-
-@backend_app.get("/api/curation/relationships/{journal_id}")
-@inject
-async def get_relationship_curation_task(
-        journal_id: str,
-        curation_manager: CurationManager = Depends(Provide[Container.curation_manager])
-):
-    """Get relationship curation task for a specific journal entry"""
-    try:
-        tasks = await curation_manager.get_pending_relationship_curation()
-
-        for task in tasks:
-            if task["journal_id"] == journal_id:
-                return task
-
-        raise HTTPException(status_code=404, detail="Relationship curation task not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get relationship curation: {str(e)}")
-
 
 @backend_app.post("/api/curation/relationships/{journal_id}/{relationship_id}/accept")
 @inject
