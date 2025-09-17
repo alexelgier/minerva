@@ -40,22 +40,15 @@ class PipelineState:
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to a JSON-serializable dictionary"""
         return {
-            # TODO FIX THIS PART
             "stage": self.stage.value,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "journal_entry": self.journal_entry.model_dump() if self.journal_entry else None,
-            "entities_extracted": [{"entity": e.model_dump(), "spans": [s.model_dump() for s in spans]} for e, spans
-                                   in self.entities_extracted.items()] if self.entities_extracted else None,
-            "entities_curated": [{"entity": e.model_dump(), "spans": [s.model_dump() for s in spans]} for e, spans in
-                                 self.entities_curated.items()] if self.entities_curated else None,
-            "relationships_extracted": [
-                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans],
-                 "context": [c.model_dump() for c in context] if context else None}
-                for r, (spans, context) in
-                self.relationships_extracted.items()] if self.relationships_extracted else None,
-            "relationships_curated": [
-                {"relationship": r.model_dump(), "spans": [s.model_dump() for s in spans]} for r, spans in
-                self.relationships_curated.items()] if self.relationships_curated else None,
+            "entities_extracted": [e.model_dump() for e in self.entities_extracted] if self.entities_extracted else None,
+            "entities_curated": [e.model_dump() for e in self.entities_curated] if self.entities_curated else None,
+            "relationships_extracted": [r.model_dump() for r in
+                                        self.relationships_extracted] if self.relationships_extracted else None,
+            "relationships_curated": [r.model_dump() for r in
+                                      self.relationships_curated] if self.relationships_curated else None,
             "error_count": self.error_count
         }
 
