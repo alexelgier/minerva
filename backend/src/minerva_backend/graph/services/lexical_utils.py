@@ -15,7 +15,7 @@ class Node(BaseModel):
     next_sibling: Optional[str] = None
 
 
-def build_chunks(text) -> Tuple[Dict[str, Node], List[List[str]]]:
+def build_chunks(text) -> Dict[str, Node]:
     nlp = stanza.Pipeline(lang='es', processors='tokenize')
     sentences = nlp(text).sentences
     nodes: Dict[str, Node] = {}
@@ -35,7 +35,6 @@ def build_chunks(text) -> Tuple[Dict[str, Node], List[List[str]]]:
             node.next_sibling = level_ids[i + 1] if i < len(level_ids) - 1 else None
 
     annotate_siblings(leaves)
-    levels: List[List[str]] = [leaves]
 
     current_level = leaves
     # build parents bottom-up until single root
@@ -66,7 +65,6 @@ def build_chunks(text) -> Tuple[Dict[str, Node], List[List[str]]]:
 
         # annotate siblings of the next level to maintain left-right traversal invariants
         annotate_siblings(next_level)
-        levels.append(next_level)
         current_level = next_level
 
-    return nodes, levels
+    return nodes
