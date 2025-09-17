@@ -20,6 +20,7 @@ class EntityType(str, Enum):
 class LexicalType(str, Enum):
     JOURNAL_ENTRY = "JournalEntry"
     SPAN = "Span"
+    CHUNK = "Chunk"
 
 
 class RelationshipType(str, Enum):

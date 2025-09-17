@@ -2,7 +2,7 @@ from datetime import date
 from typing import Any, Dict, List, Tuple
 
 from minerva_backend.graph.db import Neo4jConnection
-from minerva_backend.graph.models.documents import JournalEntry, Span
+from minerva_backend.graph.models.documents import JournalEntry, Span, Chunk
 from minerva_backend.graph.models.entities import Entity
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.graph.repositories.concept_repository import ConceptRepository
@@ -57,9 +57,14 @@ class KnowledgeGraphService:
             The UUID of the created journal entry.
         """
         # Create lexical nodes from journal text.
-        chunks_dict = build_chunks(journal_entry.entry_text)
-        for chunk in chunks_dict:
-            
+        spans_dict = build_chunks(journal_entry.entry_text)
+        for span in spans_dict.values():
+            Chunk(span.id, )
+            # TODO insert lexical graph
+            # later go over spans and check against original spans_dict
+            # have to chat with gpt about checking lowest level span
+            # or maybe its simple: just go through all chunks to see if indices contain current entity/relation span
+            # bruteforce but works
 
 
         # Ensure time tree has corresponding nodes

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, time, timedelta
 from datetime import date as date_type
-from typing import List, Literal
+from typing import List, Literal, Any
 
 from pydantic import Field
 
@@ -139,3 +139,14 @@ class Span(Document):
     start: int = Field(..., description="Character start index in the Document text")
     end: int = Field(..., description="Character end index (exclusive)")
     text: str = Field(..., description="The exact substring from the entry text")
+
+
+class Chunk(Document):
+    """A chunk of text in a document."""
+    type: Literal[LexicalType.CHUNK] = LexicalType.CHUNK.value
+
+    def __init__(self, uuid: str, text: str) -> None:
+        self.uuid = uuid
+        self.text = text
+
+
