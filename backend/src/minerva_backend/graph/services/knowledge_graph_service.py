@@ -57,7 +57,11 @@ class KnowledgeGraphService:
             The UUID of the created journal entry.
         """
         # Create lexical nodes from journal text.
-        chunks_dict, = build_chunks(journal_entry.entry_text)
+        chunks_dict = build_chunks(journal_entry.entry_text)
+        for chunk in chunks_dict:
+            
+
+
         # Ensure time tree has corresponding nodes
         day_uuid = self.temporal_repository.ensure_day_in_time_tree(journal_entry.date)
         journal_uuid = self.journal_entry_repository.create(journal_entry)
