@@ -1,7 +1,6 @@
 import pytest
 from minerva_backend.graph.services.knowledge_graph_service import KnowledgeGraphService
-from minerva_backend.graph.models.enums import RelationshipType
-from minerva_backend.graph.models.relations import Relation
+from minerva_backend.graph.models.relations import Relation, RelationshipType
 
 
 @pytest.fixture

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from enum import Enum
 from typing import Literal, Optional, List
 
 from pydantic import Field, conlist, BaseModel
 
 from .base import Edge, PartitionType
-from .enums import RelationshipType
+
+
+class RelationshipType(str, Enum):
+    RELATED_TO = "RELATED_TO"
 
 
 class Relation(Edge):

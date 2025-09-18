@@ -3,7 +3,7 @@ from enum import Enum
 from minerva_backend.graph.models.entities import (
     Person, Feeling, Emotion, Event, Project, Concept, Content, Consumable, Place, EntityType
 )
-from minerva_backend.graph.models.relations import Relation
+from minerva_backend.graph.models.relations import Relation, RelationshipType
 
 
 # ----------------------------
@@ -21,10 +21,6 @@ ENTITY_TYPE_MAP = {
     EntityType.CONSUMABLE: Consumable,
     EntityType.PLACE: Place
 }
-
-
-class RelationshipType(str, Enum):
-    RELATED_TO = "RELATED_TO"
 
 
 RELATIONSHIP_TYPE_MAP = {
