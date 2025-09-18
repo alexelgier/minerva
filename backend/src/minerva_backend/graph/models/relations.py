@@ -4,8 +4,8 @@ from typing import Literal, Optional, List
 
 from pydantic import Field, conlist, BaseModel
 
-from .base import Edge
-from .enums import PartitionType, RelationshipType
+from .base import Edge, PartitionType
+from .enums import RelationshipType
 
 
 class Relation(Edge):

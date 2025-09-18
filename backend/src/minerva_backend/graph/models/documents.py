@@ -8,8 +8,7 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from .base import Document
-from .enums import LexicalType
+from .base import Document, LexicalType
 
 
 class JournalEntry(Document):
