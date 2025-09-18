@@ -76,7 +76,7 @@ def test_submit_journal_success(client, mock_orchestrator):
     workflow_id = str(uuid.uuid4())
 
     mock_status = MagicMock(spec=PipelineState)
-    mock_status.to_dict.return_value = {"stage": "SUBMITTED"}
+    mock_status.model_dump.return_value = {"stage": "SUBMITTED"}
     mock_orchestrator.submit_journal.return_value = workflow_id
     mock_orchestrator.get_pipeline_status.return_value = mock_status
 
@@ -101,7 +101,7 @@ def test_get_pipeline_status_success(client, mock_orchestrator):
     status_dict = {"stage": "ENTITY_CURATION", "progress": 50}
 
     mock_pipeline_status = MagicMock(spec=PipelineState)
-    mock_pipeline_status.to_dict.return_value = status_dict
+    mock_pipeline_status.model_dump.return_value = status_dict
     mock_orchestrator.get_pipeline_status.return_value = mock_pipeline_status
 
     with container.pipeline_orchestrator.override(mock_orchestrator):
