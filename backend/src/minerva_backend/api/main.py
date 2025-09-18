@@ -72,7 +72,7 @@ async def submit_journal(
         await asyncio.sleep(2)  # Give the workflow time to start
         status = await orchestrator.get_pipeline_status(workflow_id)
         if status:
-            print(f"Current pipeline stage: {status.to_dict()['stage']}")
+            print(f"Current pipeline stage: {status.stage.value}")
 
         return {
             "success": True,
@@ -98,7 +98,7 @@ async def get_pipeline_status(
         status = await orchestrator.get_pipeline_status(workflow_id)
         return {
             "workflow_id": workflow_id,
-            "status": status.to_dict()
+            "status": status.model_dump()
         }
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Workflow not found: {str(e)}")
