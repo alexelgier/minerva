@@ -17,17 +17,3 @@ class Relation(Edge):
     summary_short: str = Field(..., description="Resumen de la relación. Máximo 30 palabras")
     summary: str = Field(..., description="Resumen de la relación. Máximo 100 palabras")
     partition: Literal[PartitionType.DOMAIN] = PartitionType.DOMAIN.value
-
-
-class Mentions(Edge):
-    """A JournalEntry mentions an Entity."""
-    source: str = Field(..., description="UUID of the source JournalEntry")
-    target: str = Field(..., description="UUID of the target Entity")
-    partition: Literal[PartitionType.LEXICAL] = PartitionType.LEXICAL.value
-
-
-class Contains(Edge):
-    """A JournalEntry/Chunk contains a Chunk."""
-    source: str = Field(..., description="UUID of the source JournalEntry or Chunk")
-    target: str = Field(..., description="UUID of the target Chunk")
-    partition: Literal[PartitionType.LEXICAL] = PartitionType.LEXICAL.value

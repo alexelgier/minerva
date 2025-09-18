@@ -27,7 +27,7 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
     # Allow injecting a nlp pipeline for testing; lazily import stanza if needed
     if nlp is None:
         import stanza
-        nlp = stanza.Pipeline(lang="es", processors="tokenize")
+        nlp = stanza.Pipeline(lang="es", processors="tokenize", download_method=None)
 
     doc = nlp(text)
     if not doc.sentences:
@@ -186,7 +186,10 @@ def _insert_chunks_and_relationships(connection, chunks: List, relationships: Li
         if contains_rels:
             result = session.run("""
                 UNWIND $contains_rels AS rel
-                MATCH (parent {uuid: rel.parent}), (child:Chunk {uuid: rel.child})
+                MATCH (parent)
+                WHERE parent.uuid = rel.parent
+                MATCH (child:Chunk)
+                WHERE child.uuid = rel.child
                 CREATE (parent)-[:CONTAINS]->(child)
             """, contains_rels=contains_rels)
             print(f"CONTAINS relationships created: {result.consume().counters.relationships_created}")
@@ -195,7 +198,10 @@ def _insert_chunks_and_relationships(connection, chunks: List, relationships: Li
         if has_chunk_rels:
             result = session.run("""
                 UNWIND $has_chunk_rels AS rel
-                MATCH (parent {uuid: rel.parent}), (child:Chunk {uuid: rel.child})
+                MATCH (parent)
+                WHERE parent.uuid = rel.parent
+                MATCH (child:Chunk)
+                WHERE child.uuid = rel.child
                 CREATE (parent)-[:HAS_CHUNK]->(child)
             """, has_chunk_rels=has_chunk_rels)
             print(f"HAS_CHUNK relationships created: {result.consume().counters.relationships_created}")
@@ -204,7 +210,10 @@ def _insert_chunks_and_relationships(connection, chunks: List, relationships: Li
         if sibling_rels:
             result = session.run("""
                 UNWIND $sibling_rels AS rel
-                MATCH (a:Chunk {uuid: rel.parent}), (b:Chunk {uuid: rel.child})
+                MATCH (a:Chunk)
+                WHERE a.uuid = rel.parent
+                MATCH (b:Chunk)
+                WHERE b.uuid = rel.child
                 CREATE (a)-[:NEXT_SIBLING]->(b)
             """, sibling_rels=sibling_rels)
             print(f"NEXT_SIBLING relationships created: {result.consume().counters.relationships_created}")

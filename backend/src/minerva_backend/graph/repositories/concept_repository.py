@@ -1,8 +1,3 @@
-"""
-Concept Repository for Minerva
-Handles all Concept entity database operations.
-"""
-
 from typing import List
 
 from .base import BaseRepository

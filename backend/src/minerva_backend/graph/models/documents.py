@@ -146,5 +146,5 @@ class Chunk(Document):
     """A chunk of text in a document."""
     type: Literal[LexicalType.CHUNK] = LexicalType.CHUNK.value
 
-    def __init__(self, text: str, uuid: str = str(uuid4()), **kwargs) -> None:
-        super().__init__(uuid=uuid, text=text, **kwargs)
+    def __init__(self, text: str, uuid: str = None, **kwargs) -> None:
+        super().__init__(uuid=uuid if uuid else str(uuid4()), text=text, **kwargs)

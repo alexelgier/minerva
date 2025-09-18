@@ -46,6 +46,7 @@ class TemporalRepository:
         MERGE (y:Year {year: $year, partition: 'TEMPORAL'})
         ON CREATE SET 
             y.uuid = $year_uuid,
+            y.name = $year,
             y.created_at = datetime()
 
         // Create or get Month node and link to Year
@@ -93,41 +94,35 @@ class TemporalRepository:
             logger.info(f"Ensured day in time tree: {target_date} (UUID: {day_uuid})")
             return day_uuid
 
-    def link_journal_entry_to_day(self, entry_uuid: str, entry_date: date) -> bool:
+    def link_node_to_day(self, uuid: str, target_date: date) -> bool:
         """
-        Link a journal entry to its corresponding day in the time tree.
-
+        Link a node to day in the time tree.
         Args:
-            entry_uuid: UUID of the journal entry
-            entry_date: Date of the journal entry
-
+            uuid: UUID of the node
+            target_date: Date to link to
         Returns:
             bool: True if link was created successfully
         """
         # First ensure the day exists
-        day_uuid = self.ensure_day_in_time_tree(entry_date)
+        day_uuid = self.ensure_day_in_time_tree(target_date)
 
         # Then create the relationship
         query = """
-        MATCH (j:JournalEntry {uuid: $entry_uuid})
+        MATCH (n {uuid: $uuid})
         MATCH (d:Day {uuid: $day_uuid})
         MERGE (j)-[:OCCURRED_ON]->(d)
         RETURN count(*) as linked
         """
-
         with self.connection.session() as session:
             try:
-                result = session.run(query, entry_uuid=entry_uuid, day_uuid=day_uuid)
+                result = session.run(query, uuid=uuid, day_uuid=day_uuid)
                 record = result.single()
                 success = record["linked"] > 0
-
                 if success:
-                    logger.info(f"Linked journal entry {entry_uuid} to day {entry_date}")
-
+                    logger.info(f"Linked node {uuid} to day {target_date}")
                 return success
-
             except Exception as e:
-                logger.error(f"Error linking journal entry to day: {e}")
+                logger.error(f"Error linking node to day: {e}")
                 return False
 
     def get_day_uuid(self, target_date: date) -> Optional[str]:

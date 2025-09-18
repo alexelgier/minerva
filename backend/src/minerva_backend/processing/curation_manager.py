@@ -305,6 +305,7 @@ class CurationManager:
         async with aiosqlite.connect(self.db_path) as db:
             if is_user_added:
                 new_uuid = str(uuid4())
+                # TODO check this, could be fucking up cache
                 await db.execute("""
                     INSERT INTO relationship_curation_items 
                     (uuid, journal_id, relationship_type, curated_data_json, status, is_user_added) 
