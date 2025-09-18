@@ -3,7 +3,7 @@ from ..models.entities import Content, Consumable, Place
 from ..models.enums import EntityType
 
 
-class PlaceRepository(BaseRepository[Content]):
+class PlaceRepository(BaseRepository[Place]):
     """Repository for Place entities with specialized place operations."""
 
     @property

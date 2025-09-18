@@ -3,7 +3,7 @@ from ..models.entities import Content, Consumable
 from ..models.enums import EntityType
 
 
-class ConsumableRepository(BaseRepository[Content]):
+class ConsumableRepository(BaseRepository[Consumable]):
     """Repository for Consumable entities with specialized consumable operations."""
 
     @property

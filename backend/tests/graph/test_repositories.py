@@ -5,14 +5,14 @@ def test_person_crud(person_repo, sample_person):
     assert person_uuid is not None
 
     # Read
-    retrieved = person_repo.find_by_id(person_uuid)
+    retrieved = person_repo.find_by_uuid(person_uuid)
     assert retrieved is not None
     assert retrieved.name == sample_person.name
     assert retrieved.occupation == sample_person.occupation
 
     # Delete
     assert person_repo.delete(person_uuid)
-    assert person_repo.find_by_id(person_uuid) is None
+    assert person_repo.find_by_uuid(person_uuid) is None
 
 
 def test_feeling_crud(feeling_repo, sample_feeling):
@@ -22,7 +22,7 @@ def test_feeling_crud(feeling_repo, sample_feeling):
     assert feeling_uuid is not None
 
     # Read
-    retrieved = feeling_repo.find_by_id(feeling_uuid)
+    retrieved = feeling_repo.find_by_uuid(feeling_uuid)
     assert retrieved.intensity == sample_feeling.intensity
 
     # Delete
@@ -36,7 +36,7 @@ def test_event_crud(event_repo, sample_event):
     assert event_uuid is not None
 
     # Read
-    retrieved = event_repo.find_by_id(event_uuid)
+    retrieved = event_repo.find_by_uuid(event_uuid)
     assert retrieved.name == sample_event.name
 
     # Delete
@@ -50,7 +50,7 @@ def test_project_crud(project_repo, sample_project):
     assert project_uuid is not None
 
     # Read
-    retrieved = project_repo.find_by_id(project_uuid)
+    retrieved = project_repo.find_by_uuid(project_uuid)
     assert retrieved.name == sample_project.name
 
     # Delete
@@ -64,7 +64,7 @@ def test_concept_crud(concept_repo, sample_concept):
     assert concept_uuid is not None
 
     # Read
-    retrieved = concept_repo.find_by_id(concept_uuid)
+    retrieved = concept_repo.find_by_uuid(concept_uuid)
     assert retrieved.name == sample_concept.name
 
     # Delete
@@ -78,7 +78,7 @@ def test_content_crud(content_repo, sample_content):
     assert content_uuid is not None
 
     # Read
-    retrieved = content_repo.find_by_id(content_uuid)
+    retrieved = content_repo.find_by_uuid(content_uuid)
     assert retrieved.name == sample_content.name
 
     # Delete
@@ -92,7 +92,7 @@ def test_journal_entry_crud(journal_entry_repo, sample_journal_entry):
     assert entry_uuid is not None
 
     # Read
-    retrieved = journal_entry_repo.find_by_id(entry_uuid)
+    retrieved = journal_entry_repo.find_by_uuid(entry_uuid)
     assert retrieved.text == sample_journal_entry.text
 
     # Delete

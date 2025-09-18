@@ -8,6 +8,8 @@ from typing import Optional, List, Dict, Any, TypeVar, Generic
 from datetime import datetime
 import logging
 
+import neo4j
+
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.base import Node
 
@@ -77,6 +79,8 @@ class BaseRepository(Generic[T], ABC):
                 except ValueError:
                     # If parsing fails, keep as string
                     pass
+            elif isinstance(value, neo4j.time.Date):
+                properties[key] = value.to_native()  # gives datetime.date
 
         return self.entity_class(**properties)
 

@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import List
 
 from .base import BaseRepository
-from ..models.entities import Project
-from ..models.enums import ProjectStatus, EntityType
+from ..models.entities import Project, ProjectStatus
+from ..models.enums import EntityType
 
 
 class ProjectRepository(BaseRepository[Project]):

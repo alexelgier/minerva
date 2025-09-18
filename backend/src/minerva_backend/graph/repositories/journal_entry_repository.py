@@ -6,8 +6,8 @@ from datetime import date
 from typing import List, Optional
 
 from .base import BaseRepository
+from ..models.base import LexicalType
 from ..models.documents import JournalEntry
-from ..models.enums import LexicalType
 
 
 class JournalEntryRepository(BaseRepository[JournalEntry]):
