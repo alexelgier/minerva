@@ -1,9 +1,9 @@
 import asyncio
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
+from pydantic import BaseModel
 from temporalio import workflow, activity
 from temporalio.client import Client
 from temporalio.common import RetryPolicy
@@ -26,31 +26,18 @@ class PipelineStage(str, Enum):
     COMPLETED = "COMPLETED"
 
 
-@dataclass
-class PipelineState:
+class PipelineState(BaseModel):
     stage: PipelineStage
-    created_at: datetime = None
-    journal_entry: JournalEntry = None
-    entities_extracted: List[EntitySpanMapping] = None
-    entities_curated: List[EntitySpanMapping] = None
-    relationships_extracted: List[RelationSpanContextMapping] = None
-    relationships_curated: List[RelationSpanContextMapping] = None
+    created_at: Optional[datetime] = None
+    journal_entry: Optional[JournalEntry] = None
+    entities_extracted: Optional[List[EntitySpanMapping]] = None
+    entities_curated: Optional[List[EntitySpanMapping]] = None
+    relationships_extracted: Optional[List[RelationSpanContextMapping]] = None
+    relationships_curated: Optional[List[RelationSpanContextMapping]] = None
     error_count: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert state to a JSON-serializable dictionary"""
-        return {
-            "stage": self.stage.value,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "journal_entry": self.journal_entry.model_dump() if self.journal_entry else None,
-            "entities_extracted": [e.model_dump() for e in self.entities_extracted] if self.entities_extracted else None,
-            "entities_curated": [e.model_dump() for e in self.entities_curated] if self.entities_curated else None,
-            "relationships_extracted": [r.model_dump() for r in
-                                        self.relationships_extracted] if self.relationships_extracted else None,
-            "relationships_curated": [r.model_dump() for r in
-                                      self.relationships_curated] if self.relationships_curated else None,
-            "error_count": self.error_count
-        }
+    class Config:
+        arbitrary_types_allowed = True
 
 
 # ===== ACTIVITIES (The actual work) =====
