@@ -16,7 +16,7 @@ from minerva_backend.graph.repositories.person_repository import PersonRepositor
 from minerva_backend.graph.repositories.project_repository import ProjectRepository
 from minerva_backend.graph.repositories.resource_repository import ResourceRepository
 from minerva_backend.graph.repositories.temporal_repository import TemporalRepository
-from minerva_backend.graph.services.lexical_utils import build_chunks
+from minerva_backend.graph.services.lexical_utils import build_and_insert_lexical_tree
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 
@@ -56,22 +56,13 @@ class KnowledgeGraphService:
         Returns:
             The UUID of the created journal entry.
         """
-        # Create lexical nodes from journal text.
-        spans_dict = build_chunks(journal_entry.entry_text)
-        for span in spans_dict.values():
-            Chunk(span.id, )
-            # TODO insert lexical graph
-            # later go over spans and check against original spans_dict
-            # have to chat with gpt about checking lowest level span
-            # or maybe its simple: just go through all chunks to see if indices contain current entity/relation span
-            # bruteforce but works
-
-
         # Ensure time tree has corresponding nodes
         day_uuid = self.temporal_repository.ensure_day_in_time_tree(journal_entry.date)
         journal_uuid = self.journal_entry_repository.create(journal_entry)
 
-        self.journal_entry_repository.connect_to_day(journal_uuid, day_uuid)
+        # Create lexical nodes from journal text.
+        spans_dict: Dict[Tuple[int, int], str] = build_and_insert_lexical_tree(self.connection, journal_entry)
+
         return journal_uuid
 
     def get_database_stats(self) -> Dict[str, Any]:

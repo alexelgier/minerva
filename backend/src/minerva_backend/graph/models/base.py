@@ -55,6 +55,5 @@ class Edge(BaseModel, ABC):
 class Document(Node, ABC):
     type: LexicalType = Field(..., description="Tipo de documento")
     text: str = Field(..., description="El texto original del documento")
-    partition: Literal[PartitionType.LEXICAL] = Field(PartitionType.LEXICAL.value,
-                                                      description="Tipo de partición (siempre LEXICAL)")
+    partition: Literal[PartitionType.LEXICAL] = PartitionType.LEXICAL.value
 

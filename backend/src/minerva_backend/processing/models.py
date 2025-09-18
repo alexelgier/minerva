@@ -12,17 +12,14 @@ class EntitySpanMapping(BaseModel):
     entity: Entity
     spans: Set[Span]
 
-    def __init__(self, entity: Entity, spans: Set[Span]) -> None:
-        self.entity = entity
-        self.spans = spans
+    def __init__(self, entity: Entity, spans: Set[Span], **kwargs) -> None:
+        super().__init__(entity=entity, spans=spans, **kwargs)
 
 
 class RelationSpanContextMapping(BaseModel):
     relation: Relation
     spans: Set[Span]
-    context: Set[RelationshipContext]
+    context: Set[RelationshipContext] | None = None
 
-    def __init__(self, relation: Relation, spans: Set[Span], context: Set[RelationshipContext]) -> None:
-        self.relation = relation
-        self.spans = spans
-        self.context = context
+    def __init__(self, relation: Relation, spans: Set[Span], context: Set[RelationshipContext] = None, **kwargs) -> None:
+        super().__init__(relation=relation, spans=spans, context=context, **kwargs)
