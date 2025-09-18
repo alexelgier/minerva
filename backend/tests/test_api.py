@@ -9,7 +9,7 @@ from minerva_backend.api.main import backend_app, container
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.processing.curation_manager import CurationManager
-from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator, PipelineState
+from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator, PipelineState, PipelineStage
 
 
 @pytest.fixture(scope="module")
@@ -77,6 +77,7 @@ def test_submit_journal_success(client, mock_orchestrator):
 
     mock_status = MagicMock(spec=PipelineState)
     mock_status.model_dump.return_value = {"stage": "SUBMITTED"}
+    mock_status.stage = PipelineStage.SUBMITTED
     mock_orchestrator.submit_journal.return_value = workflow_id
     mock_orchestrator.get_pipeline_status.return_value = mock_status
 
