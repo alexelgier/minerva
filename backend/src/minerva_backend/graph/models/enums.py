@@ -1,25 +1,14 @@
 from enum import Enum
 
-from minerva_backend.graph.models.entities import Person, Feeling, Emotion, Event, Project, Concept, Content, \
-    Consumable, Place
+from minerva_backend.graph.models.entities import (
+    Person, Feeling, Emotion, Event, Project, Concept, Content, Consumable, Place, EntityType
+)
 from minerva_backend.graph.models.relations import Relation
 
 
 # ----------------------------
 # Core entity + relationship + partition types
 # ----------------------------
-
-class EntityType(str, Enum):
-    PERSON = "Person"
-    FEELING = "Feeling"
-    EMOTION = "Emotion"
-    EVENT = "Event"
-    PROJECT = "Project"
-    CONCEPT = "Concept"
-    CONTENT = "Content"
-    CONSUMABLE = "Consumable"
-    PLACE = "Place"
-
 
 ENTITY_TYPE_MAP = {
     EntityType.PERSON: Person,
@@ -98,27 +87,3 @@ class EmotionType(str, Enum):
     NOSTALGIA = "Nostalgia"
     INTEREST = "Interest"
     SURPRISE = "Surprise"
-
-
-class ProjectStatus(str, Enum):
-    NOT_STARTED = "NOT_STARTED"
-    ACTIVE = "ACTIVE"
-    ON_HOLD = "ON_HOLD"
-    COMPLETED = "COMPLETED"
-    CANCELLED = "CANCELLED"
-
-
-class ResourceType(str, Enum):
-    BOOK = "BOOK"
-    ARTICLE = "ARTICLE"
-    YOUTUBE = "YOUTUBE"
-    MOVIE = "MOVIE"
-    MISC = "MISC"
-
-
-class ResourceStatus(str, Enum):
-    WANT_TO_CONSUME = "WANT_TO_CONSUME"
-    IN_PROGRESS = "IN_PROGRESS"
-    COMPLETED = "COMPLETED"
-    REFERENCE = "REFERENCE"
-    ABANDONED = "ABANDONED"

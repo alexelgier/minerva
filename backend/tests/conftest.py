@@ -5,9 +5,9 @@ from datetime import datetime, date
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import (
-    Person, Feeling, Event, Project, Concept, Consumable, Content, Emotion
+    Person, Feeling, Event, Project, Concept, Consumable, Content, Emotion, ProjectStatus, ResourceType, ResourceStatus
 )
-from minerva_backend.graph.models.enums import EmotionType, ProjectStatus, ResourceType, ResourceStatus
+from minerva_backend.graph.models.enums import EmotionType
 from minerva_backend.graph.repositories import (
     PersonRepository, FeelingRepository, EventRepository, ProjectRepository,
     ConceptRepository, ContentRepository, ConsumableRepository,

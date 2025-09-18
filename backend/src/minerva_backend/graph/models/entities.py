@@ -2,12 +2,52 @@ from __future__ import annotations
 
 from abc import ABC
 from datetime import date, datetime, timedelta
+from enum import Enum
 from typing import List, Literal
 
 from pydantic import Field
 
 from .base import Node, PartitionType
-from .enums import EntityType, ProjectStatus, ResourceStatus, ResourceType
+
+
+# ----------------------------
+# Enums
+# ----------------------------
+
+class EntityType(str, Enum):
+    PERSON = "Person"
+    FEELING = "Feeling"
+    EMOTION = "Emotion"
+    EVENT = "Event"
+    PROJECT = "Project"
+    CONCEPT = "Concept"
+    CONTENT = "Content"
+    CONSUMABLE = "Consumable"
+    PLACE = "Place"
+
+
+class ProjectStatus(str, Enum):
+    NOT_STARTED = "NOT_STARTED"
+    ACTIVE = "ACTIVE"
+    ON_HOLD = "ON_HOLD"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class ResourceType(str, Enum):
+    BOOK = "BOOK"
+    ARTICLE = "ARTICLE"
+    YOUTUBE = "YOUTUBE"
+    MOVIE = "MOVIE"
+    MISC = "MISC"
+
+
+class ResourceStatus(str, Enum):
+    WANT_TO_CONSUME = "WANT_TO_CONSUME"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    REFERENCE = "REFERENCE"
+    ABANDONED = "ABANDONED"
 
 
 class Entity(Node, ABC):
