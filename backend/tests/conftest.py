@@ -7,7 +7,6 @@ from minerva_backend.graph.models.documents import JournalEntry
 from minerva_backend.graph.models.entities import (
     Person, Feeling, Event, Project, Concept, Consumable, Content, Emotion, ProjectStatus, ResourceType, ResourceStatus
 )
-from minerva_backend.graph.models.enums import EmotionType
 from minerva_backend.graph.repositories import (
     PersonRepository, FeelingRepository, EventRepository, ProjectRepository,
     ConceptRepository, ContentRepository, ConsumableRepository,
@@ -73,7 +72,8 @@ def sample_person():
     """Sample Person entity for testing."""
     return Person(
         name="Test User " + str(uuid.uuid4()),  # Add UUID to ensure uniqueness
-        aliases=["Tester", "TestUser"],
+        summary_short="A test user.",
+        summary="A test user for software testing purposes.",
         occupation="Software Tester"
     )
 
@@ -83,8 +83,10 @@ def sample_feeling():
     """Sample Feeling entity for testing."""
     return Feeling(
         name="Joy " + str(uuid.uuid4()),
-        intensity=7,
-        context="Test completion"
+        summary_short="A feeling of joy.",
+        summary="A feeling of joy experienced upon test completion.",
+        timestamp=datetime.now(),
+        intensity=7
     )
 
 @pytest.fixture
@@ -92,7 +94,8 @@ def sample_emotion():
     """Sample Emotion entity for testing."""
     return Emotion(
         name="Happiness " + str(uuid.uuid4()),
-        emotion_type=EmotionType.JOY
+        summary_short="The emotion of happiness.",
+        summary="A positive emotion, the state of being happy."
     )
 
 
@@ -101,10 +104,11 @@ def sample_event():
     """Sample Event entity for testing."""
     return Event(
         name="Test Event " + str(uuid.uuid4()),
-        event_type="work",
-        start_date=datetime.now(),
-        location="Test Location",
-        tags=["test", "work"]
+        summary_short="A test event.",
+        summary="An event created for testing purposes.",
+        category="work",
+        date=datetime.now(),
+        location="Test Location"
     )
 
 
@@ -113,9 +117,10 @@ def sample_project():
     """Sample Project entity for testing."""
     return Project(
         name="Test Project " + str(uuid.uuid4()),
-        description="A project for testing purposes",
+        summary_short="A test project.",
+        summary="A project for testing purposes",
         status=ProjectStatus.ACTIVE,
-        start_date=date.today()
+        start_date=datetime.now()
     )
 
 
@@ -124,8 +129,10 @@ def sample_concept():
     """Sample Concept entity for testing."""
     return Concept(
         name="Test Concept " + str(uuid.uuid4()),
-        definition="A concept used for testing",
-        category="testing"
+        summary_short="A test concept.",
+        summary="A concept for testing purposes.",
+        title="Test Concept Title",
+        analysis="A concept used for testing"
     )
 
 
@@ -134,11 +141,12 @@ def sample_content():
     """Sample Content entity for testing."""
     return Content(
         name="Test Content " + str(uuid.uuid4()),
-        resource_type=ResourceType.DOCUMENTATION,
+        summary_short="Test content.",
+        summary="Content for testing purposes.",
+        title="Test Content Title",
+        category=ResourceType.MISC,
         author="Test Author",
-        status=ResourceStatus.COMPLETED,
-        rating=4,
-        tags=["testing", "documentation"]
+        status=ResourceStatus.COMPLETED
     )
 
 
@@ -147,8 +155,9 @@ def sample_consumable():
     """Sample Consumable entity for testing."""
     return Consumable(
         name="Test Consumable " + str(uuid.uuid4()),
-        type="article",
-        source="web"
+        summary_short="A test consumable.",
+        summary="A consumable item for testing purposes.",
+        category="article"
     )
 
 
