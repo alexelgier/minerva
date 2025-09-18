@@ -99,7 +99,7 @@ class ExtractionService:
         # 1. Detection: Find potential relationships
         entity_context = "\n".join(
             [f"- {e.entity.name} ({e.entity.type}) uuid:'{e.entity.uuid}' short summary:'{e.entity.summary_short}'" for
-             e in entities])
+             e in sorted(entities, key=lambda e: e.entity.uuid)])
         detected_relationships_result = await self.llm_service.generate(
             prompt=ExtractRelationshipsPrompt.user_prompt(
                 {'text': journal_entry.entry_text, 'entities': entity_context}),
@@ -121,7 +121,8 @@ class ExtractionService:
             # Check all UUIDs at once
             invalid_uuids = [uuid for uuid in uuids_to_check if uuid not in entity_map]
             if invalid_uuids:
-                raise ValueError(f"Invalid UUID(s) detected: {invalid_uuids}")
+                print(f"Invalid UUID(s) detected: {invalid_uuids}")
+                continue
             rel_data = rel.model_dump(exclude={'context', 'spans'})
             relation = Relation(**rel_data)
             result.append(RelationSpanContextMapping(relation, rel.spans, rel.context))

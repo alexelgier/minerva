@@ -17,7 +17,6 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
     Returns:
         Dict[Tuple[int, int], str]: Mapping from (start_char, end_char) spans to chunk UUIDs
     """
-    # Get text and add journal entry to span mapping
     text = journal_entry.entry_text
     if not text:
         return {}
@@ -30,119 +29,117 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
         import stanza
         nlp = stanza.Pipeline(lang="es", processors="tokenize")
 
-    sentences = nlp(text).sentences
-    if not sentences:
+    doc = nlp(text)
+    if not doc.sentences:
         return span_to_uuid
 
-    # Create leaf chunks (sentences)
-    all_chunks = []
-    leaves = []
-
-    for sent in sentences:
+    # Create sentence chunks
+    sentence_chunks = []
+    for sent in doc.sentences:
         start = int(sent.tokens[0].start_char)
         end = int(sent.tokens[-1].end_char)
-        chunk_text = text[start:end]
-
-        chunk = Chunk(text=chunk_text)
-        all_chunks.append(chunk)
-        leaves.append((chunk.uuid, start, end))
+        chunk = Chunk(text=text[start:end])
+        sentence_chunks.append((chunk, start, end))
         span_to_uuid[(start, end)] = chunk.uuid
 
-    # Build balanced tree structure bottom-up using center-out strategy
+    # Build balanced binary tree
+    all_chunks = []
     relationships = []
-    current_level = leaves
 
-    while len(current_level) > 2:  # Stop when we have 2 nodes (journal entry's children)
-        next_level = []
+    # Add all sentence chunks to our collections
+    all_chunks.extend([chunk for chunk, _, _ in sentence_chunks])
 
-        # Create sibling relationships for current level
-        for i in range(len(current_level) - 1):
-            left_uuid = current_level[i][0]
-            right_uuid = current_level[i + 1][0]
-            relationships.append({
-                "parent": left_uuid,
-                "child": right_uuid,
-                "type": "NEXT_SIBLING"
-            })
+    # Build tree and get root
+    if sentence_chunks:
+        root_chunk, root_start, root_end = _build_balanced_tree(
+            sentence_chunks, text, all_chunks, relationships, span_to_uuid
+        )
 
-        # Build balanced subtrees using center-out approach
-        next_level.extend(_build_balanced_level(current_level, text, all_chunks, relationships, span_to_uuid))
-        current_level = next_level
-
-    # Connect top-level chunks to journal entry (CONTAINS relationships)
-    for top_chunk_uuid, _, _ in current_level:
+        # Connect root to journal entry
         relationships.append({
             "parent": journal_entry.uuid,
-            "child": top_chunk_uuid,
+            "child": root_chunk.uuid,
             "type": "CONTAINS"
         })
 
-    # Create direct HAS_CHUNK relationships from journal entry to all chunks
-    for chunk in all_chunks:
-        relationships.append({
-            "parent": journal_entry.uuid,
-            "child": chunk.uuid,
-            "type": "HAS_CHUNK"
-        })
+        # Add HAS_CHUNK relationships from journal entry to every chunk
+        for chunk in all_chunks:
+            relationships.append({
+                "parent": journal_entry.uuid,
+                "child": chunk.uuid,
+                "type": "HAS_CHUNK"
+            })
 
-    # Insert everything into database
-    _insert_chunks_and_relationships(connection, all_chunks, relationships)
+    try:
+        print(f"Inserting {len(all_chunks)} chunks and {len(relationships)} relationships")
+        _insert_chunks_and_relationships(connection, all_chunks, relationships)
+    except Exception as e:
+        print(f"Error inserting chunks: {e}")
+        raise
 
     return span_to_uuid
 
 
-def _build_balanced_level(current_level: List[Tuple], text: str, all_chunks: List,
-                          relationships: List[Dict], span_to_uuid: Dict) -> List[Tuple]:
-    """Build a balanced level using recursive center-out strategy."""
-    if len(current_level) <= 1:
-        return current_level
-
-    # Split into two roughly equal halves
-    mid = len(current_level) // 2
-    left_half = current_level[:mid]
-    right_half = current_level[mid:]
-
-    result = []
-
-    # Process left half
-    if len(left_half) == 1:
-        result.append(left_half[0])
-    else:
-        left_parent = _create_parent_chunk(left_half, text, all_chunks, relationships, span_to_uuid)
-        result.append(left_parent)
-
-    # Process right half
-    if len(right_half) == 1:
-        result.append(right_half[0])
-    else:
-        right_parent = _create_parent_chunk(right_half, text, all_chunks, relationships, span_to_uuid)
-        result.append(right_parent)
-
-    return result
-
-
-def _create_parent_chunk(children: List[Tuple], text: str, all_chunks: List,
+def _build_balanced_tree(nodes: List[Tuple], text: str, all_chunks: List,
                          relationships: List[Dict], span_to_uuid: Dict) -> Tuple:
-    """Create a parent chunk for the given children."""
-    # Get span boundaries
-    start = min(child[1] for child in children)
-    end = max(child[2] for child in children)
-    parent_text = text[start:end]
+    """
+    Build a balanced binary tree from a list of (chunk, start, end) tuples.
+    Returns the root (chunk, start, end).
+    """
+    if len(nodes) == 1:
+        return nodes[0]
 
-    # Create parent chunk
+    if len(nodes) == 2:
+        # Create parent for the pair
+        left_chunk, left_start, left_end = nodes[0]
+        right_chunk, right_start, right_end = nodes[1]
+
+        # Create parent chunk spanning both children
+        parent_start = min(left_start, right_start)
+        parent_end = max(left_end, right_end)
+        parent_text = text[parent_start:parent_end]
+        parent_chunk = Chunk(text=parent_text)
+
+        all_chunks.append(parent_chunk)
+        span_to_uuid[(parent_start, parent_end)] = parent_chunk.uuid
+
+        # Create relationships
+        relationships.extend([
+            {"parent": parent_chunk.uuid, "child": left_chunk.uuid, "type": "CONTAINS"},
+            {"parent": parent_chunk.uuid, "child": right_chunk.uuid, "type": "CONTAINS"},
+            {"parent": left_chunk.uuid, "child": right_chunk.uuid, "type": "NEXT_SIBLING"}
+        ])
+
+        return parent_chunk, parent_start, parent_end
+
+    # Split into two halves and recursively build subtrees
+    mid = len(nodes) // 2
+    left_nodes = nodes[:mid]
+    right_nodes = nodes[mid:]
+
+    left_root = _build_balanced_tree(left_nodes, text, all_chunks, relationships, span_to_uuid)
+    right_root = _build_balanced_tree(right_nodes, text, all_chunks, relationships, span_to_uuid)
+
+    # Create parent for the two subtrees
+    left_chunk, left_start, left_end = left_root
+    right_chunk, right_start, right_end = right_root
+
+    parent_start = min(left_start, right_start)
+    parent_end = max(left_end, right_end)
+    parent_text = text[parent_start:parent_end]
     parent_chunk = Chunk(text=parent_text)
+
     all_chunks.append(parent_chunk)
-    span_to_uuid[(start, end)] = parent_chunk.uuid
+    span_to_uuid[(parent_start, parent_end)] = parent_chunk.uuid
 
-    # Add CONTAINS relationships to all children
-    for child_uuid, _, _ in children:
-        relationships.append({
-            "parent": parent_chunk.uuid,
-            "child": child_uuid,
-            "type": "CONTAINS"
-        })
+    # Create relationships
+    relationships.extend([
+        {"parent": parent_chunk.uuid, "child": left_chunk.uuid, "type": "CONTAINS"},
+        {"parent": parent_chunk.uuid, "child": right_chunk.uuid, "type": "CONTAINS"},
+        {"parent": left_chunk.uuid, "child": right_chunk.uuid, "type": "NEXT_SIBLING"}
+    ])
 
-    return parent_chunk.uuid, start, end
+    return parent_chunk, parent_start, parent_end
 
 
 def _insert_chunks_and_relationships(connection, chunks: List, relationships: List[Dict]):
@@ -160,14 +157,19 @@ def _insert_chunks_and_relationships(connection, chunks: List, relationships: Li
         for chunk in chunks
     ]
 
-    # Separate relationships by type
+    # Separate relationships by type for better debugging
     contains_rels = [r for r in relationships if r["type"] == "CONTAINS"]
-    has_chunk_rels = [r for r in relationships if r["type"] == "HAS_CHUNK"]
     sibling_rels = [r for r in relationships if r["type"] == "NEXT_SIBLING"]
+    has_chunk_rels = [r for r in relationships if r["type"] == "HAS_CHUNK"]
+
+    print(f"Creating {len(chunks)} chunks")
+    print(f"Creating {len(contains_rels)} CONTAINS relationships")
+    print(f"Creating {len(sibling_rels)} NEXT_SIBLING relationships")
+    print(f"Creating {len(has_chunk_rels)} HAS_CHUNK relationships")
 
     with connection.session() as session:
         # Create all chunks
-        session.run("""
+        result = session.run("""
             UNWIND $chunks AS c
             CREATE (:Chunk {
                 uuid: c.uuid,
@@ -178,26 +180,31 @@ def _insert_chunks_and_relationships(connection, chunks: List, relationships: Li
             })
         """, chunks=chunk_data)
 
+        print(f"Chunks created: {result.consume().counters.nodes_created}")
+
         # Create CONTAINS relationships (tree structure)
         if contains_rels:
-            session.run("""
+            result = session.run("""
                 UNWIND $contains_rels AS rel
                 MATCH (parent {uuid: rel.parent}), (child:Chunk {uuid: rel.child})
                 CREATE (parent)-[:CONTAINS]->(child)
             """, contains_rels=contains_rels)
+            print(f"CONTAINS relationships created: {result.consume().counters.relationships_created}")
 
         # Create HAS_CHUNK relationships (direct access)
         if has_chunk_rels:
-            session.run("""
+            result = session.run("""
                 UNWIND $has_chunk_rels AS rel
                 MATCH (parent {uuid: rel.parent}), (child:Chunk {uuid: rel.child})
                 CREATE (parent)-[:HAS_CHUNK]->(child)
             """, has_chunk_rels=has_chunk_rels)
+            print(f"HAS_CHUNK relationships created: {result.consume().counters.relationships_created}")
 
         # Create NEXT_SIBLING relationships
         if sibling_rels:
-            session.run("""
+            result = session.run("""
                 UNWIND $sibling_rels AS rel
                 MATCH (a:Chunk {uuid: rel.parent}), (b:Chunk {uuid: rel.child})
                 CREATE (a)-[:NEXT_SIBLING]->(b)
             """, sibling_rels=sibling_rels)
+            print(f"NEXT_SIBLING relationships created: {result.consume().counters.relationships_created}")
