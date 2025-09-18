@@ -34,12 +34,6 @@ ENTITY_TYPE_MAP = {
 }
 
 
-class LexicalType(str, Enum):
-    JOURNAL_ENTRY = "JournalEntry"
-    SPAN = "Span"
-    CHUNK = "Chunk"
-
-
 class RelationshipType(str, Enum):
     RELATED_TO = "RELATED_TO"
 
@@ -47,12 +41,6 @@ class RelationshipType(str, Enum):
 RELATIONSHIP_TYPE_MAP = {
     RelationshipType.RELATED_TO: Relation
 }
-
-
-class PartitionType(str, Enum):
-    DOMAIN = "DOMAIN"
-    LEXICAL = "LEXICAL"
-    TEMPORAL = "TEMPORAL"
 
 
 # ----------------------------

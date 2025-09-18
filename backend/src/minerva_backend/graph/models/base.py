@@ -2,12 +2,27 @@ from __future__ import annotations
 
 from abc import ABC
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from .enums import LexicalType, PartitionType
+
+# ----------------------------
+# Base Enums
+# ----------------------------
+
+class PartitionType(str, Enum):
+    DOMAIN = "DOMAIN"
+    LEXICAL = "LEXICAL"
+    TEMPORAL = "TEMPORAL"
+
+
+class LexicalType(str, Enum):
+    JOURNAL_ENTRY = "JournalEntry"
+    SPAN = "Span"
+    CHUNK = "Chunk"
 
 
 # ----------------------------

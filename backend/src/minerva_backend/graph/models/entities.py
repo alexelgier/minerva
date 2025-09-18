@@ -6,8 +6,8 @@ from typing import List, Literal
 
 from pydantic import Field
 
-from .base import Node
-from .enums import EntityType, ProjectStatus, ResourceStatus, ResourceType, PartitionType
+from .base import Node, PartitionType
+from .enums import EntityType, ProjectStatus, ResourceStatus, ResourceType
 
 
 class Entity(Node, ABC):
