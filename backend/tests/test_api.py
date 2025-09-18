@@ -76,6 +76,7 @@ def test_submit_journal_success(client, mock_orchestrator):
     workflow_id = str(uuid.uuid4())
 
     mock_status = MagicMock(spec=PipelineState)
+    mock_status.to_dict.return_value = {"stage": "SUBMITTED"}
     mock_orchestrator.submit_journal.return_value = workflow_id
     mock_orchestrator.get_pipeline_status.return_value = mock_status
 
