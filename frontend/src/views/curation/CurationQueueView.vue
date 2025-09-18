@@ -62,13 +62,7 @@ const journalGroups = computed(() => {
     journal_id: journal.journal_id,
     created_at: journal.created_at,
     total_tasks: journal.pending_relationships_count,
-    tasks: (journal.pending_relationships || []).map(rel => ({
-      ...rel,
-      id: rel.id,
-      name: rel.sub_type ? rel.sub_type.join(', ') : rel.relationship_type,
-      entity_type: rel.relationship_type,
-      summary_short: rel.summary_short
-    })),
+    tasks: journal.pending_relationships || [],
     phase: 'relationships',
   }));
 
@@ -92,6 +86,12 @@ async function fetchCurationData() {
     }
 
     const data = await response.json();
+    (data.relationship_journals || []).forEach(journal => {
+      (journal.pending_relationships || []).forEach(rel => {
+        rel.name = rel.sub_type ? rel.sub_type.join(', ') : rel.relationship_type;
+        rel.entity_type = rel.relationship_type;
+      });
+    });
     apiResponse.value = data;
   } catch (err) {
     console.error("Failed to fetch curation tasks:", err);
