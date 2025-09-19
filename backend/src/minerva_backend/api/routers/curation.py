@@ -13,6 +13,7 @@ from ..dependencies import (
     validate_entity_id, validate_relationship_id
 )
 from ..exceptions import handle_errors, NotFoundError, ValidationError
+from ...processing.models import CurationStats
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/curation", tags=["curation"])
@@ -35,7 +36,7 @@ async def get_pending_curation(
 
         return PendingCurationResponse(
             journal_entry=pending_journals,
-            stats=CurationStatsResponse(**stats_model)
+            stats=stats_model
         )
 
     except Exception as e:

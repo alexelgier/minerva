@@ -114,7 +114,7 @@ class PendingCurationResponse(BaseResponse):
     """Response model for pending curation tasks."""
     journal_entry: List[JournalEntryCuration] = Field(default_factory=list,
                                                       description="List of pending journals with curation tasks")
-    stats: CurationStatsResponse = Field(..., description="Curation statistics")
+    stats: CurationStats = Field(..., description="Curation statistics")
 
 
 class ProcessingWindowsResponse(BaseResponse):
