@@ -30,10 +30,13 @@ async def get_pending_curation(
     human review and approval.
     """
     try:
-        pendings = await curation_manager.get_all_pending_curation_tasks()
-        #TODO FIX THIS
+        pending_journals = await curation_manager.get_all_pending_curation_tasks()
+        stats_model = await curation_manager.get_curation_stats()
 
-        return response
+        return PendingCurationResponse(
+            journal_entry=pending_journals,
+            stats=CurationStatsResponse(**stats_model)
+        )
 
     except Exception as e:
         logger.error(f"Failed to get pending curation tasks: {e}")
