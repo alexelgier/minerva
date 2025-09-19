@@ -161,10 +161,10 @@ class TestJournalProcessingWorkflow:
                 mock_activities.write_to_knowledge_graph.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_entity_extraction_failure_with_retry(self, sample_journal_entry):
+    async def test_entity_extraction_failure_with_retry(self, sample_journal_entry, local_workflow_environment):
         """Test that entity extraction retries on failure"""
 
-        async with WorkflowEnvironment(data_converter=pydantic_data_converter) as env:
+        async with local_workflow_environment as env:
             mock_activities = MagicMock(spec=PipelineActivities)
 
             # First two calls fail, third succeeds

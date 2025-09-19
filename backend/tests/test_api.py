@@ -43,7 +43,7 @@ def test_health_check_healthy(client, mock_db_connection, mock_curation_manager)
     mock_curation_manager.get_curation_stats.return_value = {"pending": 0, "completed": 0}
 
     with container.db_connection.override(mock_db_connection), \
-         container.curation_manager.override(mock_curation_manager):
+            container.curation_manager.override(mock_curation_manager):
         response = client.get("/api/health")
 
     assert response.status_code == 200
@@ -60,7 +60,7 @@ def test_health_check_unhealthy(client, mock_db_connection, mock_curation_manage
     mock_curation_manager.get_curation_stats.return_value = {"pending": 0, "completed": 0}
 
     with container.db_connection.override(mock_db_connection), \
-         container.curation_manager.override(mock_curation_manager):
+            container.curation_manager.override(mock_curation_manager):
         response = client.get("/api/health")
 
     assert response.status_code == 200
@@ -117,7 +117,7 @@ def test_get_pipeline_status_success(client, mock_orchestrator):
 
 def test_get_all_pending_pipelines_success(client, mock_orchestrator):
     """Test getting all pending pipelines successfully (expecting empty list)."""
-    mock_orchestrator.get_all_pending_curation.return_value = [] # This is actually for curation manager in code
+    mock_orchestrator.get_all_pending_curation.return_value = []  # This is actually for curation manager in code
 
     with container.pipeline_orchestrator.override(mock_orchestrator):
         response = client.get("/api/pipeline/all-pending")
@@ -175,13 +175,14 @@ def test_accept_entity_curation_success(client, mock_curation_manager):
         curated_data=curated_data
     )
 
+
 def test_accept_entity_curation_not_found(client, mock_curation_manager):
     """Test accepting an entity curation when entity not found or not pending."""
     journal_id = str(uuid.uuid4())
     entity_id = str(uuid.uuid4())
     curated_data = {"name": "Updated Name"}
 
-    mock_curation_manager.accept_entity.return_value = "" # Empty string for not found
+    mock_curation_manager.accept_entity.return_value = ""  # Empty string for not found
 
     with container.curation_manager.override(mock_curation_manager):
         response = client.post(f"/api/curation/entities/{journal_id}/{entity_id}/accept", json=curated_data)
@@ -206,6 +207,7 @@ def test_reject_entity_curation_success(client, mock_curation_manager):
         journal_uuid=journal_id,
         entity_uuid=entity_id
     )
+
 
 def test_reject_entity_curation_not_found(client, mock_curation_manager):
     """Test rejecting an entity curation when entity not found or not pending."""
@@ -253,13 +255,14 @@ def test_accept_relationship_curation_success(client, mock_curation_manager):
         curated_data=curated_data
     )
 
+
 def test_accept_relationship_curation_not_found(client, mock_curation_manager):
     """Test accepting a relationship curation when relationship not found or not pending."""
     journal_id = str(uuid.uuid4())
     relationship_id = str(uuid.uuid4())
     curated_data = {"type": "UPDATED_RELATION"}
 
-    mock_curation_manager.accept_relationship.return_value = "" # Empty string for not found
+    mock_curation_manager.accept_relationship.return_value = ""  # Empty string for not found
 
     with container.curation_manager.override(mock_curation_manager):
         response = client.post(f"/api/curation/relationships/{journal_id}/{relationship_id}/accept", json=curated_data)
@@ -284,6 +287,7 @@ def test_reject_relationship_curation_success(client, mock_curation_manager):
         journal_uuid=journal_id,
         relationship_uuid=relationship_id
     )
+
 
 def test_reject_relationship_curation_not_found(client, mock_curation_manager):
     """Test rejecting a relationship curation when relationship not found or not pending."""
