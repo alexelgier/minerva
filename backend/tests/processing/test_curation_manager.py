@@ -489,94 +489,115 @@ async def test_get_all_pending_curation_tasks(curation_manager_db: CurationManag
 
 @pytest.mark.asyncio
 async def test_get_curation_stats(curation_manager_db: CurationManager,
-                                  sample_journal_entry,
                                   sample_entity_span_mapping,
                                   sample_relation_span_context_mapping,
                                   sample_person_entity,
                                   sample_relation):
+    # Journals for each final status
+    journal_pe_uuid = "journal-pending-entities-final"
+    journal_ed_uuid = "journal-entities-done-final"
+    journal_pr_uuid = "journal-pending-relations-final"
+    journal_comp_uuid = "journal-completed-final"
+    journal_re_uuid = "journal-rejected-entity-final"
+    journal_rr_uuid = "journal-rejected-relationship-final"
 
-    # Setup journals with different overall statuses
-    journal_uuid_pe = "journal-pending-entities"
-    journal_uuid_ed = "journal-entities-done"
-    journal_uuid_pr = "journal-pending-relations"
-    journal_uuid_comp = "journal-completed"
-
-    await curation_manager_db.create_journal_for_curation(journal_uuid_pe, "Pending entities text")
-    await curation_manager_db.create_journal_for_curation(journal_uuid_ed, "Entities done text")
-    await curation_manager_db.update_journal_status(journal_uuid_ed, "ENTITIES_DONE")
-    await curation_manager_db.create_journal_for_curation(journal_uuid_pr, "Pending relations text")
-    await curation_manager_db.update_journal_status(journal_uuid_pr, "PENDING_RELATIONS")
-    await curation_manager_db.create_journal_for_curation(journal_uuid_comp, "Completed text")
-    await curation_manager_db.update_journal_status(journal_uuid_comp, "COMPLETED")
-
-    # Setup entity curation items
-    entity_uuid_pending = str(sample_person_entity.uuid)
-    entity_uuid_accepted = "entity-accepted-1"
-    entity_uuid_rejected = "entity-rejected-1"
-
+    # 1. Journal PENDING_ENTITIES & Entity PENDING
+    # This call creates the journal and sets its status to PENDING_ENTITIES
+    # and queues one pending entity.
+    entity_pending_uuid = str(sample_person_entity.uuid)
     await curation_manager_db.queue_entities_for_curation(
-        journal_uuid_pe, "some text", [sample_entity_span_mapping]
+        journal_pe_uuid, "Text for pending entities journal", [sample_entity_span_mapping]
     )
-    # Add an accepted entity to a different journal (or same, for entity counts)
+
+    # 2. Journal ENTITIES_DONE & Entity ACCEPTED
+    entity_accepted_uuid = "entity-accepted-1"
     await curation_manager_db.queue_entities_for_curation(
-        journal_uuid_ed, "some text", [
-            EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_uuid_accepted}),
-                              spans=sample_entity_span_mapping.spans)]
+        journal_ed_uuid, "Text for entities done journal",
+        [EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_accepted_uuid}),
+                           spans=sample_entity_span_mapping.spans)]
     )
-    await curation_manager_db.accept_entity(journal_uuid_ed, entity_uuid_accepted, sample_person_entity.model_copy(
-        update={'uuid': entity_uuid_accepted}).model_dump(mode='json'))
+    await curation_manager_db.accept_entity(journal_ed_uuid, entity_accepted_uuid,
+                                            sample_person_entity.model_copy(update={'uuid': entity_accepted_uuid}).model_dump(mode='json'))
+    await curation_manager_db.complete_entity_phase(journal_ed_uuid)
 
-    # Add a rejected entity
+    # 3. Journal PENDING_RELATIONS & Relationship PENDING
+    # First, move through the entity phase
+    entity_for_pr_uuid = "entity-for-pr-1"
     await curation_manager_db.queue_entities_for_curation(
-        journal_uuid_pr, "some text", [
-            EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_uuid_rejected}),
-                              spans=sample_entity_span_mapping.spans)]
+        journal_pr_uuid, "Text for pending relations journal - entities",
+        [EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_for_pr_uuid}),
+                           spans=sample_entity_span_mapping.spans)]
     )
-    await curation_manager_db.reject_entity(journal_uuid_pr, entity_uuid_rejected)
-
-    # Setup relationship curation items
-    rel_uuid_pending = str(sample_relation.uuid)
-    rel_uuid_accepted = "rel-accepted-1"
-    rel_uuid_rejected = "rel-rejected-1"
-
-    # Queue pending relationship for journal_uuid_pr
+    await curation_manager_db.accept_entity(journal_pr_uuid, entity_for_pr_uuid,
+                                            sample_person_entity.model_copy(update={'uuid': entity_for_pr_uuid}).model_dump(mode='json'))
+    await curation_manager_db.complete_entity_phase(journal_pr_uuid)
+    # Then queue relationships
+    rel_pending_uuid = str(sample_relation.uuid)
     await curation_manager_db.queue_relationships_for_curation(
-        journal_uuid_pr, [sample_relation_span_context_mapping]
+        journal_pr_uuid, [sample_relation_span_context_mapping]
     )
 
-    # Queue and accept a relationship
-    await curation_manager_db.update_journal_status(journal_uuid_comp,
-                                                    'ENTITIES_DONE')  # Temporarily set to ENTITIES_DONE to queue relationships
-    await curation_manager_db.queue_relationships_for_curation(
-        journal_uuid_comp, [
-            RelationSpanContextMapping(relation=sample_relation.model_copy(update={'uuid': rel_uuid_accepted}),
-                                       spans=sample_relation_span_context_mapping.spans,
-                                       context=sample_relation_span_context_mapping.context)]
+    # 4. Journal COMPLETED & Relationship ACCEPTED
+    # First, move through the entity phase
+    entity_for_comp_uuid = "entity-for-comp-1"
+    await curation_manager_db.queue_entities_for_curation(
+        journal_comp_uuid, "Text for completed journal - entities",
+        [EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_for_comp_uuid}),
+                           spans=sample_entity_span_mapping.spans)]
     )
-    await curation_manager_db.accept_relationship(journal_uuid_comp, rel_uuid_accepted, sample_relation.model_copy(
-        update={'uuid': rel_uuid_accepted}).model_dump(mode='json'))
-    await curation_manager_db.update_journal_status(journal_uuid_comp, 'COMPLETED')  # Reset status
+    await curation_manager_db.accept_entity(journal_comp_uuid, entity_for_comp_uuid,
+                                            sample_person_entity.model_copy(update={'uuid': entity_for_comp_uuid}).model_dump(mode='json'))
+    await curation_manager_db.complete_entity_phase(journal_comp_uuid)
+    # Then queue and accept relationship
+    rel_accepted_uuid = "rel-accepted-1"
+    await curation_manager_db.queue_relationships_for_curation(
+        journal_comp_uuid, [RelationSpanContextMapping(relation=sample_relation.model_copy(update={'uuid': rel_accepted_uuid}),
+                                                       spans=sample_relation_span_context_mapping.spans,
+                                                       context=sample_relation_span_context_mapping.context)]
+    )
+    await curation_manager_db.accept_relationship(journal_comp_uuid, rel_accepted_uuid,
+                                                  sample_relation.model_copy(update={'uuid': rel_accepted_uuid}).model_dump(mode='json'))
+    await curation_manager_db.complete_relationship_phase(journal_comp_uuid)
 
-    # Queue and reject a relationship
-    journal_uuid_temp_rel_rej = "journal-temp-rel-rej"
-    await curation_manager_db.create_journal_for_curation(journal_uuid_temp_rel_rej, "Temp rel rej text")
-    await curation_manager_db.update_journal_status(journal_uuid_temp_rel_rej, 'ENTITIES_DONE')
-    await curation_manager_db.queue_relationships_for_curation(
-        journal_uuid_temp_rel_rej, [
-            RelationSpanContextMapping(relation=sample_relation.model_copy(update={'uuid': rel_uuid_rejected}),
-                                       spans=sample_relation_span_context_mapping.spans,
-                                       context=sample_relation_span_context_mapping.context)]
+    # 5. Entity REJECTED (journal moves to ENTITIES_DONE)
+    entity_rejected_uuid = "entity-rejected-1"
+    await curation_manager_db.queue_entities_for_curation(
+        journal_re_uuid, "Text for rejected entity journal",
+        [EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_rejected_uuid}),
+                           spans=sample_entity_span_mapping.spans)]
     )
-    await curation_manager_db.reject_relationship(journal_uuid_temp_rel_rej, rel_uuid_rejected)
+    await curation_manager_db.reject_entity(journal_re_uuid, entity_rejected_uuid)
+    await curation_manager_db.complete_entity_phase(journal_re_uuid)
+
+    # 6. Relationship REJECTED (journal moves to COMPLETED)
+    # First, move through the entity phase
+    entity_for_rr_uuid = "entity-for-rr-1"
+    await curation_manager_db.queue_entities_for_curation(
+        journal_rr_uuid, "Text for rejected relationship journal - entities",
+        [EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_for_rr_uuid}),
+                           spans=sample_entity_span_mapping.spans)]
+    )
+    await curation_manager_db.accept_entity(journal_rr_uuid, entity_for_rr_uuid,
+                                            sample_person_entity.model_copy(update={'uuid': entity_for_rr_uuid}).model_dump(mode='json'))
+    await curation_manager_db.complete_entity_phase(journal_rr_uuid)
+    # Then queue and reject relationship
+    rel_rejected_uuid = "rel-rejected-1"
+    await curation_manager_db.queue_relationships_for_curation(
+        journal_rr_uuid, [RelationSpanContextMapping(relation=sample_relation.model_copy(update={'uuid': rel_rejected_uuid}),
+                                                       spans=sample_relation_span_context_mapping.spans,
+                                                       context=sample_relation_span_context_mapping.context)]
+    )
+    await curation_manager_db.reject_relationship(journal_rr_uuid, rel_rejected_uuid)
+    await curation_manager_db.complete_relationship_phase(journal_rr_uuid)
 
     stats = await curation_manager_db.get_curation_stats()
 
     assert stats["journals_pending_entities"] == 1
-    assert stats["journals_entities_done"] == 1
+    assert stats["journals_entities_done"] == 2  # j-ed and j-re
     assert stats["journals_pending_relations"] == 1
-    assert stats["journals_completed"] == 1
+    assert stats["journals_completed"] == 2  # j-comp and j-rr
     assert stats["entities_pending"] == 1
-    assert stats["entities_accepted"] == 1
+    assert stats["entities_accepted"] == 4  # one for j-ed, one for j-pr, one for j-comp, one for j-rr
     assert stats["entities_rejected"] == 1
     assert stats["relationships_pending"] == 1
     assert stats["relationships_accepted"] == 1
