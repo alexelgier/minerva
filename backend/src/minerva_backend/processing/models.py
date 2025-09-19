@@ -48,11 +48,29 @@ class JournalEntryCuration(BaseModel):
     tasks: List[CurationTask] = Field(default_factory=list, description="List of pending curation tasks")
 
 
+class CurationEntityStats(BaseModel):
+    """Entity curation statistics."""
+    total_extracted: int = Field(default=0, description="Total entities extracted")
+    accepted: int = Field(default=0, description="Total entities accepted")
+    rejected: int = Field(default=0, description="Total entities rejected")
+    pending: int = Field(default=0, description="Total entities pending")
+    acceptance_rate: float = Field(default=0.0, description="Acceptance rate (accepted / (accepted + rejected))")
+
+
+class CurationRelationshipStats(BaseModel):
+    """Relationship curation statistics."""
+    total_extracted: int = Field(default=0, description="Total relationships extracted")
+    accepted: int = Field(default=0, description="Total relationships accepted")
+    rejected: int = Field(default=0, description="Total relationships rejected")
+    pending: int = Field(default=0, description="Total relationships pending")
+    acceptance_rate: float = Field(default=0.0, description="Acceptance rate (accepted / (accepted + rejected))")
+
+
 class CurationStats(BaseModel):
     """Curation statistics model."""
-    total_pending: int = Field(default=0, description="Total pending curation tasks")
-    entities_pending: int = Field(default=0, description="Pending entity curation tasks")
-    relationships_pending: int = Field(default=0, description="Pending relationship curation tasks")
-    avg_processing_time_minutes: float = Field(default=0.0, description="Average processing time in minutes")
-    oldest_pending_age_hours: float = Field(default=0.0, description="Age of oldest pending task in hours")
-    completed_today: int = Field(default=0, description="Tasks completed today")
+    total_journals: int = Field(default=0, description="Total journals in curation")
+    pending_entities: int = Field(default=0, description="Journals pending entity curation")
+    pending_relationships: int = Field(default=0, description="Journals pending relationship curation")
+    completed: int = Field(default=0, description="Completed journals")
+    entity_stats: CurationEntityStats = Field(default_factory=CurationEntityStats)
+    relationship_stats: CurationRelationshipStats = Field(default_factory=CurationRelationshipStats)

@@ -20,7 +20,7 @@ from minerva_backend.graph.models.entities import (
 )
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping, JournalEntryCuration, \
-    CurationStats, CurationTask
+    CurationStats, CurationTask, CurationEntityStats, CurationRelationshipStats
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 ENTITY_TYPE_MAP = {
@@ -483,7 +483,22 @@ class CurationManager:
     async def get_curation_stats(self) -> CurationStats:
         """Get overall curation statistics for the dashboard"""
         async with aiosqlite.connect(self.db_path) as db:
-            # Get entity statistics
+            # Journal stats
+            async with db.execute("""
+                SELECT overall_status, COUNT(*)
+                FROM journal_curation
+                GROUP BY overall_status
+            """) as cursor:
+                journal_rows = await cursor.fetchall()
+            journal_counts = dict(journal_rows)
+
+            total_journals = sum(journal_counts.values())
+            pending_entities_journals = journal_counts.get('PENDING_ENTITIES', 0)
+            pending_relations_journals = journal_counts.get('PENDING_RELATIONS', 0) + journal_counts.get(
+                'ENTITIES_DONE', 0)
+            completed_journals = journal_counts.get('COMPLETED', 0)
+
+            # Entity stats
             async with db.execute("""
                 SELECT status, COUNT(*)
                 FROM entity_curation_items
@@ -492,7 +507,22 @@ class CurationManager:
                 entity_rows = await cursor.fetchall()
             entity_counts = dict(entity_rows)
 
-            # Get relationship statistics
+            entities_accepted = entity_counts.get('ACCEPTED', 0)
+            entities_rejected = entity_counts.get('REJECTED', 0)
+            entities_pending = entity_counts.get('PENDING', 0)
+            total_entities = entities_accepted + entities_rejected + entities_pending
+            entity_acceptance_rate = (entities_accepted / (entities_accepted + entities_rejected)) \
+                if (entities_accepted + entities_rejected) > 0 else 0.0
+
+            entity_stats = CurationEntityStats(
+                total_extracted=total_entities,
+                accepted=entities_accepted,
+                rejected=entities_rejected,
+                pending=entities_pending,
+                acceptance_rate=entity_acceptance_rate
+            )
+
+            # Relationship stats
             async with db.execute("""
                 SELECT status, COUNT(*)
                 FROM relationship_curation_items
@@ -501,34 +531,28 @@ class CurationManager:
                 rel_rows = await cursor.fetchall()
             rel_counts = dict(rel_rows)
 
-            entities_pending = entity_counts.get('PENDING', 0)
-            relationships_pending = rel_counts.get('PENDING', 0)
-            total_pending = entities_pending + relationships_pending
+            rels_accepted = rel_counts.get('ACCEPTED', 0)
+            rels_rejected = rel_counts.get('REJECTED', 0)
+            rels_pending = rel_counts.get('PENDING', 0)
+            total_rels = rels_accepted + rels_rejected + rels_pending
+            rel_acceptance_rate = (rels_accepted / (rels_accepted + rels_rejected)) \
+                if (rels_accepted + rels_rejected) > 0 else 0.0
 
-            # Get age of oldest pending task
-            oldest_pending_age_hours = 0.0
-            async with db.execute("""
-                SELECT MIN(created_at) FROM (
-                    SELECT created_at FROM entity_curation_items WHERE status = 'PENDING'
-                    UNION ALL
-                    SELECT created_at FROM relationship_curation_items WHERE status = 'PENDING'
-                )
-            """) as cursor:
-                row = await cursor.fetchone()
-                if row and row[0]:
-                    oldest_ts_str = row[0]
-                    oldest_ts = datetime.strptime(oldest_ts_str, '%Y-%m-%d %H:%M:%S')
-                    # Assuming created_at is in UTC
-                    age_delta = datetime.utcnow() - oldest_ts
-                    oldest_pending_age_hours = age_delta.total_seconds() / 3600
+            relationship_stats = CurationRelationshipStats(
+                total_extracted=total_rels,
+                accepted=rels_accepted,
+                rejected=rels_rejected,
+                pending=rels_pending,
+                acceptance_rate=rel_acceptance_rate
+            )
 
             return CurationStats(
-                total_pending=total_pending,
-                entities_pending=entities_pending,
-                relationships_pending=relationships_pending,
-                avg_processing_time_minutes=0.0,  # Not possible to calculate without completion timestamps
-                oldest_pending_age_hours=round(oldest_pending_age_hours, 2),
-                completed_today=0,  # Not possible to calculate without completion timestamps
+                total_journals=total_journals,
+                pending_entities=pending_entities_journals,
+                pending_relationships=pending_relations_journals,
+                completed=completed_journals,
+                entity_stats=entity_stats,
+                relationship_stats=relationship_stats
             )
 
     async def clear_all(self):

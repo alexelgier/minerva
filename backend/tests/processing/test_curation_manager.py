@@ -506,11 +506,16 @@ async def test_get_all_pending_curation_tasks(curation_manager_db: CurationManag
 
     all_tasks = await curation_manager_db.get_all_pending_curation_tasks()
 
-    assert all_tasks["total_pending_journals"] == 2
-    assert len(all_tasks["entity_journals"]) == 1
-    assert all_tasks["entity_journals"][0]["journal_id"] == journal_uuid_e
-    assert len(all_tasks["relationship_journals"]) == 1
-    assert all_tasks["relationship_journals"][0]["journal_id"] == journal_uuid_r
+    # Filter journals by pending entity tasks
+    entity_journals = [j for j in all_tasks if any(t.type == 'entity' for t in j.tasks)]
+    # Filter journals by pending relationship tasks
+    relationship_journals = [j for j in all_tasks if any(t.type == 'relationship' for t in j.tasks)]
+
+    assert len(all_tasks) == 2
+    assert len(entity_journals) == 1
+    assert entity_journals[0].journal_id == journal_uuid_e
+    assert len(relationship_journals) == 1
+    assert relationship_journals[0].journal_id == journal_uuid_r
 
 
 @pytest.mark.asyncio
@@ -551,24 +556,24 @@ async def test_get_curation_stats(curation_manager_db: CurationManager, sample_j
     stats = await curation_manager_db.get_curation_stats()
 
     # Verify basic journal counts
-    assert stats["total_journals"] == 3
-    assert stats["pending_entities"] == 1  # journal1_uuid
-    assert stats["pending_relationships"] == 1  # journal2_uuid
-    assert stats["completed"] == 1  # journal3_uuid
+    assert stats.total_journals == 3
+    assert stats.pending_entities == 1  # journal1_uuid
+    assert stats.pending_relationships == 1  # journal2_uuid
+    assert stats.completed == 1  # journal3_uuid
 
     # Verify entity stats
-    assert stats["entity_stats"]["total_extracted"] == 2
-    assert stats["entity_stats"]["accepted"] == 1
-    assert stats["entity_stats"]["rejected"] == 0
-    assert stats["entity_stats"]["pending"] == 1
-    assert stats["entity_stats"]["acceptance_rate"] == 1.0  # 1 accepted / 1 processed
+    assert stats.entity_stats.total_extracted == 2
+    assert stats.entity_stats.accepted == 1
+    assert stats.entity_stats.rejected == 0
+    assert stats.entity_stats.pending == 1
+    assert stats.entity_stats.acceptance_rate == 1.0  # 1 accepted / 1 processed
 
     # Verify relationship stats
-    assert stats["relationship_stats"]["total_extracted"] == 2
-    assert stats["relationship_stats"]["accepted"] == 0
-    assert stats["relationship_stats"]["rejected"] == 1
-    assert stats["relationship_stats"]["pending"] == 1
-    assert stats["relationship_stats"]["acceptance_rate"] == 0.0  # 0 accepted / 1 processed
+    assert stats.relationship_stats.total_extracted == 2
+    assert stats.relationship_stats.accepted == 0
+    assert stats.relationship_stats.rejected == 1
+    assert stats.relationship_stats.pending == 1
+    assert stats.relationship_stats.acceptance_rate == 0.0  # 0 accepted / 1 processed
 
 
 @pytest.mark.asyncio
@@ -625,9 +630,9 @@ async def test_clear_all(curation_manager_db: CurationManager, sample_journal_en
 
     # Verify get_curation_stats returns zeros after clearing
     stats = await curation_manager_db.get_curation_stats()
-    assert stats["total_journals"] == 0
-    assert stats["pending_entities"] == 0
-    assert stats["pending_relationships"] == 0
-    assert stats["completed"] == 0
-    assert stats["entity_stats"]["total_extracted"] == 0
-    assert stats["relationship_stats"]["total_extracted"] == 0
+    assert stats.total_journals == 0
+    assert stats.pending_entities == 0
+    assert stats.pending_relationships == 0
+    assert stats.completed == 0
+    assert stats.entity_stats.total_extracted == 0
+    assert stats.relationship_stats.total_extracted == 0
