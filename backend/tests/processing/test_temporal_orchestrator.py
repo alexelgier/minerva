@@ -105,12 +105,13 @@ class TestJournalProcessingWorkflow:
     @pytest.mark.asyncio
     async def test_successful_workflow_execution(
             self,
+            local_workflow_environment,
             sample_journal_entry,
             sample_entity_span_mappings,
             sample_relation_span_mappings
     ):
         """Test complete workflow execution with mocked activities"""
-        async with local_workflow_environment() as env:
+        async with local_workflow_environment as env:
             # Create mock activities that return proper data structures
             mock_activities = MagicMock(spec=PipelineActivities)
             mock_activities.extract_entities = AsyncMock(return_value=sample_entity_span_mappings)
@@ -210,10 +211,10 @@ class TestJournalProcessingWorkflow:
                 assert mock_activities.extract_entities.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_workflow_query_state(self, sample_journal_entry):
+    async def test_workflow_query_state(self, local_workflow_environment, sample_journal_entry):
         """Test querying workflow state during execution"""
 
-        async with local_workflow_environment() as env:
+        async with local_workflow_environment as env:
             # Create activities that simulate slow human curation
             mock_activities = MagicMock(spec=PipelineActivities)
             mock_activities.extract_entities = AsyncMock(return_value=[])
@@ -393,10 +394,10 @@ class TestPipelineOrchestratorIntegration:
     """Integration tests for the orchestrator"""
 
     @pytest.mark.asyncio
-    async def test_orchestrator_submit_and_status(self, sample_journal_entry):
+    async def test_orchestrator_submit_and_status(self, local_workflow_environment, sample_journal_entry):
         """Test submitting journal and checking status through orchestrator"""
 
-        async with local_workflow_environment() as env:
+        async with local_workflow_environment as env:
             # Create orchestrator
             orchestrator = PipelineOrchestrator(env.client.service_client.target)
             orchestrator.client = env.client
