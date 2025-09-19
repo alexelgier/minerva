@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 from typing import List, Dict, Any, Optional
 from uuid import uuid4
 
@@ -486,42 +487,58 @@ class CurationManager:
             "total_pending_journals": len(entity_journals) + len(relationship_journals)
         }
 
-    async def get_curation_stats(self) -> Dict[str, int]:
-        """Get comprehensive curation statistics"""
+    async def get_curation_stats(self) -> dict:
+        """Return counts of journals, entities, relationships, spans, etc. grouped by status/state."""
+        stats = defaultdict(dict)
         async with aiosqlite.connect(self.db_path) as db:
-            # Journal stats
+            db.row_factory = aiosqlite.Row
+
+            # Journal states
             async with db.execute("""
-                SELECT overall_status, COUNT(*) 
-                FROM journal_curation 
+                SELECT overall_status, COUNT(*) as cnt
+                FROM journal_curation
                 GROUP BY overall_status
             """) as cursor:
-                journal_stats = dict(await cursor.fetchall())
+                stats["journals"] = {row["overall_status"]: row["cnt"] async for row in cursor}
 
-            # Entity stats
+            # Entity statuses
             async with db.execute("""
-                SELECT status, COUNT(*) 
-                FROM entity_curation_items 
+                SELECT status, COUNT(*) as cnt
+                FROM entity_curation_items
                 GROUP BY status
             """) as cursor:
-                entity_stats = dict(await cursor.fetchall())
+                stats["entities"] = {row["status"]: row["cnt"] async for row in cursor}
 
-            # Relationship stats
+            # Relationship statuses
             async with db.execute("""
-                SELECT status, COUNT(*) 
-                FROM relationship_curation_items 
+                SELECT status, COUNT(*) as cnt
+                FROM relationship_curation_items
                 GROUP BY status
             """) as cursor:
-                relationship_stats = dict(await cursor.fetchall())
+                stats["relationships"] = {row["status"]: row["cnt"] async for row in cursor}
 
-            return {
-                "journals_pending_entities": journal_stats.get("PENDING_ENTITIES", 0),
-                "journals_entities_done": journal_stats.get("ENTITIES_DONE", 0),
-                "journals_pending_relations": journal_stats.get("PENDING_RELATIONS", 0),
-                "journals_completed": journal_stats.get("COMPLETED", 0),
-                "entities_pending": entity_stats.get("PENDING", 0),
-                "entities_accepted": entity_stats.get("ACCEPTED", 0),
-                "entities_rejected": entity_stats.get("REJECTED", 0),
-                "relationships_pending": relationship_stats.get("PENDING", 0),
-                "relationships_accepted": relationship_stats.get("ACCEPTED", 0),
-                "relationships_rejected": relationship_stats.get("REJECTED", 0)
-            }
+            # Span count
+            async with db.execute("""
+                SELECT COUNT(*) as cnt FROM span_curation_items
+            """) as cursor:
+                row = await cursor.fetchone()
+                stats["spans"] = row["cnt"] if row else 0
+
+            # Relationship context count
+            async with db.execute("""
+                SELECT COUNT(*) as cnt FROM relationship_context_items
+            """) as cursor:
+                row = await cursor.fetchone()
+                stats["relationship_contexts"] = row["cnt"] if row else 0
+
+        return dict(stats)
+
+    async def clear_all(self):
+        """Wipe all rows from every table."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM relationship_context_items")
+            await db.execute("DELETE FROM span_curation_items")
+            await db.execute("DELETE FROM relationship_curation_items")
+            await db.execute("DELETE FROM entity_curation_items")
+            await db.execute("DELETE FROM journal_curation")
+            await db.commit()
