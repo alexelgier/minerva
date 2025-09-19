@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from minerva_backend.processing.models import JournalEntryCuration
+from minerva_backend.processing.models import JournalEntryCuration, CurationStats
 
 
 # ===== REQUEST MODELS =====
@@ -105,14 +105,9 @@ class PendingPipelinesResponse(BaseResponse):
     total_count: int = Field(default=0, description="Total number of pending pipelines")
 
 
-class CurationStatsResponse(BaseResponse):
+class CurationStatsResponse(BaseResponse, CurationStats):
     """Curation statistics response model."""
-    total_pending: int = Field(default=0, description="Total pending curation tasks")
-    entities_pending: int = Field(default=0, description="Pending entity curation tasks")
-    relationships_pending: int = Field(default=0, description="Pending relationship curation tasks")
-    avg_processing_time_minutes: float = Field(default=0.0, description="Average processing time in minutes")
-    oldest_pending_age_hours: float = Field(default=0.0, description="Age of oldest pending task in hours")
-    completed_today: int = Field(default=0, description="Tasks completed today")
+    pass
 
 
 class PendingCurationResponse(BaseResponse):

@@ -46,3 +46,13 @@ class JournalEntryCuration(BaseModel):
     date: date_type = Field(..., description="Fecha de la entrada del diario")
     entry_text: str | None = Field(default=None, description="El texto principal de la entrada del diario")
     tasks: List[CurationTask] = Field(default_factory=list, description="List of pending curation tasks")
+
+
+class CurationStats(BaseModel):
+    """Curation statistics model."""
+    total_pending: int = Field(default=0, description="Total pending curation tasks")
+    entities_pending: int = Field(default=0, description="Pending entity curation tasks")
+    relationships_pending: int = Field(default=0, description="Pending relationship curation tasks")
+    avg_processing_time_minutes: float = Field(default=0.0, description="Average processing time in minutes")
+    oldest_pending_age_hours: float = Field(default=0.0, description="Age of oldest pending task in hours")
+    completed_today: int = Field(default=0, description="Tasks completed today")
