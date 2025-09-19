@@ -23,7 +23,9 @@ from minerva_backend.processing.temporal_orchestrator import (
 
 @pytest_asyncio.fixture
 async def local_workflow_environment():
-    env = await WorkflowEnvironment.start_local()
+    env = await WorkflowEnvironment.start_local(
+        data_converter=pydantic_data_converter
+    )
     yield env
 
 
@@ -135,8 +137,7 @@ class TestJournalProcessingWorkflow:
                     mock_activities.submit_relationship_curation,
                     mock_activities.wait_for_relationship_curation,
                     mock_activities.write_to_knowledge_graph,
-                ],
-                data_converter=pydantic_data_converter
+                ]
             )
 
             async with worker:
@@ -163,7 +164,7 @@ class TestJournalProcessingWorkflow:
     async def test_entity_extraction_failure_with_retry(self, sample_journal_entry):
         """Test that entity extraction retries on failure"""
 
-        async with WorkflowEnvironment() as env:
+        async with WorkflowEnvironment(data_converter=pydantic_data_converter) as env:
             mock_activities = MagicMock(spec=PipelineActivities)
 
             # First two calls fail, third succeeds
@@ -193,8 +194,7 @@ class TestJournalProcessingWorkflow:
                     mock_activities.submit_relationship_curation,
                     mock_activities.wait_for_relationship_curation,
                     mock_activities.write_to_knowledge_graph,
-                ],
-                data_converter=pydantic_data_converter
+                ]
             )
 
             async with worker:
@@ -245,8 +245,7 @@ class TestJournalProcessingWorkflow:
                     mock_activities.submit_relationship_curation,
                     mock_activities.wait_for_relationship_curation,
                     mock_activities.write_to_knowledge_graph,
-                ],
-                data_converter=pydantic_data_converter
+                ]
             )
 
             async with worker:
@@ -409,8 +408,7 @@ class TestPipelineOrchestratorIntegration:
                 env.client,
                 task_queue="minerva-pipeline",
                 workflows=[JournalProcessingWorkflow],
-                activities=list(mock_activities.values()),
-                data_converter=pydantic_data_converter
+                activities=list(mock_activities.values())
             )
 
             async with worker:
