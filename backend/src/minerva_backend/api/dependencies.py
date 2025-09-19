@@ -2,6 +2,7 @@
 import asyncio
 import logging
 from typing import Optional
+
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, HTTPException
 
@@ -9,7 +10,7 @@ from minerva_backend.containers import Container
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.processing.curation_manager import CurationManager
 from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator
-from .exceptions import ServiceUnavailableError, ProcessingError
+from .exceptions import ServiceUnavailableError
 from ..config import settings
 
 logger = logging.getLogger(__name__)
