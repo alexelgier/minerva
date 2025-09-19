@@ -12,8 +12,6 @@ from .models import SuccessResponse
 from .routers import journal, pipeline, curation, health, processing
 
 
-
-
 # --- FastAPI App Initialization ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,16 +36,13 @@ backend_app.add_middleware(
 )
 
 backend_app.add_exception_handler(MinervaHTTPException, minerva_exception_handler)
+backend_app.add_exception_handler(MinervaHTTPException, minerva_exception_handler)
 
 backend_app.include_router(journal.router)
 backend_app.include_router(pipeline.router)
 backend_app.include_router(curation.router)
 backend_app.include_router(health.router)
 backend_app.include_router(processing.router)
-
-
-
-
 
 
 # ===== OBSIDIAN INTEGRATION ENDPOINTS =====

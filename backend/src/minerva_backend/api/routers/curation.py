@@ -30,24 +30,12 @@ async def get_pending_curation(
     human review and approval.
     """
     try:
-        pending_tasks = await curation_manager.get_all_pending_curation_tasks()
+        pending = await curation_manager.get_all_pending_curation_tasks()
         stats_dict = await curation_manager.get_curation_stats()
 
         # Convert raw task data to CurationTask models
         formatted_tasks = []
-        for task in pending_tasks:
-            try:
-                formatted_task = CurationTask(
-                    id=task.get('id', ''),
-                    journal_id=task.get('journal_id', ''),
-                    type=task.get('type', 'entity'),
-                    status=task.get('status', 'pending'),
-                    created_at=task.get('created_at'),
-                    data=task.get('data', {})
-                )
-                formatted_tasks.append(formatted_task)
-            except Exception as e:
-                logger.warning(f"Failed to format task {task.get('id', 'unknown')}: {e}")
+        # TODO fill formatted_tasks with CurationTask
 
         stats = CurationStatsResponse(**stats_dict)
 

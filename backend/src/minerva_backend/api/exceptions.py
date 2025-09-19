@@ -1,9 +1,9 @@
 """Custom exceptions for the Minerva Backend API."""
 import logging
-from typing import Any, Dict, Optional, Callable, TypeVar
 from functools import wraps
+from typing import Any, Dict, Optional, Callable, TypeVar
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -91,9 +91,9 @@ def handle_errors(default_status_code: int = 500):
     return decorator
 
 
-async def minerva_exception_handler(request: Request, exc: MinervaHTTPException) -> JSONResponse:
+def minerva_exception_handler(request: Request, exc: Exception) -> Response:
     """Custom exception handler for MinervaHTTPException instances."""
-
+    assert isinstance(exc, MinervaHTTPException)
     content = {
         "error": {
             "code": exc.error_code,
