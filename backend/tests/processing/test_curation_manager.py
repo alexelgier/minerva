@@ -14,6 +14,30 @@ from minerva_backend.graph.models.relations import Relation
 from minerva_backend.processing.curation_manager import CurationManager
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_relationships import RelationshipContext
+from uuid import uuid4
+
+
+def create_person(name: str, uuid_str: str = None) -> Person:
+    return Person(
+        uuid=uuid_str if uuid_str else str(uuid4()),
+        name=name,
+        summary_short=f"A person named {name}",
+        summary=f"Details for {name}",
+        occupation="Tester"
+    )
+
+def create_span(text: str, owner_uuid: str, start: int = 0, end: int = 0, uuid_str: str = None) -> Span:
+    return Span(uuid=uuid_str if uuid_str else str(uuid4()), text=text, start=start, end=end, document_uuid=owner_uuid)
+
+def create_relation(source_uuid: str, target_uuid: str, rel_type: str, uuid_str: str = None) -> Relation:
+    return Relation(
+        uuid=uuid_str if uuid_str else str(uuid4()),
+        source=source_uuid,
+        target=target_uuid,
+        proposed_types=[rel_type],
+        summary_short=f"{source_uuid} {rel_type} {target_uuid}",
+        summary=f"Relationship details for {source_uuid} {rel_type} {target_uuid}"
+    )
 
 
 @pytest_asyncio.fixture
@@ -488,5 +512,178 @@ async def test_get_all_pending_curation_tasks(curation_manager_db: CurationManag
 
 
 @pytest.mark.asyncio
-async def test_get_curation_stats():
-    # TODO
+async def test_get_curation_stats(curation_manager_db: CurationManager):
+    # Journal 1: PENDING_ENTITIES (1 pending entity, 1 accepted, 1 rejected)
+    journal_uuid_1 = str(uuid4())
+    entity_1a_uuid = str(uuid4()) # pending
+    entity_1b_uuid = str(uuid4()) # accepted
+    entity_1c_uuid = str(uuid4()) # rejected
+    span_1a_uuid = str(uuid4())
+    span_1b_uuid = str(uuid4())
+    span_1c_uuid = str(uuid4())
+
+    person_1a = create_person("Alice", uuid_str=entity_1a_uuid)
+    person_1b = create_person("Bob", uuid_str=entity_1b_uuid)
+    person_1c = create_person("Charlie", uuid_str=entity_1c_uuid)
+
+    span_1a = create_span("Alice", entity_1a_uuid, uuid_str=span_1a_uuid)
+    span_1b = create_span("Bob", entity_1b_uuid, uuid_str=span_1b_uuid)
+    span_1c = create_span("Charlie", entity_1c_uuid, uuid_str=span_1c_uuid)
+
+    await curation_manager_db.queue_entities_for_curation(
+        journal_uuid_1, "Journal 1 text with Alice, Bob, Charlie.",
+        [
+            EntitySpanMapping(entity=person_1a, spans={span_1a}),
+            EntitySpanMapping(entity=person_1b, spans={span_1b}),
+            EntitySpanMapping(entity=person_1c, spans={span_1c}),
+        ]
+    )
+    await curation_manager_db.accept_entity(journal_uuid_1, entity_1b_uuid, person_1b.model_dump())
+    await curation_manager_db.reject_entity(journal_uuid_1, entity_1c_uuid)
+
+    # Journal 2: ENTITIES_DONE (1 accepted entity)
+    journal_uuid_2 = str(uuid4())
+    entity_2a_uuid = str(uuid4()) # accepted
+    span_2a_uuid = str(uuid4())
+
+    person_2a = create_person("David", uuid_str=entity_2a_uuid)
+    span_2a = create_span("David", entity_2a_uuid, uuid_str=span_2a_uuid)
+
+    await curation_manager_db.queue_entities_for_curation(
+        journal_uuid_2, "Journal 2 text with David.",
+        [EntitySpanMapping(entity=person_2a, spans={span_2a})]
+    )
+    await curation_manager_db.accept_entity(journal_uuid_2, entity_2a_uuid, person_2a.model_dump())
+    await curation_manager_db.complete_entity_phase(journal_uuid_2)
+
+    # Journal 3: PENDING_RELATIONS (1 pending relationship, 1 accepted relationship)
+    journal_uuid_3 = str(uuid4())
+    # Entities to be sources/targets of relationships
+    entity_3a_uuid = str(uuid4()) # Eve
+    entity_3b_uuid = str(uuid4()) # Frank
+    span_3a_uuid = str(uuid4())
+    span_3b_uuid = str(uuid4())
+
+    person_3a = create_person("Eve", uuid_str=entity_3a_uuid)
+    person_3b = create_person("Frank", uuid_str=entity_3b_uuid)
+    span_3a = create_span("Eve", entity_3a_uuid, uuid_str=span_3a_uuid)
+    span_3b = create_span("Frank", entity_3b_uuid, uuid_str=span_3b_uuid)
+
+    await curation_manager_db.queue_entities_for_curation(
+        journal_uuid_3, "Journal 3 text with Eve and Frank.",
+        [
+            EntitySpanMapping(entity=person_3a, spans={span_3a}),
+            EntitySpanMapping(entity=person_3b, spans={span_3b}),
+        ]
+    )
+    await curation_manager_db.accept_entity(journal_uuid_3, entity_3a_uuid, person_3a.model_dump())
+    await curation_manager_db.accept_entity(journal_uuid_3, entity_3b_uuid, person_3b.model_dump())
+    await curation_manager_db.complete_entity_phase(journal_uuid_3)
+
+    rel_3a_uuid = str(uuid4()) # pending relationship
+    rel_3b_uuid = str(uuid4()) # accepted relationship
+    rel_span_3a_uuid = str(uuid4())
+    rel_span_3b_uuid = str(uuid4())
+
+    relation_3a = create_relation(entity_3a_uuid, entity_3b_uuid, "KNOWS", uuid_str=rel_3a_uuid)
+    relation_3b = create_relation(entity_3b_uuid, entity_3a_uuid, "FRIENDS_WITH", uuid_str=rel_3b_uuid)
+    rel_span_3a = create_span("knows", rel_3a_uuid, uuid_str=rel_span_3a_uuid)
+    rel_span_3b = create_span("friends", rel_3b_uuid, uuid_str=rel_span_3b_uuid)
+    rel_context_3a = RelationshipContext(entity_uuid=entity_3a_uuid, sub_type=["subject"])
+    rel_context_3b = RelationshipContext(entity_uuid=entity_3b_uuid, sub_type=["object"])
+
+
+    await curation_manager_db.queue_relationships_for_curation(
+        journal_uuid_3,
+        [
+            RelationSpanContextMapping(relation=relation_3a, spans={rel_span_3a}, context={rel_context_3a}),
+            RelationSpanContextMapping(relation=relation_3b, spans={rel_span_3b}, context={rel_context_3b}),
+        ]
+    )
+    await curation_manager_db.accept_relationship(journal_uuid_3, rel_3b_uuid, relation_3b.model_dump())
+
+    # Journal 4: COMPLETED
+    journal_uuid_4 = str(uuid4())
+    await curation_manager_db.create_journal_for_curation(journal_uuid_4, "Journal 4 text, completed.")
+    await curation_manager_db.update_journal_status(journal_uuid_4, 'ENTITIES_DONE')
+    await curation_manager_db.update_journal_status(journal_uuid_4, 'COMPLETED')
+
+    stats = await curation_manager_db.get_curation_stats()
+
+    # Assertions
+    assert stats["journals"].get("PENDING_ENTITIES", 0) == 1
+    assert stats["journals"].get("ENTITIES_DONE", 0) == 1
+    assert stats["journals"].get("PENDING_RELATIONS", 0) == 1
+    assert stats["journals"].get("COMPLETED", 0) == 1
+
+    assert stats["entities"].get("PENDING", 0) == 1 # Alice (J1)
+    assert stats["entities"].get("ACCEPTED", 0) == 4 # Bob (J1), David (J2), Eve (J3), Frank (J3)
+    assert stats["entities"].get("REJECTED", 0) == 1 # Charlie (J1)
+
+    assert stats["relationships"].get("PENDING", 0) == 1 # relation_3a (J3)
+    assert stats["relationships"].get("ACCEPTED", 0) == 1 # relation_3b (J3)
+
+    assert stats["spans"] == 8 # 3 (J1 entities) + 1 (J2 entity) + 2 (J3 entities) + 2 (J3 relationships)
+    assert stats["relationship_contexts"] == 2 # 2 (J3 relationships)
+
+
+@pytest.mark.asyncio
+async def test_clear_all(curation_manager_db: CurationManager):
+    journal_uuid_c = str(uuid4())
+    entity_c_uuid = str(uuid4())
+    span_c_uuid = str(uuid4())
+    relation_c_uuid = str(uuid4())
+    rel_span_c_uuid = str(uuid4())
+    entity_source_c_uuid = str(uuid4())
+    entity_target_c_uuid = str(uuid4())
+
+    # Create a journal, queue entities, accept them, complete entity phase
+    person_c = create_person("Clearable Person", uuid_str=entity_c_uuid)
+    span_c = create_span("Clearable Person", entity_c_uuid, uuid_str=span_c_uuid)
+    entity_span_mapping_c = EntitySpanMapping(entity=person_c, spans={span_c})
+
+    await curation_manager_db.queue_entities_for_curation(
+        journal_uuid_c, "Journal to be cleared.", [entity_span_mapping_c]
+    )
+    await curation_manager_db.accept_entity(journal_uuid_c, entity_c_uuid, person_c.model_dump())
+    await curation_manager_db.complete_entity_phase(journal_uuid_c)
+
+    # Add two user-added entities for the relationship (these won't have initial spans from queue_entities)
+    person_source_c = create_person("Rel Source", uuid_str=entity_source_c_uuid)
+    person_target_c = create_person("Rel Target", uuid_str=entity_target_c_uuid)
+    await curation_manager_db.accept_entity(journal_uuid_c, str(uuid4()), person_source_c.model_dump(), is_user_added=True)
+    await curation_manager_db.accept_entity(journal_uuid_c, str(uuid4()), person_target_c.model_dump(), is_user_added=True)
+
+    # Queue a relationship, accept it, complete relationship phase
+    relation_c = create_relation(entity_source_c_uuid, entity_target_c_uuid, "RELATES_TO", uuid_str=relation_c_uuid)
+    rel_span_c = create_span("relates to", relation_c_uuid, uuid_str=rel_span_c_uuid)
+    rel_context_c = RelationshipContext(entity_uuid=entity_source_c_uuid, sub_type=["subject"])
+    relation_span_context_mapping_c = RelationSpanContextMapping(relation=relation_c, spans={rel_span_c}, context={rel_context_c})
+    await curation_manager_db.queue_relationships_for_curation(journal_uuid_c, [relation_span_context_mapping_c])
+    await curation_manager_db.accept_relationship(journal_uuid_c, relation_c_uuid, relation_c.model_dump())
+    await curation_manager_db.complete_relationship_phase(journal_uuid_c)
+
+    # Verify data exists before clearing
+    stats_before = await curation_manager_db.get_curation_stats()
+    assert stats_before["journals"].get("COMPLETED", 0) == 1
+    assert stats_before["entities"].get("ACCEPTED", 0) == 3 # 1 (person_c) + 2 (person_source_c, person_target_c)
+    assert stats_before["relationships"].get("ACCEPTED", 0) == 1
+    assert stats_before["spans"] == 2 # 1 for person_c, 1 for relation_c
+    assert stats_before["relationship_contexts"] == 1 # for relation_c
+
+    await curation_manager_db.clear_all()
+
+    # Verify all tables are empty
+    stats_after = await curation_manager_db.get_curation_stats()
+    assert stats_after["journals"] == {}
+    assert stats_after["entities"] == {}
+    assert stats_after["relationships"] == {}
+    assert stats_after["spans"] == 0
+    assert stats_after["relationship_contexts"] == 0
+
+    async with aiosqlite.connect(curation_manager_db.db_path) as db:
+        for table_name in ["journal_curation", "entity_curation_items", "relationship_curation_items",
+                           "span_curation_items", "relationship_context_items"]:
+            cursor = await db.execute(f"SELECT COUNT(*) FROM {table_name}")
+            count = (await cursor.fetchone())[0]
+            assert count == 0, f"Table {table_name} should be empty"
