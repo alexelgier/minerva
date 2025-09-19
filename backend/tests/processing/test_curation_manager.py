@@ -9,8 +9,8 @@ import pytest
 import pytest_asyncio
 
 from minerva_backend.graph.models.documents import Span, JournalEntry
-from minerva_backend.graph.models.entities import Person, EntityType
-from minerva_backend.graph.models.relations import Relation, RelationshipType
+from minerva_backend.graph.models.entities import Person
+from minerva_backend.graph.models.relations import Relation
 from minerva_backend.processing.curation_manager import CurationManager
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_relationships import RelationshipContext
@@ -518,13 +518,18 @@ async def test_get_curation_stats(curation_manager_db: CurationManager,
     )
     # Add an accepted entity to a different journal (or same, for entity counts)
     await curation_manager_db.queue_entities_for_curation(
-        journal_uuid_ed, "some text", [EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_uuid_accepted}), spans=sample_entity_span_mapping.spans)]
+        journal_uuid_ed, "some text", [
+            EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_uuid_accepted}),
+                              spans=sample_entity_span_mapping.spans)]
     )
-    await curation_manager_db.accept_entity(journal_uuid_ed, entity_uuid_accepted, sample_person_entity.model_copy(update={'uuid': entity_uuid_accepted}).model_dump())
+    await curation_manager_db.accept_entity(journal_uuid_ed, entity_uuid_accepted, sample_person_entity.model_copy(
+        update={'uuid': entity_uuid_accepted}).model_dump(mode='json'))
 
     # Add a rejected entity
     await curation_manager_db.queue_entities_for_curation(
-        journal_uuid_pr, "some text", [EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_uuid_rejected}), spans=sample_entity_span_mapping.spans)]
+        journal_uuid_pr, "some text", [
+            EntitySpanMapping(entity=sample_person_entity.model_copy(update={'uuid': entity_uuid_rejected}),
+                              spans=sample_entity_span_mapping.spans)]
     )
     await curation_manager_db.reject_entity(journal_uuid_pr, entity_uuid_rejected)
 
@@ -539,22 +544,29 @@ async def test_get_curation_stats(curation_manager_db: CurationManager,
     )
 
     # Queue and accept a relationship
-    await curation_manager_db.update_journal_status(journal_uuid_comp, 'ENTITIES_DONE') # Temporarily set to ENTITIES_DONE to queue relationships
+    await curation_manager_db.update_journal_status(journal_uuid_comp,
+                                                    'ENTITIES_DONE')  # Temporarily set to ENTITIES_DONE to queue relationships
     await curation_manager_db.queue_relationships_for_curation(
-        journal_uuid_comp, [RelationSpanContextMapping(relation=sample_relation.model_copy(update={'uuid': rel_uuid_accepted}), spans=sample_relation_span_context_mapping.spans, context=sample_relation_span_context_mapping.context)]
+        journal_uuid_comp, [
+            RelationSpanContextMapping(relation=sample_relation.model_copy(update={'uuid': rel_uuid_accepted}),
+                                       spans=sample_relation_span_context_mapping.spans,
+                                       context=sample_relation_span_context_mapping.context)]
     )
-    await curation_manager_db.accept_relationship(journal_uuid_comp, rel_uuid_accepted, sample_relation.model_copy(update={'uuid': rel_uuid_accepted}).model_dump())
-    await curation_manager_db.update_journal_status(journal_uuid_comp, 'COMPLETED') # Reset status
+    await curation_manager_db.accept_relationship(journal_uuid_comp, rel_uuid_accepted, sample_relation.model_copy(
+        update={'uuid': rel_uuid_accepted}).model_dump(mode='json'))
+    await curation_manager_db.update_journal_status(journal_uuid_comp, 'COMPLETED')  # Reset status
 
     # Queue and reject a relationship
     journal_uuid_temp_rel_rej = "journal-temp-rel-rej"
     await curation_manager_db.create_journal_for_curation(journal_uuid_temp_rel_rej, "Temp rel rej text")
     await curation_manager_db.update_journal_status(journal_uuid_temp_rel_rej, 'ENTITIES_DONE')
     await curation_manager_db.queue_relationships_for_curation(
-        journal_uuid_temp_rel_rej, [RelationSpanContextMapping(relation=sample_relation.model_copy(update={'uuid': rel_uuid_rejected}), spans=sample_relation_span_context_mapping.spans, context=sample_relation_span_context_mapping.context)]
+        journal_uuid_temp_rel_rej, [
+            RelationSpanContextMapping(relation=sample_relation.model_copy(update={'uuid': rel_uuid_rejected}),
+                                       spans=sample_relation_span_context_mapping.spans,
+                                       context=sample_relation_span_context_mapping.context)]
     )
     await curation_manager_db.reject_relationship(journal_uuid_temp_rel_rej, rel_uuid_rejected)
-
 
     stats = await curation_manager_db.get_curation_stats()
 
