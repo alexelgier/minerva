@@ -105,9 +105,9 @@ class PendingPipelinesResponse(BaseResponse):
     total_count: int = Field(default=0, description="Total number of pending pipelines")
 
 
-class CurationStatsResponse(BaseResponse, CurationStats):
+class CurationStatsResponse(BaseResponse):
     """Curation statistics response model."""
-    pass
+    stats: CurationStats = Field(..., description="Curation statistics")
 
 
 class PendingCurationResponse(BaseResponse):

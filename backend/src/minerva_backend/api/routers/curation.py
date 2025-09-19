@@ -1,19 +1,19 @@
 """Human-in-the-loop curation endpoints."""
 import logging
 from typing import Dict, Any
+
 from fastapi import APIRouter, Depends
 
 from minerva_backend.processing.curation_manager import CurationManager
-from ..models import (
-    CurationAction, SuccessResponse, PendingCurationResponse,
-    CurationStatsResponse, CurationTask
-)
 from ..dependencies import (
     get_curation_manager, validate_journal_id,
     validate_entity_id, validate_relationship_id
 )
 from ..exceptions import handle_errors, NotFoundError, ValidationError
-from ...processing.models import CurationStats
+from ..models import (
+    CurationAction, SuccessResponse, PendingCurationResponse,
+    CurationStatsResponse
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/curation", tags=["curation"])
@@ -57,7 +57,7 @@ async def get_curation_stats(
     """
     try:
         stats_dict = await curation_manager.get_curation_stats()
-        return CurationStatsResponse(**stats_dict)
+        return CurationStatsResponse(stats=stats_dict)
 
     except Exception as e:
         logger.error(f"Failed to get curation stats: {e}")
@@ -116,37 +116,6 @@ async def handle_entity_curation(
 
     except Exception as e:
         logger.error(f"Failed to handle entity curation: {e}")
-        raise
-
-
-@router.get("/entities/{journal_id}")
-@handle_errors(404)
-async def get_entity_curation_tasks(
-        journal_id: str = Depends(validate_journal_id),
-        curation_manager: CurationManager = Depends(get_curation_manager)
-) -> Dict[str, Any]:
-    """
-    Get all entity curation tasks for a specific journal entry.
-
-    Returns the entities that need human review along with
-    their extracted properties and confidence scores.
-    """
-    try:
-        # This method might need to be implemented in CurationManager
-        tasks = await curation_manager.get_entity_curation_tasks(journal_id)
-
-        if not tasks:
-            raise NotFoundError("Journal", journal_id)
-
-        return {
-            "success": True,
-            "journal_id": journal_id,
-            "entity_tasks": tasks,
-            "total_entities": len(tasks)
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to get entity curation tasks for {journal_id}: {e}")
         raise
 
 
@@ -229,37 +198,6 @@ async def handle_relationship_curation(
 
     except Exception as e:
         logger.error(f"Failed to handle relationship curation: {e}")
-        raise
-
-
-@router.get("/relationships/{journal_id}")
-@handle_errors(404)
-async def get_relationship_curation_tasks(
-        journal_id: str = Depends(validate_journal_id),
-        curation_manager: CurationManager = Depends(get_curation_manager)
-) -> Dict[str, Any]:
-    """
-    Get all relationship curation tasks for a specific journal entry.
-
-    Returns the relationships that need human review along with
-    their source/target entities and confidence scores.
-    """
-    try:
-        # This method might need to be implemented in CurationManager
-        tasks = await curation_manager.get_relationship_curation_tasks(journal_id)
-
-        if not tasks:
-            raise NotFoundError("Journal", journal_id)
-
-        return {
-            "success": True,
-            "journal_id": journal_id,
-            "relationship_tasks": tasks,
-            "total_relationships": len(tasks)
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to get relationship curation tasks for {journal_id}: {e}")
         raise
 
 
