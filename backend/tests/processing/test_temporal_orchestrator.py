@@ -4,12 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from minerva_backend.graph.models.documents import Span
-from minerva_backend.graph.models.entities import Person, Emotion
+from minerva_backend.graph.models.entities import Person
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 from minerva_backend.processing.temporal_orchestrator import (
@@ -20,47 +21,54 @@ from minerva_backend.processing.temporal_orchestrator import (
 )
 
 
+@pytest_asyncio.fixture
+async def local_workflow_environment():
+    env = await WorkflowEnvironment.start_local()
+    yield env
+
+
 @pytest.fixture
 def sample_entity_span_mappings(sample_journal_entry):
     """Create sample EntitySpanMapping objects with proper structure"""
     # Create Person entity
     person = Person(
         uuid=str(uuid4()),
-        full_name="María",
-        occupation="unknown"
+        name="María",
+        occupation="unknown",
+        summary="summary María",
+        summary_short="summary short María"
     )
     person_span = Span(
         uuid=str(uuid4()),
         text="María",
-        start_char=16,
-        end_char=21,
+        start=16,
+        end=21,
         parent_document_uuid=sample_journal_entry.uuid
     )
     person_mapping = EntitySpanMapping(
         entity=person,
         spans={person_span}
     )
-
-    # Create Emotion entity
-    emotion = Emotion(
+    person2 = Person(
         uuid=str(uuid4()),
-        emotion_name="feliz",
-        emotion_type="joy",
-        valence_score=8
+        name="Jose",
+        occupation="unknown",
+        summary="summary Jose",
+        summary_short="summary short Jose"
     )
-    emotion_span = Span(
+    person_span2 = Span(
         uuid=str(uuid4()),
-        text="muy feliz",
-        start_char=50,
-        end_char=59,
+        text="Jose",
+        start=6,
+        end=26,
         parent_document_uuid=sample_journal_entry.uuid
     )
-    emotion_mapping = EntitySpanMapping(
-        entity=emotion,
-        spans={emotion_span}
+    person_mapping2 = EntitySpanMapping(
+        entity=person2,
+        spans={person_span2}
     )
 
-    return [person_mapping, emotion_mapping]
+    return [person_mapping, person_mapping2]
 
 
 @pytest.fixture
@@ -68,16 +76,18 @@ def sample_relation_span_mappings(sample_entity_span_mappings, sample_journal_en
     """Create sample RelationSpanContextMapping objects"""
     relation = Relation(
         uuid=str(uuid4()),
-        source_uuid=sample_entity_span_mappings[0].entity.uuid,  # Person
-        target_uuid=sample_entity_span_mappings[1].entity.uuid,  # Emotion
-        relation_type="FEELS"
+        source=sample_entity_span_mappings[0].entity.uuid,  # Person
+        target=sample_entity_span_mappings[1].entity.uuid,  # Person2
+        proposed_types=["IS_FRIEND", "IS_COWORKER"],
+        summary_short="summary short",
+        summary="summary is longer than the summary short"
     )
 
     relation_span = Span(
         uuid=str(uuid4()),
         text="hablé con María",
-        start_char=5,
-        end_char=20,
+        start=5,
+        end=20,
         parent_document_uuid=sample_journal_entry.uuid
     )
 
@@ -100,8 +110,7 @@ class TestJournalProcessingWorkflow:
             sample_relation_span_mappings
     ):
         """Test complete workflow execution with mocked activities"""
-
-        async with WorkflowEnvironment() as env:
+        async with local_workflow_environment() as env:
             # Create mock activities that return proper data structures
             mock_activities = MagicMock(spec=PipelineActivities)
             mock_activities.extract_entities = AsyncMock(return_value=sample_entity_span_mappings)
@@ -204,7 +213,7 @@ class TestJournalProcessingWorkflow:
     async def test_workflow_query_state(self, sample_journal_entry):
         """Test querying workflow state during execution"""
 
-        async with WorkflowEnvironment() as env:
+        async with local_workflow_environment() as env:
             # Create activities that simulate slow human curation
             mock_activities = MagicMock(spec=PipelineActivities)
             mock_activities.extract_entities = AsyncMock(return_value=[])
@@ -288,8 +297,8 @@ class TestPipelineActivitiesUnit:
 
             # Verify
             assert len(result) == 2
-            assert result[0].entity.full_name == "María"
-            assert result[1].entity.emotion_name == "feliz"
+            assert result[0].entity.name == "María"
+            assert result[1].entity.name == "Jose"
             mock_extraction_service.extract_entities.assert_called_once_with(sample_journal_entry)
 
     @pytest.mark.asyncio
@@ -387,7 +396,7 @@ class TestPipelineOrchestratorIntegration:
     async def test_orchestrator_submit_and_status(self, sample_journal_entry):
         """Test submitting journal and checking status through orchestrator"""
 
-        async with WorkflowEnvironment() as env:
+        async with local_workflow_environment() as env:
             # Create orchestrator
             orchestrator = PipelineOrchestrator(env.client.service_client.target)
             orchestrator.client = env.client

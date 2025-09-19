@@ -1,5 +1,4 @@
 import json
-from collections import defaultdict
 from typing import List, Dict, Any, Optional
 from uuid import uuid4
 
@@ -209,6 +208,7 @@ class CurationManager:
                 await db.commit()
                 return new_uuid
             else:
+                curated_data['uuid'] = entity_uuid
                 cursor = await db.execute("""
                     UPDATE entity_curation_items 
                     SET curated_data_json = ?, status = 'ACCEPTED'
@@ -306,7 +306,6 @@ class CurationManager:
         async with aiosqlite.connect(self.db_path) as db:
             if is_user_added:
                 new_uuid = str(uuid4())
-                # TODO check this, could be fucking up cache
                 await db.execute("""
                     INSERT INTO relationship_curation_items 
                     (uuid, journal_id, relationship_type, curated_data_json, status, is_user_added) 
@@ -315,6 +314,7 @@ class CurationManager:
                 await db.commit()
                 return new_uuid
             else:
+                curated_data['uuid'] = relationship_uuid
                 cursor = await db.execute("""
                     UPDATE relationship_curation_items 
                     SET curated_data_json = ?, status = 'ACCEPTED'
@@ -488,50 +488,71 @@ class CurationManager:
         }
 
     async def get_curation_stats(self) -> dict:
-        """Return counts of journals, entities, relationships, spans, etc. grouped by status/state."""
-        stats = defaultdict(dict)
+        """Get overall curation statistics for the dashboard"""
         async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-
-            # Journal states
+            # Get journal counts by phase
             async with db.execute("""
-                SELECT overall_status, COUNT(*) as cnt
-                FROM journal_curation
+                SELECT overall_status, COUNT(*) 
+                FROM journal_curation 
                 GROUP BY overall_status
             """) as cursor:
-                stats["journals"] = {row["overall_status"]: row["cnt"] async for row in cursor}
+                phase_rows = await cursor.fetchall()
 
-            # Entity statuses
+            phase_counts = dict(phase_rows)
+
+            # Get entity statistics
             async with db.execute("""
-                SELECT status, COUNT(*) as cnt
-                FROM entity_curation_items
+                SELECT status, COUNT(*) 
+                FROM entity_curation_items 
                 GROUP BY status
             """) as cursor:
-                stats["entities"] = {row["status"]: row["cnt"] async for row in cursor}
+                entity_rows = await cursor.fetchall()
 
-            # Relationship statuses
+            entity_counts = dict(entity_rows)
+            total_entities = sum(entity_counts.values())
+
+            # Get relationship statistics
             async with db.execute("""
-                SELECT status, COUNT(*) as cnt
-                FROM relationship_curation_items
+                SELECT status, COUNT(*) 
+                FROM relationship_curation_items 
                 GROUP BY status
             """) as cursor:
-                stats["relationships"] = {row["status"]: row["cnt"] async for row in cursor}
+                rel_rows = await cursor.fetchall()
 
-            # Span count
-            async with db.execute("""
-                SELECT COUNT(*) as cnt FROM span_curation_items
-            """) as cursor:
-                row = await cursor.fetchone()
-                stats["spans"] = row["cnt"] if row else 0
+            rel_counts = dict(rel_rows)
+            total_relationships = sum(rel_counts.values())
 
-            # Relationship context count
-            async with db.execute("""
-                SELECT COUNT(*) as cnt FROM relationship_context_items
-            """) as cursor:
-                row = await cursor.fetchone()
-                stats["relationship_contexts"] = row["cnt"] if row else 0
+            # Calculate acceptance rates
+            entity_accepted = entity_counts.get('ACCEPTED', 0)
+            entity_rejected = entity_counts.get('REJECTED', 0)
+            entity_processed = entity_accepted + entity_rejected
+            entity_acceptance_rate = entity_accepted / entity_processed if entity_processed > 0 else 0
 
-        return dict(stats)
+            rel_accepted = rel_counts.get('ACCEPTED', 0)
+            rel_rejected = rel_counts.get('REJECTED', 0)
+            rel_processed = rel_accepted + rel_rejected
+            rel_acceptance_rate = rel_accepted / rel_processed if rel_processed > 0 else 0
+
+            return {
+                "total_journals": sum(phase_counts.values()),
+                "pending_entities": phase_counts.get('PENDING_ENTITIES', 0),
+                "pending_relationships": phase_counts.get('PENDING_RELATIONS', 0),
+                "completed": phase_counts.get('COMPLETED', 0),
+                "entity_stats": {
+                    "total_extracted": total_entities,
+                    "accepted": entity_accepted,
+                    "rejected": entity_rejected,
+                    "pending": entity_counts.get('PENDING', 0),
+                    "acceptance_rate": round(entity_acceptance_rate, 3)
+                },
+                "relationship_stats": {
+                    "total_extracted": total_relationships,
+                    "accepted": rel_accepted,
+                    "rejected": rel_rejected,
+                    "pending": rel_counts.get('PENDING', 0),
+                    "acceptance_rate": round(rel_acceptance_rate, 3)
+                }
+            }
 
     async def clear_all(self):
         """Wipe all rows from every table."""
