@@ -494,6 +494,8 @@ async def test_get_curation_stats(curation_manager_db: CurationManager,
                                   sample_relation_span_context_mapping,
                                   sample_person_entity,
                                   sample_relation):
+    await curation_manager_db.clear_all()
+
     # Setup journals with different overall statuses
     journal_uuid_pe = "journal-pending-entities"
     journal_uuid_ed = "journal-entities-done"
