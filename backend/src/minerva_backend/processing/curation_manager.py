@@ -18,7 +18,8 @@ from minerva_backend.graph.models.entities import (
     Content,
 )
 from minerva_backend.graph.models.relations import Relation
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping, CurationTask
+from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping, JournalEntryCuration, \
+    CurationStats
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 ENTITY_TYPE_MAP = {
@@ -378,10 +379,10 @@ class CurationManager:
 
     async def get_all_pending_curation_tasks(self) -> List[JournalEntryCuration]:
         """Get all pending curation tasks for the dashboard, grouped by journalentry"""
-        # TODO FIX THIS
+        # TODO MAKE THIS
+        pass
 
-
-    async def get_curation_stats(self) -> dict:
+    async def get_curation_stats(self) -> CurationStats:
         """Get overall curation statistics for the dashboard"""
         async with aiosqlite.connect(self.db_path) as db:
             # Get journal counts by phase
@@ -427,6 +428,7 @@ class CurationManager:
             rel_processed = rel_accepted + rel_rejected
             rel_acceptance_rate = rel_accepted / rel_processed if rel_processed > 0 else 0
 
+            # TODO fix return, should be of type CurationStats
             return {
                 "total_journals": sum(phase_counts.values()),
                 "pending_entities": phase_counts.get('PENDING_ENTITIES', 0),
