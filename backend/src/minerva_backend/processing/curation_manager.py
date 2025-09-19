@@ -18,7 +18,7 @@ from minerva_backend.graph.models.entities import (
     Content,
 )
 from minerva_backend.graph.models.relations import Relation
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
+from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping, CurationTask
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 ENTITY_TYPE_MAP = {
@@ -376,116 +376,10 @@ class CurationManager:
 
     # ===== DASHBOARD API HELPERS =====
 
-    async def get_journals_pending_entity_curation(self) -> List[Dict[str, Any]]:
-        """Get journals that need entity curation with detailed pending entities"""
-        async with aiosqlite.connect(self.db_path) as db:
-            # First get the journal list with counts
-            async with db.execute("""
-                SELECT j.uuid, j.journal_text, j.created_at,
-                       COUNT(e.uuid) as pending_entities_count
-                FROM journal_curation j
-                LEFT JOIN entity_curation_items e ON j.uuid = e.journal_id AND e.status = 'PENDING'
-                WHERE j.overall_status = 'PENDING_ENTITIES'
-                GROUP BY j.uuid, j.journal_text, j.created_at
-                ORDER BY j.created_at ASC
-            """) as cursor:
-                journal_rows = await cursor.fetchall()
+    async def get_all_pending_curation_tasks(self) -> List[JournalEntryCuration]:
+        """Get all pending curation tasks for the dashboard, grouped by journalentry"""
+        # TODO FIX THIS
 
-            # Now get the detailed entities for each journal
-            journals_with_entities = []
-            for row in journal_rows:
-                journal_uuid = row[0]
-
-                # Get the detailed pending entities for this journal
-                async with db.execute("""
-                    SELECT uuid, entity_type, original_data_json, status
-                    FROM entity_curation_items 
-                    WHERE journal_id = ? AND status = 'PENDING'
-                    ORDER BY created_at ASC
-                """, (journal_uuid,)) as entity_cursor:
-                    entity_rows = await entity_cursor.fetchall()
-
-                pending_entities = [
-                    {
-                        "id": entity_row[0],  # uuid
-                        "entity_type": entity_row[1],
-                        "status": entity_row[3],
-                        **json.loads(entity_row[2])
-                    }
-                    for entity_row in entity_rows
-                ]
-
-                journals_with_entities.append({
-                    "journal_id": row[0],  # uuid
-                    "journal_text": row[1],
-                    "created_at": row[2],
-                    "pending_entities_count": row[3],
-                    "pending_entities": pending_entities,
-                    "phase": "entities"
-                })
-
-            return journals_with_entities
-
-    async def get_journals_pending_relationship_curation(self) -> List[Dict[str, Any]]:
-        """Get journals that need relationship curation with detailed pending relationships"""
-        async with aiosqlite.connect(self.db_path) as db:
-            # First get the journal list with counts
-            async with db.execute("""
-                SELECT j.uuid, j.journal_text, j.created_at,
-                       COUNT(r.uuid) as pending_relationships_count
-                FROM journal_curation j
-                LEFT JOIN relationship_curation_items r ON j.uuid = r.journal_id AND r.status = 'PENDING'
-                WHERE j.overall_status = 'PENDING_RELATIONS'
-                GROUP BY j.uuid, j.journal_text, j.created_at
-                ORDER BY j.created_at ASC
-            """) as cursor:
-                journal_rows = await cursor.fetchall()
-
-            # Now get the detailed relationships for each journal
-            journals_with_relationships = []
-            for row in journal_rows:
-                journal_uuid = row[0]
-
-                # Get the detailed pending relationships for this journal
-                async with db.execute("""
-                    SELECT uuid, relationship_type, original_data_json, status
-                    FROM relationship_curation_items 
-                    WHERE journal_id = ? AND status = 'PENDING'
-                    ORDER BY created_at ASC
-                """, (journal_uuid,)) as rel_cursor:
-                    rel_rows = await rel_cursor.fetchall()
-
-                pending_relationships = [
-                    {
-                        "id": rel_row[0],  # uuid
-                        "relationship_type": rel_row[1],
-                        "status": rel_row[3],
-                        **json.loads(rel_row[2])
-                    }
-                    for rel_row in rel_rows
-                ]
-
-                journals_with_relationships.append({
-                    "journal_id": row[0],  # uuid
-                    "journal_text": row[1],
-                    "created_at": row[2],
-                    "pending_relationships_count": row[3],
-                    "pending_relationships": pending_relationships,
-                    "phase": "relationships"
-                })
-
-            return journals_with_relationships
-
-    async def get_all_pending_curation_tasks(self) -> Dict[str, Any]:
-        """Get all pending curation tasks for the dashboard"""
-        entity_journals = await self.get_journals_pending_entity_curation()
-        relationship_journals = await self.get_journals_pending_relationship_curation()
-
-        return {
-            "entity_journals": entity_journals,
-            "relationship_journals": relationship_journals,
-            "total_pending_journals": len(entity_journals) + len(relationship_journals)
-        }
 
     async def get_curation_stats(self) -> dict:
         """Get overall curation statistics for the dashboard"""

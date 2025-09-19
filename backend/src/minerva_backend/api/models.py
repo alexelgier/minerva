@@ -1,20 +1,18 @@
 """Request and response models for the Minerva Backend API."""
+import re
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Literal
-from pydantic import BaseModel, Field, validator
-import re
+
+from pydantic import BaseModel, Field, field_validator
+
+from minerva_backend.processing.models import JournalEntryCuration
 
 
 # ===== REQUEST MODELS =====
 
 class JournalSubmission(BaseModel):
     """Model for journal entry submission."""
-
-    date: str = Field(
-        ...,
-        description="Journal date in YYYY-MM-DD format",
-        example="2025-09-19"
-    )
+    date: str = Field(..., description="Journal date in YYYY-MM-DD format", examples=["2025-09-19"])
     text: str = Field(
         ...,
         min_length=10,
@@ -22,14 +20,14 @@ class JournalSubmission(BaseModel):
         description="Journal entry text content"
     )
 
-    @validator('date')
+    @field_validator('date')
     def validate_date_format(cls, v):
         """Validate date is in correct format."""
         if not re.match(r'^\d{4}-\d{2}-\d{2}$', v):
             raise ValueError('Date must be in YYYY-MM-DD format')
         return v
 
-    @validator('text')
+    @field_validator('text')
     def validate_text_content(cls, v):
         """Validate text content is not empty."""
         if not v.strip():
@@ -39,7 +37,6 @@ class JournalSubmission(BaseModel):
 
 class CurationAction(BaseModel):
     """Model for curation actions (accept/reject)."""
-
     action: Literal["accept", "reject"] = Field(
         ...,
         description="Action to take on the curation item"
@@ -49,7 +46,7 @@ class CurationAction(BaseModel):
         description="Curated data (required for accept action)"
     )
 
-    @validator('curated_data')
+    @field_validator('curated_data')
     def validate_curated_data_for_accept(cls, v, values):
         """Ensure curated_data is provided for accept actions."""
         if values.get('action') == 'accept' and not v:
@@ -59,7 +56,6 @@ class CurationAction(BaseModel):
 
 class ProcessingControl(BaseModel):
     """Model for processing control actions."""
-
     action: Literal["start", "pause", "resume"] = Field(
         ...,
         description="Processing control action"
@@ -76,14 +72,12 @@ class ProcessingControl(BaseModel):
 
 class BaseResponse(BaseModel):
     """Base response model with common fields."""
-
     success: bool = Field(default=True, description="Whether the operation was successful")
     timestamp: datetime = Field(default_factory=datetime.now, description="Response timestamp")
 
 
 class SuccessResponse(BaseResponse):
     """Standard success response model."""
-
     message: str = Field(..., description="Success message")
     workflow_id: Optional[str] = Field(None, description="Associated workflow ID")
     journal_id: Optional[str] = Field(None, description="Associated journal ID")
@@ -92,21 +86,18 @@ class SuccessResponse(BaseResponse):
 
 class ErrorResponse(BaseResponse):
     """Error response model."""
-
     success: bool = Field(default=False)
     error: Dict[str, Any] = Field(..., description="Error details")
 
 
 class PipelineStatusResponse(BaseResponse):
     """Pipeline status response model."""
-
     workflow_id: str = Field(..., description="Workflow identifier")
     status: Dict[str, Any] = Field(..., description="Detailed status information")
 
 
 class PendingPipelinesResponse(BaseResponse):
     """Response model for pending pipelines list."""
-
     pending_pipelines: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="List of pending pipeline workflows"
@@ -114,20 +105,8 @@ class PendingPipelinesResponse(BaseResponse):
     total_count: int = Field(default=0, description="Total number of pending pipelines")
 
 
-class CurationTask(BaseModel):
-    """Model for individual curation tasks."""
-
-    id: str = Field(..., description="Task identifier")
-    journal_id: str = Field(..., description="Associated journal entry ID")
-    type: Literal["entity", "relationship"] = Field(..., description="Type of curation task")
-    status: Literal["pending", "in_progress", "completed"] = Field(..., description="Task status")
-    created_at: datetime = Field(..., description="Task creation timestamp")
-    data: Dict[str, Any] = Field(..., description="Task data to be curated")
-
-
 class CurationStatsResponse(BaseResponse):
     """Curation statistics response model."""
-
     total_pending: int = Field(default=0, description="Total pending curation tasks")
     entities_pending: int = Field(default=0, description="Pending entity curation tasks")
     relationships_pending: int = Field(default=0, description="Pending relationship curation tasks")
@@ -138,14 +117,13 @@ class CurationStatsResponse(BaseResponse):
 
 class PendingCurationResponse(BaseResponse):
     """Response model for pending curation tasks."""
-
-    tasks: List[CurationTask] = Field(default_factory=list, description="List of pending curation tasks")
+    journal_entry: List[JournalEntryCuration] = Field(default_factory=list,
+                                                      description="List of pending journals with curation tasks")
     stats: CurationStatsResponse = Field(..., description="Curation statistics")
 
 
 class ProcessingWindowsResponse(BaseResponse):
     """Processing windows configuration response."""
-
     default_window: Dict[str, Any] = Field(..., description="Default processing window configuration")
     currently_active: bool = Field(..., description="Whether processing is currently active")
     next_window: str = Field(..., description="Description of next processing window")
