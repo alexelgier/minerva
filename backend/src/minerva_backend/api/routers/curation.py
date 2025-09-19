@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/curation", tags=["curation"])
 
 
-@router.get("/pending", response_model=PendingCurationResponse)
+@router.get("/pending", response_model=Dict[str, Any])
 @handle_errors(500)
 async def get_pending_curation(
         curation_manager: CurationManager = Depends(get_curation_manager)
-) -> PendingCurationResponse:
+) -> Dict[str, Any]:
     """
     Get all pending curation tasks across all journal entries.
 
@@ -30,38 +30,12 @@ async def get_pending_curation(
     human review and approval.
     """
     try:
-        pending = await curation_manager.get_all_pending_curation_tasks()
-        stats_dict = await curation_manager.get_curation_stats()
-
-        # Convert raw task data to CurationTask models
-        formatted_tasks = [
-            CurationTask(
-                journal_id=j["journal_id"],
-                journal_text=j["journal_text"],
-                created_at=j["created_at"],
-                phase=j["phase"],
-                pending_count=j["pending_entities_count"],
-                pending_items=j["pending_entities"],
-            ) for j in pending.get("entity_journals", [])
-        ] + [
-            CurationTask(
-                journal_id=j["journal_id"],
-                journal_text=j["journal_text"],
-                created_at=j["created_at"],
-                phase=j["phase"],
-                pending_count=j["pending_relationships_count"],
-                pending_items=j["pending_relationships"],
-            ) for j in pending.get("relationship_journals", [])
-        ]
-
-        stats = CurationStatsResponse(**stats_dict)
-
-        logger.info(f"Retrieved {len(formatted_tasks)} pending curation tasks")
-
-        return PendingCurationResponse(
-            tasks=formatted_tasks,
-            stats=stats
+        pending_tasks = await curation_manager.get_all_pending_curation_tasks()
+        logger.info(
+            f"Retrieved {pending_tasks.get('total_pending_journals', 0)} "
+            "pending curation journals"
         )
+        return pending_tasks
 
     except Exception as e:
         logger.error(f"Failed to get pending curation tasks: {e}")
