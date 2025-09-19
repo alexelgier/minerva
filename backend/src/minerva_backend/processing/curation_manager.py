@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from uuid import uuid4
 
@@ -19,7 +20,7 @@ from minerva_backend.graph.models.entities import (
 )
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping, JournalEntryCuration, \
-    CurationStats
+    CurationStats, CurationTask
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 ENTITY_TYPE_MAP = {
@@ -379,76 +380,156 @@ class CurationManager:
 
     async def get_all_pending_curation_tasks(self) -> List[JournalEntryCuration]:
         """Get all pending curation tasks for the dashboard, grouped by journalentry"""
-        # TODO MAKE THIS
-        pass
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT uuid, journal_text, created_at FROM journal_curation
+                WHERE overall_status != 'COMPLETED' ORDER BY created_at DESC
+            """) as cursor:
+                journal_rows = await cursor.fetchall()
+
+            if not journal_rows:
+                return []
+
+            journal_curations = {
+                row[0]: JournalEntryCuration(
+                    journal_id=row[0],
+                    date=datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S').date(),
+                    entry_text=row[1]
+                ) for row in journal_rows
+            }
+            journal_ids = tuple(journal_curations.keys())
+
+            # Process entities
+            async with db.execute(f"""
+                SELECT uuid, journal_id, created_at, original_data_json
+                FROM entity_curation_items
+                WHERE journal_id IN ({','.join('?' for _ in journal_ids)}) AND status = 'PENDING'
+            """, journal_ids) as cursor:
+                entity_rows = await cursor.fetchall()
+
+            entity_tasks = {
+                row[0]: CurationTask(
+                    id=row[0],
+                    journal_id=row[1],
+                    type='entity',
+                    status='pending',
+                    created_at=datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S'),
+                    data=json.loads(row[3])
+                ) for row in entity_rows
+            }
+
+            if entity_tasks:
+                entity_uuids = tuple(entity_tasks.keys())
+                async with db.execute(f"""
+                    SELECT owner_uuid, span_data_json FROM span_curation_items
+                    WHERE owner_uuid IN ({','.join('?' for _ in entity_uuids)})
+                """, entity_uuids) as cursor:
+                    for owner_uuid, span_json in await cursor.fetchall():
+                        if 'spans' not in entity_tasks[owner_uuid].data:
+                            entity_tasks[owner_uuid].data['spans'] = []
+                        entity_tasks[owner_uuid].data['spans'].append(json.loads(span_json))
+
+            for task in entity_tasks.values():
+                journal_curations[task.journal_id].tasks.append(task)
+
+            # Process relationships
+            async with db.execute(f"""
+                SELECT uuid, journal_id, created_at, original_data_json
+                FROM relationship_curation_items
+                WHERE journal_id IN ({','.join('?' for _ in journal_ids)}) AND status = 'PENDING'
+            """, journal_ids) as cursor:
+                relationship_rows = await cursor.fetchall()
+
+            relationship_tasks = {
+                row[0]: CurationTask(
+                    id=row[0],
+                    journal_id=row[1],
+                    type='relationship',
+                    status='pending',
+                    created_at=datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S'),
+                    data=json.loads(row[3])
+                ) for row in relationship_rows
+            }
+
+            if relationship_tasks:
+                rel_uuids = tuple(relationship_tasks.keys())
+                async with db.execute(f"""
+                    SELECT owner_uuid, span_data_json FROM span_curation_items
+                    WHERE owner_uuid IN ({','.join('?' for _ in rel_uuids)})
+                """, rel_uuids) as cursor:
+                    for owner_uuid, span_json in await cursor.fetchall():
+                        if 'spans' not in relationship_tasks[owner_uuid].data:
+                            relationship_tasks[owner_uuid].data['spans'] = []
+                        relationship_tasks[owner_uuid].data['spans'].append(json.loads(span_json))
+
+                async with db.execute(f"""
+                    SELECT relationship_uuid, entity_uuid, sub_type_json
+                    FROM relationship_context_items
+                    WHERE relationship_uuid IN ({','.join('?' for _ in rel_uuids)})
+                """, rel_uuids) as cursor:
+                    for rel_uuid, entity_uuid, sub_type_json in await cursor.fetchall():
+                        if 'context' not in relationship_tasks[rel_uuid].data:
+                            relationship_tasks[rel_uuid].data['context'] = []
+                        relationship_tasks[rel_uuid].data['context'].append({
+                            'entity_uuid': entity_uuid,
+                            'sub_type': json.loads(sub_type_json)
+                        })
+
+            for task in relationship_tasks.values():
+                journal_curations[task.journal_id].tasks.append(task)
+
+            return list(journal_curations.values())
 
     async def get_curation_stats(self) -> CurationStats:
         """Get overall curation statistics for the dashboard"""
         async with aiosqlite.connect(self.db_path) as db:
-            # Get journal counts by phase
-            async with db.execute("""
-                SELECT overall_status, COUNT(*) 
-                FROM journal_curation 
-                GROUP BY overall_status
-            """) as cursor:
-                phase_rows = await cursor.fetchall()
-
-            phase_counts = dict(phase_rows)
-
             # Get entity statistics
             async with db.execute("""
-                SELECT status, COUNT(*) 
-                FROM entity_curation_items 
+                SELECT status, COUNT(*)
+                FROM entity_curation_items
                 GROUP BY status
             """) as cursor:
                 entity_rows = await cursor.fetchall()
-
             entity_counts = dict(entity_rows)
-            total_entities = sum(entity_counts.values())
 
             # Get relationship statistics
             async with db.execute("""
-                SELECT status, COUNT(*) 
-                FROM relationship_curation_items 
+                SELECT status, COUNT(*)
+                FROM relationship_curation_items
                 GROUP BY status
             """) as cursor:
                 rel_rows = await cursor.fetchall()
-
             rel_counts = dict(rel_rows)
-            total_relationships = sum(rel_counts.values())
 
-            # Calculate acceptance rates
-            entity_accepted = entity_counts.get('ACCEPTED', 0)
-            entity_rejected = entity_counts.get('REJECTED', 0)
-            entity_processed = entity_accepted + entity_rejected
-            entity_acceptance_rate = entity_accepted / entity_processed if entity_processed > 0 else 0
+            entities_pending = entity_counts.get('PENDING', 0)
+            relationships_pending = rel_counts.get('PENDING', 0)
+            total_pending = entities_pending + relationships_pending
 
-            rel_accepted = rel_counts.get('ACCEPTED', 0)
-            rel_rejected = rel_counts.get('REJECTED', 0)
-            rel_processed = rel_accepted + rel_rejected
-            rel_acceptance_rate = rel_accepted / rel_processed if rel_processed > 0 else 0
+            # Get age of oldest pending task
+            oldest_pending_age_hours = 0.0
+            async with db.execute("""
+                SELECT MIN(created_at) FROM (
+                    SELECT created_at FROM entity_curation_items WHERE status = 'PENDING'
+                    UNION ALL
+                    SELECT created_at FROM relationship_curation_items WHERE status = 'PENDING'
+                )
+            """) as cursor:
+                row = await cursor.fetchone()
+                if row and row[0]:
+                    oldest_ts_str = row[0]
+                    oldest_ts = datetime.strptime(oldest_ts_str, '%Y-%m-%d %H:%M:%S')
+                    # Assuming created_at is in UTC
+                    age_delta = datetime.utcnow() - oldest_ts
+                    oldest_pending_age_hours = age_delta.total_seconds() / 3600
 
-            # TODO fix return, should be of type CurationStats
-            return {
-                "total_journals": sum(phase_counts.values()),
-                "pending_entities": phase_counts.get('PENDING_ENTITIES', 0),
-                "pending_relationships": phase_counts.get('PENDING_RELATIONS', 0),
-                "completed": phase_counts.get('COMPLETED', 0),
-                "entity_stats": {
-                    "total_extracted": total_entities,
-                    "accepted": entity_accepted,
-                    "rejected": entity_rejected,
-                    "pending": entity_counts.get('PENDING', 0),
-                    "acceptance_rate": round(entity_acceptance_rate, 3)
-                },
-                "relationship_stats": {
-                    "total_extracted": total_relationships,
-                    "accepted": rel_accepted,
-                    "rejected": rel_rejected,
-                    "pending": rel_counts.get('PENDING', 0),
-                    "acceptance_rate": round(rel_acceptance_rate, 3)
-                }
-            }
+            return CurationStats(
+                total_pending=total_pending,
+                entities_pending=entities_pending,
+                relationships_pending=relationships_pending,
+                avg_processing_time_minutes=0.0,  # Not possible to calculate without completion timestamps
+                oldest_pending_age_hours=round(oldest_pending_age_hours, 2),
+                completed_today=0,  # Not possible to calculate without completion timestamps
+            )
 
     async def clear_all(self):
         """Wipe all rows from every table."""
