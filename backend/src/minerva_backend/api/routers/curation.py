@@ -34,8 +34,25 @@ async def get_pending_curation(
         stats_dict = await curation_manager.get_curation_stats()
 
         # Convert raw task data to CurationTask models
-        formatted_tasks = []
-        # TODO fill formatted_tasks with CurationTask
+        formatted_tasks = [
+            CurationTask(
+                journal_id=j["journal_id"],
+                journal_text=j["journal_text"],
+                created_at=j["created_at"],
+                phase=j["phase"],
+                pending_count=j["pending_entities_count"],
+                pending_items=j["pending_entities"],
+            ) for j in pending.get("entity_journals", [])
+        ] + [
+            CurationTask(
+                journal_id=j["journal_id"],
+                journal_text=j["journal_text"],
+                created_at=j["created_at"],
+                phase=j["phase"],
+                pending_count=j["pending_relationships_count"],
+                pending_items=j["pending_relationships"],
+            ) for j in pending.get("relationship_journals", [])
+        ]
 
         stats = CurationStatsResponse(**stats_dict)
 
