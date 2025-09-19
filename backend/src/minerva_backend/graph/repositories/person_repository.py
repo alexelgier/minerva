@@ -43,7 +43,7 @@ class PersonRepository(BaseRepository[Person]):
 
             for record in result:
                 properties = dict(record["p"])
-                persons.append(self._properties_to_entity(properties))
+                persons.append(self._properties_to_node(properties))
 
             return persons
 
@@ -71,7 +71,7 @@ class PersonRepository(BaseRepository[Person]):
 
             for record in result:
                 properties = dict(record["p"])
-                persons.append(self._properties_to_entity(properties))
+                persons.append(self._properties_to_node(properties))
 
             return persons
 
@@ -99,7 +99,7 @@ class PersonRepository(BaseRepository[Person]):
 
             for record in result:
                 properties = dict(record["p"])
-                person = self._properties_to_entity(properties)
+                person = self._properties_to_node(properties)
                 # You could add mention_count as a dynamic property if needed
                 persons.append(person)
 
@@ -128,7 +128,7 @@ class PersonRepository(BaseRepository[Person]):
 
             for record in result:
                 properties = dict(record["p"])
-                persons.append(self._properties_to_entity(properties))
+                persons.append(self._properties_to_node(properties))
 
             return persons
 
@@ -146,7 +146,7 @@ class PersonRepository(BaseRepository[Person]):
             count(DISTINCT p) as total_persons,
             count(DISTINCT j) as total_mentions,
             count(DISTINCT p.occupation) as unique_occupations,
-            avg(size((p)-[:MENTIONED_IN]->())) as avg_mentions_per_person
+            avg(COUNT {(p)-[:MENTIONED_IN]->()}) as avg_mentions_per_person
         """
 
         with self.connection.session() as session:

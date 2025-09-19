@@ -13,7 +13,8 @@ uvicorn = "^0.30"
 neo4j = "^5.23"
 ollama = "^0.1.0"
 aiosqlite = "^0.21.0"
-temporalio = "^1.17.0"
+temporalio = {extras = ["testing"], version = "^1.17.0"}
+pytest-asyncio = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"

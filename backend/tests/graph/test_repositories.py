@@ -108,9 +108,9 @@ def test_journal_entry_crud(journal_entry_repo, sample_journal_entry):
 def test_person_repository_specialized_queries(person_repo):
     """Test specialized query methods for PersonRepository."""
     # Setup: Create a few sample persons
-    p1_data = Person(name="Alice Smith", occupation="Engineer", birth_date=date(1990, 5, 15))
-    p2_data = Person(name="Bob Johnson", occupation="Engineer", birth_date=date(1985, 8, 20))
-    p3_data = Person(name="Charlie Brown", occupation="Artist", birth_date=date(1990, 1, 10))
+    p1_data = Person(name="Alice Smith", occupation="Engineer", birth_date=date(1990, 5, 15), summary="", summary_short="")
+    p2_data = Person(name="Bob Johnson", occupation="Engineer", birth_date=date(1985, 8, 20), summary="", summary_short="")
+    p3_data = Person(name="Charlie Brown", occupation="Artist", birth_date=date(1990, 1, 10), summary="", summary_short="")
     p1_uuid = person_repo.create(p1_data)
     p2_uuid = person_repo.create(p2_data)
     p3_uuid = person_repo.create(p3_data)
@@ -146,7 +146,7 @@ def test_person_repository_specialized_queries(person_repo):
 def test_get_persons_with_recent_mentions(person_repo, journal_entry_repo, db_connection):
     """Test retrieving persons with recent mentions."""
     # Setup
-    p_mentioned_data = Person(name="Mentioned Person")
+    p_mentioned_data = Person(name="Mentioned Person", occupation="Engineer", birth_date=date(1990, 5, 15), summary="", summary_short="")
     j_recent_data = JournalEntry(text="Recent entry", date=date.today())
 
     p_mentioned_uuid = person_repo.create(p_mentioned_data)

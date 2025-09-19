@@ -44,7 +44,7 @@ class EmotionRepository(BaseRepository[Emotion]):
 
             for record in result:
                 properties = dict(record["e"])
-                emotions.append(self._properties_to_entity(properties))
+                emotions.append(self._properties_to_node(properties))
 
             return emotions
 
@@ -72,7 +72,7 @@ class EmotionRepository(BaseRepository[Emotion]):
 
             for record in result:
                 properties = dict(record["e"])
-                emotion = self._properties_to_entity(properties)
+                emotion = self._properties_to_node(properties)
                 emotions.append(emotion)
 
             return emotions

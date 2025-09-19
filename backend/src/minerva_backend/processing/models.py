@@ -23,3 +23,8 @@ class RelationSpanContextMapping(BaseModel):
 
     def __init__(self, relation: Relation, spans: Set[Span], context: Set[RelationshipContext] = None, **kwargs) -> None:
         super().__init__(relation=relation, spans=spans, context=context, **kwargs)
+
+    def __hash__(self):
+        return hash(self.relation.uuid)
+
+

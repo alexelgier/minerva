@@ -41,7 +41,7 @@ class ProjectRepository(BaseRepository[Project]):
             projects = []
             for record in result:
                 properties = dict(record["p"])
-                projects.append(self._properties_to_entity(properties))
+                projects.append(self._properties_to_node(properties))
             return projects
 
     def find_projects_due_soon(self, days: int = 30) -> List[Project]:
@@ -67,7 +67,7 @@ class ProjectRepository(BaseRepository[Project]):
             projects = []
             for record in result:
                 properties = dict(record["p"])
-                projects.append(self._properties_to_entity(properties))
+                projects.append(self._properties_to_node(properties))
             return projects
 
     def search_by_name_partial(self, partial_name: str) -> List[Project]:
@@ -91,7 +91,7 @@ class ProjectRepository(BaseRepository[Project]):
             projects = []
             for record in result:
                 properties = dict(record["p"])
-                projects.append(self._properties_to_entity(properties))
+                projects.append(self._properties_to_node(properties))
             return projects
 
     def get_statistics(self) -> dict:

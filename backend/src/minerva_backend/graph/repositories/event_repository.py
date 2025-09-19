@@ -44,7 +44,7 @@ class EventRepository(BaseRepository[Event]):
 
             for record in result:
                 properties = dict(record["e"])
-                events.append(self._properties_to_entity(properties))
+                events.append(self._properties_to_node(properties))
 
             return events
 
@@ -72,7 +72,7 @@ class EventRepository(BaseRepository[Event]):
 
             for record in result:
                 properties = dict(record["e"])
-                events.append(self._properties_to_entity(properties))
+                events.append(self._properties_to_node(properties))
 
             return events
             
@@ -99,7 +99,7 @@ class EventRepository(BaseRepository[Event]):
 
             for record in result:
                 properties = dict(record["e"])
-                events.append(self._properties_to_entity(properties))
+                events.append(self._properties_to_node(properties))
 
             return events
 
@@ -126,7 +126,7 @@ class EventRepository(BaseRepository[Event]):
 
             for record in result:
                 properties = dict(record["e"])
-                events.append(self._properties_to_entity(properties))
+                events.append(self._properties_to_node(properties))
 
             return events
 

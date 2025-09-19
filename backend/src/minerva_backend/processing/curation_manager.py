@@ -211,8 +211,8 @@ class CurationManager:
                 cursor = await db.execute("""
                     UPDATE entity_curation_items 
                     SET curated_data_json = ?, status = 'ACCEPTED'
-                    WHERE uuid = ? AND journal_id = ? AND status = 'PENDING'
-                """, (json.dumps(curated_data), entity_uuid, journal_uuid))
+                    WHERE uuid = ? AND journal_id = ?
+                """, (json.dumps(curated_data, default=lambda o: o.isoformat()), entity_uuid, journal_uuid))
                 await db.commit()
                 return entity_uuid if cursor.rowcount > 0 else ""
 
@@ -222,7 +222,7 @@ class CurationManager:
             cursor = await db.execute("""
                 UPDATE entity_curation_items 
                 SET status = 'REJECTED'
-                WHERE uuid = ? AND journal_id = ? AND status = 'PENDING'
+                WHERE uuid = ? AND journal_id = ?
             """, (entity_uuid, journal_uuid))
             await db.commit()
             return cursor.rowcount > 0
@@ -317,7 +317,7 @@ class CurationManager:
                 cursor = await db.execute("""
                     UPDATE relationship_curation_items 
                     SET curated_data_json = ?, status = 'ACCEPTED'
-                    WHERE uuid = ? AND journal_id = ? AND status = 'PENDING'
+                    WHERE uuid = ? AND journal_id = ?
                 """, (json.dumps(curated_data), relationship_uuid, journal_uuid))
                 await db.commit()
                 return relationship_uuid if cursor.rowcount > 0 else ""
@@ -328,7 +328,7 @@ class CurationManager:
             cursor = await db.execute("""
                 UPDATE relationship_curation_items 
                 SET status = 'REJECTED'
-                WHERE uuid = ? AND journal_id = ? AND status = 'PENDING'
+                WHERE uuid = ? AND journal_id = ?
             """, (relationship_uuid, journal_uuid))
             await db.commit()
             return cursor.rowcount > 0

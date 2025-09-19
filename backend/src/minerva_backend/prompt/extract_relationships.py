@@ -10,14 +10,30 @@ from minerva_backend.prompt.base import Prompt
 class RelationshipContext(BaseModel):
     """Una entidad relacionada de alguna manera con la relación"""
     entity_uuid: str = Field(..., description="El UUID de la entidad")
-    sub_type: conset(str, min_length=1) = Field(..., description="Propuestas de subtipo para la relación")
+    sub_type: conlist(str, min_length=1) = Field(..., description="Propuestas de subtipo para la relación")
+
+    class Config:
+        # This tells Pydantic to serialize sets as lists
+        json_encoders = {
+            set: list,
+            conlist: list
+        }
+
+    def __hash__(self):
+        return hash(self.entity_uuid + "".join(self.sub_type))
 
 
 class Relationship(Relation):
     """Una relación entre dos entidades encontrada en el texto."""
-    spans: conset(Span, min_length=1) = Field(..., description="Spans in the document where the person is mentioned")
+    spans: conlist(Span, min_length=1) = Field(..., description="Spans in the document where the person is mentioned")
     context: Optional[Set[RelationshipContext]] = Field(default=None, description="Entidades relacionadas de alguna "
                                                                                   "manera con la relación")
+
+    class Config:
+        # This tells Pydantic to serialize sets as lists
+        json_encoders = {
+            set: list
+        }
 
 
 class Relationships(BaseModel):

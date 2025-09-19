@@ -41,7 +41,7 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
             record = result.single()
             if record:
                 properties = dict(record["j"])
-                return self._properties_to_entity(properties)
+                return self._properties_to_node(properties)
             return None
 
     def find_by_date_range(self, start_date: date, end_date: date) -> List[JournalEntry]:
@@ -66,7 +66,7 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
             entries = []
             for record in result:
                 properties = dict(record["j"])
-                entries.append(self._properties_to_entity(properties))
+                entries.append(self._properties_to_node(properties))
             return entries
 
     def get_statistics(self) -> dict:

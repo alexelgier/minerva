@@ -39,7 +39,7 @@ class ConceptRepository(BaseRepository[Concept]):
 
             for record in result:
                 properties = dict(record["c"])
-                concepts.append(self._properties_to_entity(properties))
+                concepts.append(self._properties_to_node(properties))
 
             return concepts
 
@@ -67,7 +67,7 @@ class ConceptRepository(BaseRepository[Concept]):
 
             for record in result:
                 properties = dict(record["c"])
-                concept = self._properties_to_entity(properties)
+                concept = self._properties_to_node(properties)
                 concepts.append(concept)
 
             return concepts

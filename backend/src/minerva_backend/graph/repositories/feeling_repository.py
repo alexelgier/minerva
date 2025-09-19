@@ -44,7 +44,7 @@ class FeelingRepository(BaseRepository[Feeling]):
             feelings = []
             for record in result:
                 properties = dict(record["f"])
-                feelings.append(self._properties_to_entity(properties))
+                feelings.append(self._properties_to_node(properties))
             return feelings
 
     def find_by_intensity(self, intensity: int) -> List[Feeling]:
@@ -67,7 +67,7 @@ class FeelingRepository(BaseRepository[Feeling]):
             feelings = []
             for record in result:
                 properties = dict(record["f"])
-                feelings.append(self._properties_to_entity(properties))
+                feelings.append(self._properties_to_node(properties))
             return feelings
 
     def get_recent_feelings(self, days: int = 30) -> List[Feeling]:
@@ -91,7 +91,7 @@ class FeelingRepository(BaseRepository[Feeling]):
             feelings = []
             for record in result:
                 properties = dict(record["f"])
-                feelings.append(self._properties_to_entity(properties))
+                feelings.append(self._properties_to_node(properties))
             return feelings
 
     def get_statistics(self) -> dict:
