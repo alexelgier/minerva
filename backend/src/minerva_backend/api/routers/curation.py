@@ -30,14 +30,9 @@ async def get_pending_curation(
     human review and approval.
     """
     try:
-        pending_tasks_dict = await curation_manager.get_all_pending_curation_tasks()
+        pendings = await curation_manager.get_all_pending_curation_tasks()
         #TODO FIX THIS
-        logger.info(
-            f"Retrieved {pending_tasks.get('total_pending_journals', 0)} "
-            "pending curation journals"
-        )
-        response = PendingCurationResponse()
-        response.tasks_dict =
+
         return response
 
     except Exception as e:
