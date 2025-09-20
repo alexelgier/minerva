@@ -132,3 +132,5 @@ class Place(Entity):
     type: Literal[EntityType.PLACE] = EntityType.PLACE.value
     address: str | None = Field(default=None, description="Dirección o descripción de la ubicación")
     category: str | None = Field(default=None, description="Categoría del lugar (p. ej., casa, parque, restaurante)")
+
+

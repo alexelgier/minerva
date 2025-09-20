@@ -45,6 +45,7 @@ class JournalEntryCuration(BaseModel):
     journal_id: str = Field(..., description="Associated journal entry ID")
     date: date_type = Field(..., description="Fecha de la entrada del diario")
     entry_text: str | None = Field(default=None, description="El texto principal de la entrada del diario")
+    phase: Literal["entities", "relationships"] = Field(..., description="Phase")
     tasks: List[CurationTask] = Field(default_factory=list, description="List of pending curation tasks")
 
 

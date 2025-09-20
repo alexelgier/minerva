@@ -32,7 +32,8 @@ class SpanIndex:
             yield (iv.begin, iv.end), iv.data
 
 
-def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: JournalEntry, nlp=None) -> SpanIndex | None:
+def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: JournalEntry,
+                                  nlp=None) -> SpanIndex | None:
     """
     Build a lexical tree from a JournalEntry's text and insert it into the database.
 
@@ -51,7 +52,7 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
     result = SpanIndex()
 
     # Initialize span mapping with journal entry (full text span)
-    span_to_uuid = {(0, len(text)): journal_entry.uuid}
+    result.add_span(0, len(text), journal_entry.uuid)
 
     # Allow injecting a nlp pipeline for testing; lazily import stanza if needed
     if nlp is None:
@@ -60,7 +61,7 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
 
     doc = nlp(text)
     if not doc.sentences:
-        return span_to_uuid
+        return None
 
     # Create sentence chunks
     sentence_chunks = []
@@ -69,7 +70,7 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
         end = int(sent.tokens[-1].end_char)
         chunk = Chunk(text=text[start:end])
         sentence_chunks.append((chunk, start, end))
-        span_to_uuid[(start, end)] = chunk.uuid
+        result.add_span(start, end, chunk.uuid)
 
     # Build balanced binary tree
     all_chunks = []
@@ -81,7 +82,7 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
     # Build tree and get root
     if sentence_chunks:
         root_chunk, root_start, root_end = _build_balanced_tree(
-            sentence_chunks, text, all_chunks, relationships, span_to_uuid
+            sentence_chunks, text, all_chunks, relationships, result
         )
 
         # Connect root to journal entry
@@ -106,11 +107,11 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
         print(f"Error inserting chunks: {e}")
         raise
 
-    return span_to_uuid
+    return result
 
 
 def _build_balanced_tree(nodes: List[Tuple], text: str, all_chunks: List,
-                         relationships: List[Dict], span_to_uuid: Dict) -> Tuple:
+                         relationships: List[Dict], result: SpanIndex) -> Tuple:
     """
     Build a balanced binary tree from a list of (chunk, start, end) tuples.
     Returns the root (chunk, start, end).
@@ -130,7 +131,7 @@ def _build_balanced_tree(nodes: List[Tuple], text: str, all_chunks: List,
         parent_chunk = Chunk(text=parent_text)
 
         all_chunks.append(parent_chunk)
-        span_to_uuid[(parent_start, parent_end)] = parent_chunk.uuid
+        result.add_span(parent_start, parent_end, parent_chunk.uuid)
 
         # Create relationships
         relationships.extend([
@@ -146,8 +147,8 @@ def _build_balanced_tree(nodes: List[Tuple], text: str, all_chunks: List,
     left_nodes = nodes[:mid]
     right_nodes = nodes[mid:]
 
-    left_root = _build_balanced_tree(left_nodes, text, all_chunks, relationships, span_to_uuid)
-    right_root = _build_balanced_tree(right_nodes, text, all_chunks, relationships, span_to_uuid)
+    left_root = _build_balanced_tree(left_nodes, text, all_chunks, relationships, result)
+    right_root = _build_balanced_tree(right_nodes, text, all_chunks, relationships, result)
 
     # Create parent for the two subtrees
     left_chunk, left_start, left_end = left_root
@@ -159,7 +160,7 @@ def _build_balanced_tree(nodes: List[Tuple], text: str, all_chunks: List,
     parent_chunk = Chunk(text=parent_text)
 
     all_chunks.append(parent_chunk)
-    span_to_uuid[(parent_start, parent_end)] = parent_chunk.uuid
+    result.add_span(parent_start, parent_end, parent_chunk.uuid)
 
     # Create relationships
     relationships.extend([

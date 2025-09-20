@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal, Optional, List
+from typing import Literal
 
-from pydantic import Field, conlist, BaseModel
+from pydantic import Field, conlist
 
-from .base import Edge, PartitionType
+from .base import PartitionType, Node
 
 
 class RelationshipType(str, Enum):
     RELATED_TO = "RELATED_TO"
 
 
-class Relation(Edge):
+class Relation(Node):
     """Generic relationship between two entities."""
     source: str = Field(..., description="UUID of the source entity")
     target: str = Field(..., description="UUID of the target entity")
@@ -21,3 +21,4 @@ class Relation(Edge):
     summary_short: str = Field(..., description="Resumen de la relación. Máximo 30 palabras")
     summary: str = Field(..., description="Resumen de la relación. Máximo 100 palabras")
     partition: Literal[PartitionType.DOMAIN] = PartitionType.DOMAIN.value
+

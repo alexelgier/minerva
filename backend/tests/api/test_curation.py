@@ -24,9 +24,10 @@ def mock_curation_manager():
 
 def test_get_pending_curation_success(client, mock_curation_manager):
     """Test getting pending curation tasks successfully."""
-    journal_entry_curation = JournalEntryCuration(journal_id="j1", date="2025-09-19", tasks=[])
-    pending_tasks = [journal_entry_curation]
-    stats = CurationStats(total_journals=1, pending_entities=1)
+    journal_entry_curation = JournalEntryCuration(journal_id="j1", date="2025-09-19", tasks=[], phase='entities')
+    journal_entry_curation_rel = JournalEntryCuration(journal_id="j2", date="2025-09-15", tasks=[], phase='relationships')
+    pending_tasks = [journal_entry_curation, journal_entry_curation_rel]
+    stats = CurationStats(total_journals=2, pending_entities=1)
 
     mock_curation_manager.get_all_pending_curation_tasks.return_value = pending_tasks
     mock_curation_manager.get_curation_stats.return_value = stats
@@ -37,7 +38,10 @@ def test_get_pending_curation_success(client, mock_curation_manager):
     assert response.status_code == 200
     data = response.json()
     assert data["journal_entry"][0]["journal_id"] == "j1"
-    assert data["stats"]["total_journals"] == 1
+    assert data["journal_entry"][0]["phase"] == "entities"
+    assert data["journal_entry"][1]["journal_id"] == "j2"
+    assert data["journal_entry"][1]["phase"] == "relationships"
+    assert data["stats"]["total_journals"] == 2
     assert data["stats"]["pending_entities"] == 1
     mock_curation_manager.get_all_pending_curation_tasks.assert_awaited_once()
     mock_curation_manager.get_curation_stats.assert_awaited_once()

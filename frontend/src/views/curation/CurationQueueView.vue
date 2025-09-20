@@ -52,10 +52,10 @@ const journalGroups = computed(() => {
   if (!apiResponse.value || !apiResponse.value.journal_entry) {
     return [];
   }
+  console.log(apiResponse.value);
   return apiResponse.value.journal_entry.map(journal => ({
     ...journal,
-    phase: (journal.tasks && journal.tasks.length > 0) ? `${journal.tasks[0].type}s` : null,
-  })).filter(journal => journal.tasks && journal.tasks.length > 0);
+  }));
 });
 
 onMounted(() => {
@@ -74,16 +74,20 @@ async function fetchCurationData() {
     }
 
     const data = await response.json();
-
     // Pre-process tasks for easier display
     (data.journal_entry || []).forEach(journal => {
       (journal.tasks || []).forEach(task => {
+        console.log(task)
         if (task.type === 'entity') {
           task.displayName = task.data.name;
-          task.displayType = task.data.entity_type;
+          task.displayType = task.data.entity_type || task.data.type || 'Entity';
         } else if (task.type === 'relationship') {
-          task.displayName = task.data.sub_type ? task.data.sub_type.join(', ') : task.data.relationship_type;
-          task.displayType = task.data.relationship_type;
+          task.displayName = task.data.proposed_types ? task.data.proposed_types.join(', ') : task.data.relationship_type;
+          task.displayType = 'Relationship';
+        } else {
+          // Fallback for any other task types
+          task.displayName = task.data.name || task.id;
+          task.displayType = task.type || 'Unknown';
         }
       });
     });
@@ -117,8 +121,9 @@ async function handleCurationAction(group, taskIndex, action) {
       action: action,
       curated_data: action === 'accept' ? task.data : {},
     };
-
-    const response = await fetch(`http://127.0.0.1:8000/api/curation/${task.type}s/${task.journal_id}/${task.id}`, {
+    const task_type = task.type === 'entity' ? "entities" : 'relationships';
+    console.log(task.type);
+    const response = await fetch(`http://127.0.0.1:8000/api/curation/${task_type}/${task.journal_id}/${task.id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

@@ -125,6 +125,47 @@ class TemporalRepository:
                 logger.error(f"Error linking node to day: {e}")
                 return False
 
+    def link_nodes_to_day_batch(self, uuids: List[str], target_date: date) -> int:
+        """
+        Link multiple nodes to a day in the time tree in batch.
+
+        Args:
+            uuids: List of node UUIDs
+            target_date: Date to link all nodes to
+
+        Returns:
+            int: Number of relationships created
+        """
+        if not uuids:
+            return 0
+
+        # First ensure the day exists
+        day_uuid = self.ensure_day_in_time_tree(target_date)
+
+        # Then create all relationships in batch
+        query = """
+        UNWIND $uuids as node_uuid
+        MATCH (n {uuid: node_uuid})
+        MATCH (d:Day {uuid: $day_uuid})
+        MERGE (n)-[:OCCURRED_ON]->(d)
+        RETURN count(*) as linked
+        """
+
+        with self.connection.session() as session:
+            try:
+                result = session.run(query, uuids=uuids, day_uuid=day_uuid)
+                record = result.single()
+                linked_count = record["linked"]
+
+                if linked_count > 0:
+                    logger.info(f"Linked {linked_count} nodes to day {target_date}")
+
+                return linked_count
+
+            except Exception as e:
+                logger.error(f"Error linking nodes to day: {e}")
+                return 0
+
     def get_day_uuid(self, target_date: date) -> Optional[str]:
         """
         Get the UUID of a day node if it exists.

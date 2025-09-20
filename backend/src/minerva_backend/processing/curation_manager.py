@@ -382,7 +382,7 @@ class CurationManager:
         """Get all pending curation tasks for the dashboard, grouped by journalentry"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT uuid, journal_text, created_at FROM journal_curation
+                SELECT uuid, journal_text, created_at, overall_status FROM journal_curation
                 WHERE overall_status != 'COMPLETED' ORDER BY created_at DESC
             """) as cursor:
                 journal_rows = await cursor.fetchall()
@@ -394,7 +394,8 @@ class CurationManager:
                 row[0]: JournalEntryCuration(
                     journal_id=row[0],
                     date=datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S').date(),
-                    entry_text=row[1]
+                    entry_text=row[1],
+                    phase="relationships" if row[3] == "PENDING_RELATIONS" else "entities"
                 ) for row in journal_rows
             }
             journal_ids = tuple(journal_curations.keys())
