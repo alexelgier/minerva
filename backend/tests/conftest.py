@@ -1,3 +1,4 @@
+import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,11 +20,57 @@ from minerva_backend.processing.models import EntitySpanMapping, RelationSpanCon
 
 
 @pytest.fixture(scope="session")
-def db_connection():
-    """Database connection fixture for the entire test session."""
-    conn = Neo4jConnection()
-    yield conn
-    conn.close()
+def test_db_connection():
+    """
+    Provides a Neo4j connection specifically for testing.
+    Uses a separate test database to avoid interfering with production data.
+    """
+    # Use environment variables or default test database settings
+    test_uri = os.getenv("NEO4J_TEST_URI", "bolt://localhost:7687")
+    test_username = os.getenv("NEO4J_TEST_USERNAME", "neo4j")
+    test_password = os.getenv("NEO4J_TEST_PASSWORD", "Alxe342!")
+    test_database = os.getenv("NEO4J_TEST_DATABASE", "testdb")  # Separate test database
+
+    connection = Neo4jConnection(
+        uri=test_uri,
+        user=test_username,
+        password=test_password,
+        database=test_database
+    )
+
+    yield connection
+
+    # Clean up connection after all tests
+    connection.close()
+
+
+@pytest.fixture(scope="function")
+def db_connection(test_db_connection):
+    """
+    Function-scoped fixture that provides a clean database for each test.
+    Clears the test database before and after each test.
+    """
+    # Clean database before test
+    _clear_test_database(test_db_connection)
+
+    yield test_db_connection
+
+    # Clean database after test
+    _clear_test_database(test_db_connection)
+
+
+def _clear_test_database(connection: Neo4jConnection):
+    """
+    Safely clears all data from the test database.
+    Only use this on test databases!
+    """
+    with connection.session() as session:
+        # Remove all relationships first
+        session.run("MATCH ()-[r]->() DELETE r")
+        # Then remove all nodes
+        session.run("MATCH (n) DELETE n")
+        # Clear any indexes or constraints if needed
+        # session.run("DROP INDEX index_name IF EXISTS")
 
 
 @pytest.fixture

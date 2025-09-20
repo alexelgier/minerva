@@ -27,7 +27,8 @@ class Neo4jConnection:
                  user: str = settings.NEO4J_USER,
                  password: str = settings.NEO4J_PASSWORD,
                  max_pool_size: int = 50,
-                 max_connection_lifetime: int = 3600):
+                 max_connection_lifetime: int = 3600,
+                 database: str = None):
         """
         Initialize Neo4j connection.
 
@@ -47,7 +48,8 @@ class Neo4jConnection:
                 uri,
                 auth=(user, password),
                 max_connection_pool_size=max_pool_size,
-                max_connection_lifetime=max_connection_lifetime
+                max_connection_lifetime=max_connection_lifetime,
+                database=database
             )
 
             if not self.health_check():

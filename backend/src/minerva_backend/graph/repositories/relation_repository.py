@@ -67,7 +67,8 @@ class RelationRepository(BaseRepository[Relation]):
                     target_uuid=target_uuid,
                     edge_uuid=edge_uuid,
                     proposed_types=proposed_types,
-                    created_at=datetime.now().isoformat()
+                    created_at=datetime.now().isoformat(),
+                    summary_short=""  # TODO
                 )
                 record = result.single()
 
