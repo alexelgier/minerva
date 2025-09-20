@@ -20,6 +20,7 @@ from minerva_backend.graph.repositories.project_repository import ProjectReposit
 from minerva_backend.graph.repositories.relation_repository import RelationRepository
 from minerva_backend.graph.repositories.temporal_repository import TemporalRepository
 from minerva_backend.graph.services.lexical_utils import build_and_insert_lexical_tree, SpanIndex
+from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 
 
@@ -48,6 +49,7 @@ class KnowledgeGraphService:
             'Consumable': ConsumableRepository(self.connection),
             'Place': PlaceRepository(self.connection),
         }
+        self.obsidian_service = ObsidianService()
 
     def add_journal_entry(self, journal_entry: JournalEntry,
                           entities: List[EntitySpanMapping],
@@ -81,9 +83,18 @@ class KnowledgeGraphService:
         for e in entities:
             entity = e.entity
             spans = e.spans
+
+            # Create/Update Entity
             # TODO figure out if entity is linked to journal date (or other?)
-            # Create Entity
-            entity_uuid = self.entity_repositories[entity.type].create(entity)
+            if self.entity_repositories[entity.type].exists(entity.uuid):
+                entity_uuid = self.entity_repositories[entity.type].update(entity.uuid,
+                                                                           entity.model_dump(exclude_unset=True,
+                                                                                             exclude_defaults=True))
+            else:
+                entity_uuid = self.entity_repositories[entity.type].create(entity)
+            # Update Obsidian YAML metadata with entity information (summary merging should already be done)
+            self.obsidian_service.update_link(entity.name, {"entity_id": entity_uuid, "entity_type": entity.type,
+                                                            "short_summary": entity.summary_short})
             for span in spans:
                 found_chunks = span_index.query_containing(span.start, span.end)
                 for chunk_uuid in found_chunks:
@@ -114,7 +125,6 @@ class KnowledgeGraphService:
         # Ensure time tree has corresponding nodes and link nodes
         self.temporal_repository.link_nodes_to_day_batch(node_day, journal_entry.date)
 
-        # TODO write metadata to obsidian
         return journal_uuid
 
     def get_database_stats(self) -> Dict[str, Any]:

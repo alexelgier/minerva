@@ -9,6 +9,7 @@ class SpanIndex:
     def __init__(self):
         self.tree = IntervalTree()
 
+
     def add_span(self, start: int, end: int, chunk_uuid: str):
         # IntervalTree uses [start, end), so end is exclusive
         self.tree[start:end] = chunk_uuid
@@ -21,8 +22,9 @@ class SpanIndex:
         """
         Return all chunk_uuids whose spans fully contain [start, end).
         """
-        matches = self.tree.envelop(start, end)
-        return [iv.data for iv in matches]
+        candidates = self.tree.overlap(start, end)
+        result = [iv for iv in candidates if iv.begin <= start and iv.end >= end]
+        return result
 
     def __len__(self):
         return len(self.tree)
