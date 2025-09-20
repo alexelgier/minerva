@@ -10,24 +10,23 @@
     <div v-if="!isLoading && !error" class="journal-groups-container">
       <div v-for="group in journalGroups" :key="group.journal_id" class="journal-group-card">
         <div class="journal-header">
-          <h2>Journal Entry: {{ formatDate(group.created_at) }}</h2>
+          <h2>Journal Entry: {{ formatDate(group.date) }}</h2>
           <div class="progress-container">
-            <span>{{ group.tasks.length }} pending of {{ group.total_tasks }}</span>
-            <progress :value="group.total_tasks - group.tasks.length" :max="group.total_tasks" class="curation-progress"></progress>
+            <span>{{ group.tasks.length }} pending tasks</span>
           </div>
         </div>
         <ul class="task-list">
           <li v-for="(task, index) in group.tasks" :key="task.id" class="task-item">
             <div class="task-info">
               <div class="task-header-info">
-                <span class="task-name">{{ task.name }}</span>
-                <span class="task-type-badge">{{ task.entity_type.toUpperCase() }}</span>
+                <span class="task-name">{{ task.displayName }}</span>
+                <span class="task-type-badge">{{ task.displayType.toUpperCase() }}</span>
               </div>
-              <p class="task-summary">{{ task.summary_short }}</p>
+              <p class="task-summary">{{ task.data.summary_short }}</p>
             </div>
             <div class="task-actions">
-              <button @click="quickAccept(group, index)" class="action-btn accept-btn" title="Quick Accept">✓</button>
-              <button @click="quickReject(group, index)" class="action-btn reject-btn" title="Quick Reject">✗</button>
+              <button @click="handleCurationAction(group, index, 'accept')" class="action-btn accept-btn" title="Quick Accept">✓</button>
+              <button @click="handleCurationAction(group, index, 'reject')" class="action-btn reject-btn" title="Quick Reject">✗</button>
               <button @click="navigateToCuration(group.journal_id)" class="action-btn details-btn" title="View Details">Details</button>
             </div>
           </li>
@@ -47,26 +46,16 @@ import { useRouter } from 'vue-router';
 const router = useRouter();
 const isLoading = ref(true);
 const error = ref(null);
-const apiResponse = ref({ entity_journals: [], relationship_journals: [] });
+const apiResponse = ref({ journal_entry: [], stats: {} });
 
 const journalGroups = computed(() => {
-  const entityGroups = (apiResponse.value.entity_journals || []).map(journal => ({
-    journal_id: journal.journal_id,
-    created_at: journal.created_at,
-    total_tasks: journal.pending_entities_count,
-    tasks: journal.pending_entities,
-    phase: 'entities',
-  }));
-
-  const relationshipGroups = (apiResponse.value.relationship_journals || []).map(journal => ({
-    journal_id: journal.journal_id,
-    created_at: journal.created_at,
-    total_tasks: journal.pending_relationships_count,
-    tasks: journal.pending_relationships || [],
-    phase: 'relationships',
-  }));
-
-  return [...entityGroups, ...relationshipGroups];
+  if (!apiResponse.value || !apiResponse.value.journal_entry) {
+    return [];
+  }
+  return apiResponse.value.journal_entry.map(journal => ({
+    ...journal,
+    phase: (journal.tasks && journal.tasks.length > 0) ? `${journal.tasks[0].type}s` : null,
+  })).filter(journal => journal.tasks && journal.tasks.length > 0);
 });
 
 onMounted(() => {
@@ -78,7 +67,6 @@ async function fetchCurationData() {
     isLoading.value = true;
     error.value = null;
 
-    // Use the full URL to your API endpoint
     const response = await fetch('http://127.0.0.1:8000/api/curation/pending');
 
     if (!response.ok) {
@@ -86,12 +74,20 @@ async function fetchCurationData() {
     }
 
     const data = await response.json();
-    (data.relationship_journals || []).forEach(journal => {
-      (journal.pending_relationships || []).forEach(rel => {
-        rel.name = rel.sub_type ? rel.sub_type.join(', ') : rel.relationship_type;
-        rel.entity_type = rel.relationship_type;
+
+    // Pre-process tasks for easier display
+    (data.journal_entry || []).forEach(journal => {
+      (journal.tasks || []).forEach(task => {
+        if (task.type === 'entity') {
+          task.displayName = task.data.name;
+          task.displayType = task.data.entity_type;
+        } else if (task.type === 'relationship') {
+          task.displayName = task.data.sub_type ? task.data.sub_type.join(', ') : task.data.relationship_type;
+          task.displayType = task.data.relationship_type;
+        }
       });
     });
+
     apiResponse.value = data;
   } catch (err) {
     console.error("Failed to fetch curation tasks:", err);
@@ -114,15 +110,18 @@ function navigateToCuration(journalId) {
   router.push({ name: 'CurationView', params: { journalId } });
 }
 
-async function quickAccept(group, taskIndex) {
+async function handleCurationAction(group, taskIndex, action) {
   const task = group.tasks[taskIndex];
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/curation/${group.phase}/${group.journal_id}/${task.id}/accept`, {
+    const payload = {
+      action: action,
+      curated_data: action === 'accept' ? task.data : {},
+    };
+
+    const response = await fetch(`http://127.0.0.1:8000/api/curation/${task.type}s/${task.journal_id}/${task.id}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(task)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -130,31 +129,10 @@ async function quickAccept(group, taskIndex) {
       throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
     }
 
-    // On success, remove from list
     group.tasks.splice(taskIndex, 1);
   } catch (err) {
-    console.error("Failed to quick accept entity:", err);
-    error.value = `Failed to accept '${task.name}': ${err.message}.`;
-  }
-}
-
-async function quickReject(group, taskIndex) {
-  const task = group.tasks[taskIndex];
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/api/curation/${group.phase}/${group.journal_id}/${task.id}/reject`, {
-      method: 'POST'
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-    }
-
-    // On success, remove from list
-    group.tasks.splice(taskIndex, 1);
-  } catch (err) {
-    console.error("Failed to quick reject entity:", err);
-    error.value = `Failed to reject '${task.name}': ${err.message}.`;
+    console.error(`Failed to ${action} task:`, err);
+    error.value = `Failed to ${action} '${task.displayName}': ${err.message}.`;
   }
 }
 async function submitCuration(group) {
@@ -179,17 +157,10 @@ async function submitCuration(group) {
     const data = await response.json();
     console.log('Curation completed successfully:', data);
 
-    // Remove the completed journal from the appropriate list
-    if (group.phase === 'entities') {
-      const groupIndex = apiResponse.value.entity_journals.findIndex(g => g.journal_id === group.journal_id);
-      if (groupIndex > -1) {
-        apiResponse.value.entity_journals.splice(groupIndex, 1);
-      }
-    } else if (group.phase === 'relationships') {
-      const groupIndex = apiResponse.value.relationship_journals.findIndex(g => g.journal_id === group.journal_id);
-      if (groupIndex > -1) {
-        apiResponse.value.relationship_journals.splice(groupIndex, 1);
-      }
+    // Remove the completed journal from the list
+    const groupIndex = apiResponse.value.journal_entry.findIndex(j => j.journal_id === group.journal_id);
+    if (groupIndex > -1) {
+      apiResponse.value.journal_entry.splice(groupIndex, 1);
     }
   } catch (err) {
     console.error("Failed to complete curation:", err);
