@@ -114,6 +114,7 @@ class KnowledgeGraphService:
         # Ensure time tree has corresponding nodes and link nodes
         self.temporal_repository.link_nodes_to_day_batch(node_day, journal_entry.date)
 
+        # TODO write metadata to obsidian
         return journal_uuid
 
     def get_database_stats(self) -> Dict[str, Any]:

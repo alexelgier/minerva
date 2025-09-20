@@ -1,15 +1,14 @@
 import re
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any
 
-from minerva_backend.graph.models.documents import JournalEntry, Span
-from minerva_backend.graph.models.entities import Person, Entity
-from minerva_backend.graph.models.enums import EntityType
+from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.graph.models.entities import Person
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.llm_service import LLMService
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_people import ExtractPeoplePrompt, People
-from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships, RelationshipContext
+from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships
 from minerva_backend.prompt.hydrate_person import HydratePersonPrompt
 
 
@@ -45,6 +44,7 @@ class ExtractionService:
         # Stage 1: Extract Person, Project, Concept, Resource, Event, Consumable, Place
         people = await self.extract_people(journal_entry)
 
+        # TODO dedupe! merge!
         # Deduplicate people based on Obsidian links and aliases
         unique_people_to_hydrate: Dict[str, Dict[str, Any]] = {}
         for person in people.people:
