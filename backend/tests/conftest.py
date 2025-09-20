@@ -327,7 +327,9 @@ def sample_entity_span_mappings(sample_journal_entry):
     # Create Person entity
     person = Person(
         uuid=str(uuid4()),
-        full_name="María",
+        name="María",
+        summary_short="A person named María.",
+        summary="A person named María, mentioned in the journal.",
         occupation="unknown"
     )
     person_span = Span(
@@ -335,7 +337,7 @@ def sample_entity_span_mappings(sample_journal_entry):
         text="María",
         start_char=16,
         end_char=21,
-        parent_document_uuid=sample_journal_entry.uuid
+        document_uuid=sample_journal_entry.uuid
     )
     person_mapping = EntitySpanMapping(
         entity=person,
@@ -345,16 +347,16 @@ def sample_entity_span_mappings(sample_journal_entry):
     # Create Emotion entity
     emotion = Emotion(
         uuid=str(uuid4()),
-        emotion_name="feliz",
-        emotion_type="joy",
-        valence_score=8
+        name="feliz",
+        summary_short="A feeling of happiness.",
+        summary="The emotion of happiness (feliz)."
     )
     emotion_span = Span(
         uuid=str(uuid4()),
         text="muy feliz",
         start_char=50,
         end_char=59,
-        parent_document_uuid=sample_journal_entry.uuid
+        document_uuid=sample_journal_entry.uuid
     )
     emotion_mapping = EntitySpanMapping(
         entity=emotion,
@@ -369,9 +371,11 @@ def sample_relation_span_mappings(sample_entity_span_mappings, sample_journal_en
     """Create sample RelationSpanContextMapping objects"""
     relation = Relation(
         uuid=str(uuid4()),
-        source_uuid=sample_entity_span_mappings[0].entity.uuid,  # Person
-        target_uuid=sample_entity_span_mappings[1].entity.uuid,  # Emotion
-        relation_type="FEELS"
+        source=sample_entity_span_mappings[0].entity.uuid,  # Person
+        target=sample_entity_span_mappings[1].entity.uuid,  # Emotion
+        proposed_types=["FEELS"],
+        summary_short="Person feels an emotion.",
+        summary="A relationship indicating a person is feeling a certain emotion."
     )
 
     relation_span = Span(
@@ -379,7 +383,7 @@ def sample_relation_span_mappings(sample_entity_span_mappings, sample_journal_en
         text="hablé con María",
         start_char=5,
         end_char=20,
-        parent_document_uuid=sample_journal_entry.uuid
+        document_uuid=sample_journal_entry.uuid
     )
 
     relation_mapping = RelationSpanContextMapping(
