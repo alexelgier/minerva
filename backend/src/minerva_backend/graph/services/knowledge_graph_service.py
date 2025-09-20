@@ -37,16 +37,16 @@ class KnowledgeGraphService:
         self.journal_entry_repository = JournalEntryRepository(self.connection)
         self.temporal_repository = TemporalRepository(self.connection)
         self.relation_repository = RelationRepository(self.connection)
-        self.entity_repositories: Dict[Type[Entity], BaseRepository] = {
-            Person: PersonRepository(self.connection),
-            Feeling: FeelingRepository(self.connection),
-            Emotion: EmotionRepository(self.connection),
-            Event: EventRepository(self.connection),
-            Project: ProjectRepository(self.connection),
-            Concept: ConceptRepository(self.connection),
-            Content: ContentRepository(self.connection),
-            Consumable: ConsumableRepository(self.connection),
-            Place: PlaceRepository(self.connection),
+        self.entity_repositories: Dict[str, BaseRepository] = {
+            'Person': PersonRepository(self.connection),
+            'Feeling': FeelingRepository(self.connection),
+            'Emotion': EmotionRepository(self.connection),
+            'Event': EventRepository(self.connection),
+            'Project': ProjectRepository(self.connection),
+            'Concept': ConceptRepository(self.connection),
+            'Content': ContentRepository(self.connection),
+            'Consumable': ConsumableRepository(self.connection),
+            'Place': PlaceRepository(self.connection),
         }
 
     def add_journal_entry(self, journal_entry: JournalEntry,
@@ -83,7 +83,7 @@ class KnowledgeGraphService:
             spans = e.spans
             # TODO figure out if entity is linked to journal date (or other?)
             # Create Entity
-            entity_uuid = self.entity_repositories[type(entity)].create(entity)
+            entity_uuid = self.entity_repositories[entity.type].create(entity)
             for span in spans:
                 found_chunks = span_index.query_containing(span.start, span.end)
                 for chunk_uuid in found_chunks:
@@ -102,9 +102,10 @@ class KnowledgeGraphService:
                 for chunk_uuid in found_chunks:
                     # Relation span is in chunk, add mention
                     node_mentions.append((chunk_uuid, relationship_uuid))
-            for entity in context:
-                # Create subsequent RELATED_TO for reified relation
-                self.relation_repository.create_edge_only(relationship_uuid, entity.entity_uuid, entity.sub_type)
+            if context and len(context) > 0:
+                for entity in context:
+                    # Create subsequent RELATED_TO for reified relation
+                    self.relation_repository.create_edge_only(relationship_uuid, entity.entity_uuid, entity.sub_type)
 
         # TODO Batch previous insertions
         # Create MENTIONS
