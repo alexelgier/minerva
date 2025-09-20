@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Literal
 
 from pydantic import BaseModel, Field, field_validator
+from pydantic_core.core_schema import ValidationInfo
 
 from minerva_backend.processing.models import JournalEntryCuration, CurationStats
 
@@ -47,11 +48,11 @@ class CurationAction(BaseModel):
     )
 
     @field_validator('curated_data')
-    def validate_curated_data_for_accept(cls, v, values):
+    def validate_curated_data_for_accept(cls, curated_data: Dict[str, Any], info: ValidationInfo):
         """Ensure curated_data is provided for accept actions."""
-        if values.get('action') == 'accept' and not v:
+        if info.data.get('action') == 'accept' and not curated_data:
             raise ValueError('curated_data is required when action is "accept"')
-        return v
+        return curated_data
 
 
 class ProcessingControl(BaseModel):

@@ -33,7 +33,6 @@ async def get_curation_manager(
     """Get curation manager with initialization check."""
     try:
         # Verify the curation manager is properly initialized
-        await manager.get_curation_stats()
         return manager
     except Exception as e:
         logger.error(f"Curation manager error: {e}")

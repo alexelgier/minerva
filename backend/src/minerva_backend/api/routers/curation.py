@@ -1,6 +1,5 @@
 """Human-in-the-loop curation endpoints."""
 import logging
-from typing import Dict, Any
 
 from fastapi import APIRouter, Depends
 
@@ -66,6 +65,34 @@ async def get_curation_stats(
 
 # ===== ENTITY CURATION ENDPOINTS =====
 
+@router.post("/entities/{journal_id}/complete", response_model=SuccessResponse)
+@handle_errors(404)
+async def complete_entity_curation(
+        journal_id: str = Depends(validate_journal_id),
+        curation_manager: CurationManager = Depends(get_curation_manager)
+) -> SuccessResponse:
+    """
+    Mark entity curation phase as complete for a journal entry.
+
+    This signals the workflow to proceed to relationship extraction
+    once all entities have been reviewed.
+    """
+    try:
+        await curation_manager.complete_entity_phase(journal_id)
+
+        logger.info(f"Entity curation completed for journal {journal_id}")
+
+        return SuccessResponse(
+            message="Entity curation phase completed",
+            journal_id=journal_id,
+            data={"phase": "entity", "status": "completed"}
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to complete entity curation for {journal_id}: {e}")
+        raise
+
+
 @router.post("/entities/{journal_id}/{entity_id}", response_model=SuccessResponse)
 @handle_errors(404)
 async def handle_entity_curation(
@@ -119,35 +146,36 @@ async def handle_entity_curation(
         raise
 
 
-@router.post("/entities/{journal_id}/complete", response_model=SuccessResponse)
+# ===== RELATIONSHIP CURATION ENDPOINTS =====
+
+
+@router.post("/relationships/{journal_id}/complete", response_model=SuccessResponse)
 @handle_errors(404)
-async def complete_entity_curation(
+async def complete_relationship_curation(
         journal_id: str = Depends(validate_journal_id),
         curation_manager: CurationManager = Depends(get_curation_manager)
 ) -> SuccessResponse:
     """
-    Mark entity curation phase as complete for a journal entry.
+    Mark relationship curation phase as complete for a journal entry.
 
-    This signals the workflow to proceed to relationship extraction
-    once all entities have been reviewed.
+    This signals the workflow to proceed to knowledge graph integration
+    once all relationships have been reviewed.
     """
     try:
-        await curation_manager.complete_entity_phase(journal_id)
+        await curation_manager.complete_relationship_phase(journal_id)
 
-        logger.info(f"Entity curation completed for journal {journal_id}")
+        logger.info(f"Relationship curation completed for journal {journal_id}")
 
         return SuccessResponse(
-            message="Entity curation phase completed",
+            message="Relationship curation phase completed",
             journal_id=journal_id,
-            data={"phase": "entity", "status": "completed"}
+            data={"phase": "relationship", "status": "completed"}
         )
 
     except Exception as e:
-        logger.error(f"Failed to complete entity curation for {journal_id}: {e}")
+        logger.error(f"Failed to complete relationship curation for {journal_id}: {e}")
         raise
 
-
-# ===== RELATIONSHIP CURATION ENDPOINTS =====
 
 @router.post("/relationships/{journal_id}/{relationship_id}", response_model=SuccessResponse)
 @handle_errors(404)
@@ -198,34 +226,6 @@ async def handle_relationship_curation(
 
     except Exception as e:
         logger.error(f"Failed to handle relationship curation: {e}")
-        raise
-
-
-@router.post("/relationships/{journal_id}/complete", response_model=SuccessResponse)
-@handle_errors(404)
-async def complete_relationship_curation(
-        journal_id: str = Depends(validate_journal_id),
-        curation_manager: CurationManager = Depends(get_curation_manager)
-) -> SuccessResponse:
-    """
-    Mark relationship curation phase as complete for a journal entry.
-
-    This signals the workflow to proceed to knowledge graph integration
-    once all relationships have been reviewed.
-    """
-    try:
-        await curation_manager.complete_relationship_phase(journal_id)
-
-        logger.info(f"Relationship curation completed for journal {journal_id}")
-
-        return SuccessResponse(
-            message="Relationship curation phase completed",
-            journal_id=journal_id,
-            data={"phase": "relationship", "status": "completed"}
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to complete relationship curation for {journal_id}: {e}")
         raise
 
 

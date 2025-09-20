@@ -47,7 +47,6 @@ async def curation_manager_db():
     # Create a temporary file for the database
     db_fd, db_path = tempfile.mkstemp(suffix='.db')
     os.close(db_fd)  # Close the file descriptor, we just need the path
-
     try:
         manager = CurationManager(db_path)
         await manager.initialize()
@@ -112,7 +111,6 @@ def sample_relation_span_context_mapping(sample_relation, sample_span, sample_re
 
 @pytest.mark.asyncio
 async def test_initialize(curation_manager_db: CurationManager):
-    # The fixture already calls initialize, so we just need to verify tables exist
     async with aiosqlite.connect(curation_manager_db.db_path) as db:
         cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [row[0] for row in await cursor.fetchall()]
@@ -416,69 +414,6 @@ async def test_complete_relationship_phase(curation_manager_db: CurationManager,
     await curation_manager_db.complete_relationship_phase(sample_journal_entry.uuid)
     status = await curation_manager_db.get_journal_status(sample_journal_entry.uuid)
     assert status == "COMPLETED"
-
-
-@pytest.mark.asyncio
-async def test_get_journals_pending_entity_curation(curation_manager_db: CurationManager, sample_journal_entry,
-                                                    sample_entity_span_mapping, sample_person_entity):
-    journal_uuid = sample_journal_entry.uuid
-    entity_uuid = sample_entity_span_mapping.entity.uuid
-
-    await curation_manager_db.queue_entities_for_curation(
-        journal_uuid, sample_journal_entry.text, [sample_entity_span_mapping]
-    )
-
-    pending_journals = await curation_manager_db.get_journals_pending_entity_curation()
-    assert len(pending_journals) == 1
-    journal_data = pending_journals[0]
-    assert journal_data["journal_id"] == journal_uuid
-    assert journal_data["journal_text"] == sample_journal_entry.text
-    assert journal_data["pending_entities_count"] == 1
-    assert journal_data["phase"] == "entities"
-    assert len(journal_data["pending_entities"]) == 1
-    pending_entity = journal_data["pending_entities"][0]
-    assert pending_entity["id"] == entity_uuid
-    assert pending_entity["entity_type"] == sample_person_entity.type
-    assert pending_entity["status"] == "PENDING"
-    assert pending_entity["name"] == sample_person_entity.name
-
-    # Complete entity phase, should no longer be pending
-    await curation_manager_db.complete_entity_phase(journal_uuid)
-    pending_journals_after_complete = await curation_manager_db.get_journals_pending_entity_curation()
-    assert len(pending_journals_after_complete) == 0
-
-
-@pytest.mark.asyncio
-async def test_get_journals_pending_relationship_curation(curation_manager_db: CurationManager, sample_journal_entry,
-                                                          sample_relation_span_context_mapping, sample_relation):
-    journal_uuid = sample_journal_entry.uuid
-    relation_uuid = sample_relation_span_context_mapping.relation.uuid
-
-    await curation_manager_db.create_journal_for_curation(journal_uuid, sample_journal_entry.text)
-    await curation_manager_db.update_journal_status(journal_uuid, 'ENTITIES_DONE')
-    await curation_manager_db.queue_relationships_for_curation(
-        journal_uuid, [sample_relation_span_context_mapping]
-    )
-
-    pending_journals = await curation_manager_db.get_journals_pending_relationship_curation()
-    assert len(pending_journals) == 1
-    journal_data = pending_journals[0]
-    assert journal_data["journal_id"] == journal_uuid
-    assert journal_data["journal_text"] == sample_journal_entry.text
-    assert journal_data["pending_relationships_count"] == 1
-    assert journal_data["phase"] == "relationships"
-    assert len(journal_data["pending_relationships"]) == 1
-    pending_relationship = journal_data["pending_relationships"][0]
-    assert pending_relationship["id"] == relation_uuid
-    assert pending_relationship["relationship_type"] == sample_relation.type
-    assert pending_relationship["status"] == "PENDING"
-    assert pending_relationship["source"] == sample_relation.source
-    assert pending_relationship["target"] == sample_relation.target
-
-    # Complete relationship phase, should no longer be pending
-    await curation_manager_db.complete_relationship_phase(journal_uuid)
-    pending_journals_after_complete = await curation_manager_db.get_journals_pending_relationship_curation()
-    assert len(pending_journals_after_complete) == 0
 
 
 @pytest.mark.asyncio

@@ -132,7 +132,7 @@ def test_handle_entity_curation_not_found(client, mock_curation_manager):
         )
 
     assert response.status_code == 404
-    assert "Entity not found" in response.json()["detail"]
+    assert f"Entity with identifier '{entity_id}' not found" in response.json()['error']['message']
 
 
 def test_handle_entity_curation_accept_validation_error(client):
@@ -144,7 +144,7 @@ def test_handle_entity_curation_accept_validation_error(client):
         f"/api/curation/entities/{journal_id}/{entity_id}",
         json={"action": "accept"}  # Missing curated_data
     )
-    assert response.status_code == 422  # Pydantic validation error
+    assert response.status_code == 400
 
 
 def test_complete_entity_curation_success(client, mock_curation_manager):
@@ -235,7 +235,7 @@ def test_handle_relationship_curation_not_found(client, mock_curation_manager):
         )
 
     assert response.status_code == 404
-    assert "Relationship not found" in response.json()["detail"]
+    assert f"Relationship with identifier '{relationship_id}' not found" in response.json()['error']['message']
 
 
 def test_complete_relationship_curation_success(client, mock_curation_manager):
@@ -291,4 +291,4 @@ def test_bulk_accept_all_invalid_phase(client):
     journal_id = str(uuid.uuid4())
     response = client.post(f"/api/curation/bulk/accept-all/{journal_id}?phase=invalid")
     assert response.status_code == 400
-    assert "Phase must be 'entity' or 'relationship'" in response.json()["detail"]
+    assert "Phase must be 'entity' or 'relationship'" in response.json()['error']['message']

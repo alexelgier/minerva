@@ -1,11 +1,38 @@
 from typing import Dict, List, Tuple
+from intervaltree import IntervalTree
 
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import Chunk, JournalEntry
 
 
-def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: JournalEntry, nlp=None) -> Dict[
-    Tuple[int, int], str]:
+class SpanIndex:
+    def __init__(self):
+        self.tree = IntervalTree()
+
+    def add_span(self, start: int, end: int, chunk_uuid: str):
+        # IntervalTree uses [start, end), so end is exclusive
+        self.tree[start:end] = chunk_uuid
+
+    def add_span_batch(self, spans_dict: Dict[Tuple[int, int], str]):
+        for span, uuid in spans_dict.items():
+            self.tree[span[0]:span[1]] = uuid
+
+    def query_containing(self, start: int, end: int) -> list[str]:
+        """
+        Return all chunk_uuids whose spans fully contain [start, end).
+        """
+        matches = self.tree.envelop(start, end)
+        return [iv.data for iv in matches]
+
+    def __len__(self):
+        return len(self.tree)
+
+    def __iter__(self):
+        for iv in self.tree:
+            yield (iv.begin, iv.end), iv.data
+
+
+def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: JournalEntry, nlp=None) -> SpanIndex | None:
     """
     Build a lexical tree from a JournalEntry's text and insert it into the database.
 
@@ -19,7 +46,9 @@ def build_and_insert_lexical_tree(connection: Neo4jConnection, journal_entry: Jo
     """
     text = journal_entry.entry_text
     if not text:
-        return {}
+        return None
+
+    result = SpanIndex()
 
     # Initialize span mapping with journal entry (full text span)
     span_to_uuid = {(0, len(text)): journal_entry.uuid}
