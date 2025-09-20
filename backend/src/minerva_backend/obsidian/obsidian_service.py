@@ -150,6 +150,74 @@ class ObsidianService:
 
         return result
 
+    def update_link(self, link_text: str, metadata: Dict[str, Any]) -> bool:
+        """
+        Updates the YAML frontmatter of a note identified by a link.
+
+        Args:
+            link_text: Raw link content, e.g., "Federico Demarchi".
+            metadata: A dictionary of metadata to update in the frontmatter.
+                      Existing keys will be overwritten.
+                      To remove a key, provide it with a value of None.
+
+        Returns:
+            True if the update was successful, False otherwise.
+        """
+        cache = self._build_cache()
+
+        # Parse the link text to get the target file
+        if '|' in link_text:
+            target, _ = link_text.split('|', 1)
+        else:
+            target = link_text
+        target = target.strip()
+
+        if target not in cache:
+            return False
+
+        file_path = cache[target]
+
+        try:
+            # Read original content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Separate frontmatter and body
+            existing_frontmatter = {}
+            body = content
+            if content.startswith('---'):
+                lines = content.split('\n')
+                yaml_end_index = -1
+                # Start search from the second line
+                for i, line in enumerate(lines[1:], 1):
+                    if line.strip() == '---':
+                        yaml_end_index = i
+                        break
+
+                if yaml_end_index > 0:
+                    frontmatter_lines = lines[1:yaml_end_index]
+                    frontmatter_str = '\n'.join(frontmatter_lines)
+                    existing_frontmatter = yaml.safe_load(frontmatter_str) or {}
+                    body = '\n'.join(lines[yaml_end_index + 1:])
+
+            # Update with new metadata
+            existing_frontmatter.update(metadata)
+
+            # Clean up keys with None values
+            updated_frontmatter = {k: v for k, v in existing_frontmatter.items() if v is not None}
+
+            # Write back to file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                if updated_frontmatter:
+                    f.write('---\n')
+                    yaml.dump(updated_frontmatter, f, allow_unicode=True, sort_keys=False)
+                    f.write('---\n')
+                f.write(body)
+
+            return True
+        except (IOError, yaml.YAMLError, UnicodeDecodeError):
+            return False
+
     def get_cache_stats(self) -> Dict:
         """Returns statistics about the vault cache."""
         cache = self._build_cache()
