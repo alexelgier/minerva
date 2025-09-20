@@ -3,23 +3,48 @@ Quick test script for the journal submission endpoint
 """
 import requests
 import json
+import os
 
 # Configuration
 API_BASE_URL = "http://localhost:8000"
 ENDPOINT = "/api/journal/submit"
 
-# TODO Test journal content - MODIFY THIS
-TEST_JOURNAL = {
-    "date": "2025-09-10",
-    "text": """[[2025]] [[2025-09]] [[2025-09-10]]  Wednesday
+# --- Journal Content Configuration ---
+# Set the name of the .md file from the 'notes' directory to use for testing
+TEST_FILE_NAME = "2025-09-10.md"  # <-- MODIFY THIS to select a different file
+NOTES_DIR = os.path.join(os.path.dirname(__file__), "notes")
+# ------------------------------------
 
-12:30, desperté, sin alarma. 
-"""
-}
+# Construct the full path to the test file
+file_path = os.path.join(NOTES_DIR, TEST_FILE_NAME)
+
+# Prepare journal data
+TEST_JOURNAL = None
+
+try:
+    # Extract date from filename (e.g., "2025-09-10.md" -> "2025-09-10")
+    journal_date = os.path.splitext(TEST_FILE_NAME)[0]
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        journal_text = f.read()
+
+    TEST_JOURNAL = {
+        "date": journal_date,
+        "text": journal_text
+    }
+except FileNotFoundError:
+    print(f"❌ ERROR: Test file not found at '{file_path}'")
+    print("Please make sure the 'notes' directory exists and contains the specified file.")
+except Exception as e:
+    print(f"❌ ERROR: Failed to load journal from file: {e}")
 
 
 def test_submit_journal():
     """Test the journal submission endpoint"""
+    if not TEST_JOURNAL:
+        print("Aborting submission due to an error during journal loading.")
+        return
+
     url = f"{API_BASE_URL}{ENDPOINT}"
 
     print(f"Submitting journal to: {url}")
