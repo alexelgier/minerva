@@ -173,6 +173,7 @@ class ObsidianService:
         target = target.strip()
 
         if target not in cache:
+            # TODO: create note
             return False
 
         file_path = cache[target]

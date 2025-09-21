@@ -1,9 +1,7 @@
-from typing import Any, Dict, List, Type
+from typing import Any, Dict, List
 
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import JournalEntry
-from minerva_backend.graph.models.entities import Person, Feeling, Emotion, Event, Project, Concept, Content, \
-    Consumable, Place, Entity
 from minerva_backend.graph.repositories.base import BaseRepository
 from minerva_backend.graph.repositories.concept_repository import ConceptRepository
 from minerva_backend.graph.repositories.consumable_repository import ConsumableRepository
