@@ -172,11 +172,27 @@ class ObsidianService:
             target = link_text
         target = target.strip()
 
-        if target not in cache:
-            # TODO: create note in 07 - Personas y Organizaciones\Personas
-            return False
+        file_path = cache.get(target)
+        if not file_path:
+            # Note doesn't exist, create it.
+            # We assume 'target' can be a full path relative to vault root.
+            relative_path_with_ext = target.replace('/', os.sep) + '.md'
+            file_path = os.path.join(self.vault_path, relative_path_with_ext)
 
-        file_path = cache[target]
+            # Ensure parent directory exists
+            parent_dir = os.path.dirname(file_path)
+            os.makedirs(parent_dir, exist_ok=True)
+
+            # Create a placeholder empty file. The rest of the function will add content.
+            with open(file_path, 'w', encoding='utf-8'):
+                pass
+
+            # Manually update cache to avoid full rebuild
+            self._cache[target] = file_path
+            # Also key by note name only, if different
+            nombre_archivo = os.path.basename(target)
+            if nombre_archivo != target:
+                self._cache[nombre_archivo] = file_path
 
         try:
             # Read original content
