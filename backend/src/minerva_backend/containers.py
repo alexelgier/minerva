@@ -52,6 +52,7 @@ class Container(containers.DeclarativeContainer):
 
     extraction_service = providers.Singleton(
         ExtractionService,
+        connection=db_connection,
         llm_service=llm_service,
         obsidian_service=obsidian_service
     )
