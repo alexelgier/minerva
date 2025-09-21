@@ -1,9 +1,9 @@
-from typing import Type, List, Optional, Set
+from typing import Type, List, Optional
 
-from minerva_backend.graph.models.relations import Relation
-from pydantic import BaseModel, Field, conlist, conset
+from pydantic import BaseModel, Field, conlist
 
 from minerva_backend.graph.models.documents import Span
+from minerva_backend.graph.models.relations import Relation
 from minerva_backend.prompt.base import Prompt
 
 
@@ -12,13 +12,6 @@ class RelationshipContext(BaseModel):
     entity_uuid: str = Field(..., description="El UUID de la entidad")
     sub_type: conlist(str, min_length=1) = Field(..., description="Propuestas de subtipo para la relación")
 
-    class Config:
-        # This tells Pydantic to serialize sets as lists
-        json_encoders = {
-            set: list,
-            conlist: list
-        }
-
     def __hash__(self):
         return hash(self.entity_uuid + "".join(self.sub_type))
 
@@ -26,14 +19,8 @@ class RelationshipContext(BaseModel):
 class Relationship(Relation):
     """Una relación entre dos entidades encontrada en el texto."""
     spans: conlist(Span, min_length=1) = Field(..., description="Spans in the document where the person is mentioned")
-    context: Optional[Set[RelationshipContext]] = Field(default=None, description="Entidades relacionadas de alguna "
-                                                                                  "manera con la relación")
-
-    class Config:
-        # This tells Pydantic to serialize sets as lists
-        json_encoders = {
-            set: list
-        }
+    context: Optional[List[RelationshipContext]] = Field(default=None, description="Entidades relacionadas de alguna "
+                                                                                   "manera con la relación")
 
 
 class Relationships(BaseModel):

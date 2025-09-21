@@ -80,7 +80,7 @@ def sample_span():
 
 @pytest_asyncio.fixture
 def sample_entity_span_mapping(sample_person_entity, sample_span):
-    return EntitySpanMapping(entity=sample_person_entity, spans={sample_span})
+    return EntitySpanMapping(entity=sample_person_entity, spans=[sample_span])
 
 
 @pytest_asyncio.fixture
@@ -91,7 +91,8 @@ def sample_relation():
         target="person-def",
         proposed_types=["KNOWS", "WORKS_WITH"],
         summary_short="A test relationship between two people",
-        summary="A comprehensive test relationship used for validating the curation system's relationship handling capabilities"
+        summary="A comprehensive test relationship used for validating the curation system's relationship "
+                "handling capabilities"
     )
 
 
@@ -104,8 +105,8 @@ def sample_relationship_context():
 def sample_relation_span_context_mapping(sample_relation, sample_span, sample_relationship_context):
     return RelationSpanContextMapping(
         relation=sample_relation,
-        spans={sample_span},
-        context={sample_relationship_context}
+        spans=[sample_span],
+        context=[sample_relationship_context]
     )
 
 
@@ -242,7 +243,7 @@ async def test_get_accepted_entities_with_spans(curation_manager_db: CurationMan
     result_entity_mapping = accepted_entities[0]
     assert result_entity_mapping.entity.uuid == sample_person_entity.uuid
     assert result_entity_mapping.entity.name == sample_person_entity.name
-    assert result_entity_mapping.spans == {sample_span}
+    assert result_entity_mapping.spans == [sample_span]
 
     # Test with no accepted entities
     await curation_manager_db.reject_entity(sample_journal_entry.uuid, sample_person_entity.uuid)
@@ -398,8 +399,8 @@ async def test_get_accepted_relationships_with_spans(curation_manager_db: Curati
     result_relation_mapping = accepted_relationships[0]
     assert result_relation_mapping.relation.uuid == sample_relation.uuid
     assert result_relation_mapping.relation.type == sample_relation.type
-    assert result_relation_mapping.spans == {sample_span}
-    assert result_relation_mapping.context == {sample_relationship_context}
+    assert result_relation_mapping.spans == [sample_span]
+    assert result_relation_mapping.context == [sample_relationship_context]
 
     # Test with no accepted relationships
     await curation_manager_db.reject_relationship(sample_journal_entry.uuid, sample_relation.uuid)
@@ -464,7 +465,7 @@ async def test_get_curation_stats(curation_manager_db: CurationManager, sample_j
     # Journal 1: Pending entities with mixed entity statuses
     entity2 = create_person("Jane Smith", "entity-2")
     span2 = create_span("Jane Smith", journal1_uuid, 10, 20, "span-2")
-    entity_mapping2 = EntitySpanMapping(entity=entity2, spans={span2})
+    entity_mapping2 = EntitySpanMapping(entity=entity2, spans=[span2])
     await curation_manager_db.queue_entities_for_curation(
         journal1_uuid, "Journal 1 text", [sample_entity_span_mapping, entity_mapping2]
     )
@@ -479,7 +480,7 @@ async def test_get_curation_stats(curation_manager_db: CurationManager, sample_j
     # Add another relationship and reject it
     rel2 = create_relation("source-2", "target-2", "RELATED_TO", "rel-2")
     span3 = create_span("relationship text", journal2_uuid, 0, 10, "span-3")
-    rel_mapping2 = RelationSpanContextMapping(relation=rel2, spans={span3}, context=set())
+    rel_mapping2 = RelationSpanContextMapping(relation=rel2, spans=[span3], context=[])
     await curation_manager_db.queue_relationships_for_curation(journal2_uuid, [rel_mapping2])
     await curation_manager_db.reject_relationship(journal2_uuid, rel2.uuid)
 

@@ -1,6 +1,6 @@
 from datetime import date as date_type
 from datetime import datetime
-from typing import Set, Any, Literal, Dict, List
+from typing import Any, Literal, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -12,18 +12,18 @@ from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 class EntitySpanMapping(BaseModel):
     entity: Entity
-    spans: Set[Span]
+    spans: List[Span]
 
-    def __init__(self, entity: Entity, spans: Set[Span], **kwargs) -> None:
+    def __init__(self, entity: Entity, spans: List[Span], **kwargs) -> None:
         super().__init__(entity=entity, spans=spans, **kwargs)
 
 
 class RelationSpanContextMapping(BaseModel):
     relation: Relation
-    spans: Set[Span]
-    context: Set[RelationshipContext] | None = None
+    spans: List[Span]
+    context: List[RelationshipContext] | None = None
 
-    def __init__(self, relation: Relation, spans: Set[Span], context: Set[RelationshipContext] = None,
+    def __init__(self, relation: Relation, spans: List[Span], context: List[RelationshipContext] = None,
                  **kwargs) -> None:
         super().__init__(relation=relation, spans=spans, context=context, **kwargs)
 
