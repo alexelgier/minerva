@@ -95,9 +95,9 @@ class KnowledgeGraphService:
                                                             "short_summary": entity.summary_short})
             for span in spans:
                 found_chunks = span_index.query_containing(span.start, span.end)
-                for chunk_uuid in found_chunks:
+                for chunk in found_chunks:
                     # Entity span is in chunk, add mention
-                    node_mentions.append((chunk_uuid, entity_uuid))
+                    node_mentions.append((chunk[2], entity_uuid))
 
         # Create Relationship edge, ReifiedRelationship node, context relations and Mentions
         for r in relationships:
@@ -108,9 +108,9 @@ class KnowledgeGraphService:
             relationship_uuid = self.relation_repository.create_full_relationship(relationship)
             for span in spans:
                 found_chunks = span_index.query_containing(span.start, span.end)
-                for chunk_uuid in found_chunks:
+                for chunk in found_chunks:
                     # Relation span is in chunk, add mention
-                    node_mentions.append((chunk_uuid, relationship_uuid))
+                    node_mentions.append((chunk[2], relationship_uuid))
             if context and len(context) > 0:
                 for entity in context:
                     # Create subsequent RELATED_TO for reified relation

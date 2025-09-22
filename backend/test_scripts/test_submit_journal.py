@@ -11,7 +11,7 @@ ENDPOINT = "/api/journal/submit"
 
 # --- Journal Content Configuration ---
 # Set the name of the .md file from the 'notes' directory to use for testing
-TEST_FILE_NAME = "2025-09-08.md"  # <-- MODIFY THIS to select a different file
+TEST_FILE_NAME = "2025-09-09.md"  # <-- MODIFY THIS to select a different file
 NOTES_DIR = os.path.join(os.path.dirname(__file__), "notes")
 # ------------------------------------
 

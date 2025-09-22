@@ -158,7 +158,7 @@ class ExtractionService:
                 hydrated_person.uuid = existing_entity_data['entity_id']
 
                 # Load existing entity from DB and merge properties
-                existing_db_entity: Person = await self.entity_repositories['Person'].find_by_uuid(
+                existing_db_entity: Person | None = self.entity_repositories['Person'].find_by_uuid(
                     existing_entity_data['entity_id'])
                 if existing_db_entity:
                     hydrated_person = await self._merge_entity_properties(
@@ -193,7 +193,7 @@ class ExtractionService:
 
         # Update entity with merged summaries
         new_entity.summary = merged_summaries['summary']
-        new_entity.summary_short = merged_summaries['short_summary']
+        new_entity.summary_short = merged_summaries['summary_short']
         return new_entity
 
     async def extract_relationships(self, journal_entry: JournalEntry,

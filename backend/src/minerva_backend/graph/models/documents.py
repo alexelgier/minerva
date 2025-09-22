@@ -118,7 +118,7 @@ class JournalEntry(Document):
             text, re.DOTALL)
         if journal_text:
             journal_entry['text'] = journal_text.group(0)
-
+        # TODO empty scores processing (fill avg day before nad day after, not here, maybe in knowledgegraphsevice)
         return cls(
             id=journal_date_str,
             date=journal_entry['date'],
