@@ -252,8 +252,8 @@ def test_base_repository_methods_on_relation(relation_repository: RelationReposi
 
     # Test update (base version)
     updates = {"summary_short": "Base update"}
-    success = relation_repository.update(relation_uuid, updates)
-    assert success is True
+    uuid = relation_repository.update(relation_uuid, updates)
+    assert uuid is not None
     updated = relation_repository.find_by_uuid(relation_uuid)
     assert updated.summary_short == "Base update"
 

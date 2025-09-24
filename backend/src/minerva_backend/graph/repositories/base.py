@@ -171,7 +171,7 @@ class BaseRepository(Generic[T], ABC):
 
             return nodes
 
-    def update(self, uuid: str, updates: Dict[str, Any]) -> bool:
+    def update(self, uuid: str, updates: Dict[str, Any]) -> Optional[str]:
         """
         Update node properties.
 
@@ -180,7 +180,7 @@ class BaseRepository(Generic[T], ABC):
             updates: Dictionary of properties to update
 
         Returns:
-            bool: True if update succeeded
+            Optional[str]: UUID if update succeeded, None otherwise
         """
         # Add updated timestamp
         updates['updated_at'] = datetime.now().isoformat()
@@ -195,16 +195,13 @@ class BaseRepository(Generic[T], ABC):
             try:
                 result = session.run(query, uuid=uuid, updates=updates)
                 record = result.single()
-                success = record is not None
-
-                if success:
+                if record and record.get("uuid"):
                     logger.info(f"Updated {self.entity_label}: {uuid}")
-
-                return success
-
+                    return record["uuid"]
+                return None
             except Exception as e:
                 logger.error(f"Error updating {self.entity_label} {uuid}: {e}")
-                return False
+                return None
 
     def delete(self, uuid: str) -> bool:
         """
