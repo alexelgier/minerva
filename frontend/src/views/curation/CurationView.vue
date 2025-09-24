@@ -5,114 +5,150 @@
     </header>
     <div class="curation-view">
       <div class="journal-panel">
-        <JournalViewer :markdown="journalMarkdown" />
+        <JournalViewer :markdown="journalMarkdown" :spans="editedEntity.spans"/>
       </div>
       <div class="editor-panel">
-        <component
-          :is="editorComponent"
-          :entity="entityToEdit"
-          @accept="handleAccept"
-          @reject="handleReject"
-        />
+    <div class="editor-header-row">
+      <h3 class="entity-type-heading">Entity Type: {{ entityToEdit.type }}</h3>
+      <div class="editor-actions">
+        <button
+          class="accept-btn"
+          @click="handleAccept"
+        >Accept</button>
+        <button class="reject-btn" @click="handleReject">Reject</button>
+      </div>
+    </div>
+    <div class="entity-fields-form">
+      <component
+        v-for="(inputType, field) in currentEntityFields"
+        :key="field"
+        :is="inputComponent(inputType)"
+        v-model="fieldRefs[field]"
+        :label="field"
+        :placeholder="field"
+      />
+    </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, defineAsyncComponent, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import JournalViewer from '@/components/curation/JournalViewer.vue';
-import PersonEditor from '@/components/curation/editors/PersonEditor.vue';
-import EventEditor from '@/components/curation/editors/EventEditor.vue';
-import ProjectEditor from '@/components/curation/editors/ProjectEditor.vue';
-import GenericEntityEditor from '@/components/curation/editors/GenericEntityEditor.vue';
+import { entityTypeFields } from '@/entityTypeFields.js';
+import { useCurationStore } from '@/stores/curation';
 
 const router = useRouter();
+const curation = useCurationStore();
 
-// Mock Data
-const journalMarkdown = ref(`
-# Journal Entry - 2025-09-15
+const journalMarkdown = computed(() => curation.journalMarkdown || "");
+const entityToEdit = computed(() => curation.entities[curation.currentEntityIndex] || {});
 
-Had a productive meeting with **Alice** about the *Minerva Project*. She seems confident we can hit the Q4 target.
-Later, I attended the project kickoff for 'Project Phoenix'. It was a long meeting.
-I'm feeling optimistic about our progress.
-`);
-
-const mockEntities = [
-  {
-    "name": "Alice",
-    "type": "PERSON",
-    "summary_short": "Colleague involved in Minerva Project.",
-    "summary": "Alice is a key stakeholder in the Minerva Project. We had a meeting today to discuss Q4 targets.",
-    "occupation": "Project Manager",
-    "birth_date": "1990-05-15"
-  },
-  {
-    "name": "Minerva Project",
-    "type": "PROJECT",
-    "summary_short": "A project discussed with Alice.",
-    "summary": "A project with Q4 targets. Progress seems to be on track.",
-    "status": "In Progress",
-    "start_date": "2025-07-01T00:00:00",
-    "target_completion": "2025-12-31T00:00:00",
-    "progress": 45.0
-  },
-  {
-    "name": "Project Phoenix Kickoff",
-    "type": "EVENT",
-    "summary_short": "Kickoff meeting for Project Phoenix.",
-    "summary": "Attended the kickoff meeting for the new 'Project Phoenix'. It was a long but informative session.",
-    "category": "Meeting",
-    "date": "2025-09-15T14:00:00",
-    "duration": "PT2H", // ISO 8601 duration format for 2 hours
-    "location": "Conference Room 4B"
-  },
-  {
-      "name": "Optimism",
-      "type": "EMOTION",
-      "summary_short": "Feeling optimistic about progress.",
-      "summary": "A feeling of optimism regarding the current project progress after today's meetings.",
+// Build a map of computed refs, one per field
+function makeFieldRefs(fields) {
+  const result = {};
+  for (const field in fields) {
+    result[field] = computed({
+      get: () => entityToEdit.value[field],
+      set: (val) => curation.updateField(field, val),
+    });
   }
-];
+  return result;
+}
 
-const currentEntityIndex = ref(0);
-const entityToEdit = computed(() => mockEntities[currentEntityIndex.value]);
+const fieldRefs = computed(() => makeFieldRefs(currentEntityFields.value));
 
-const editorMap = {
-  PERSON: PersonEditor,
-  EVENT: EventEditor,
-  PROJECT: ProjectEditor,
-  // Add other entity types here
-};
-
-const editorComponent = computed(() => {
-  return editorMap[entityToEdit.value.type] || GenericEntityEditor;
+const currentEntityFields = computed(() => {
+  const type = entityToEdit.value.type;
+  return entityTypeFields[type] || {};
 });
+const editedEntity = computed(() => curation.editedEntity);
+
+onMounted(() => {
+  curation.initializeMockEntities();
+});
+
+function inputComponent(type) {
+  switch (type) {
+    case 'Input':
+      return defineAsyncComponent(() => import('@/components/curation/inputs/StringInput.vue'));
+    case 'TextAreaInput':
+      return defineAsyncComponent(() => import('@/components/curation/inputs/TextAreaInput.vue'));
+    case 'DateInput':
+      return defineAsyncComponent(() => import('@/components/curation/inputs/DateInput.vue'));
+    case 'DateTimeInput':
+      return defineAsyncComponent(() => import('@/components/curation/inputs/DateTimeInput.vue'));
+    case 'SliderInput':
+      return defineAsyncComponent(() => import('@/components/curation/inputs/SliderInput.vue'));
+    case 'DurationInput':
+      return defineAsyncComponent(() => import('@/components/curation/inputs/DurationInput.vue'));
+    case 'SpansInput':
+      return defineAsyncComponent(() => import('@/components/curation/inputs/SpansInput.vue'));
+    default:
+      return defineAsyncComponent(() => import('@/components/curation/inputs/StringInput.vue'));
+  }
+}
 
 function goBackToQueue() {
   router.push({ name: 'CurationQueueView' });
 }
 
-function handleAccept(updatedEntity) {
-  console.log('Accepted:', updatedEntity);
+function handleAccept() {
+  console.log('Accepted:', editedEntity.value);
   // Here you would typically send the data to an API
   // and then load the next entity.
-  goToNextEntity();
 }
 
 function handleReject() {
   console.log('Rejected:', entityToEdit.value.name);
   // Here you would typically flag this entity and load the next one.
-  goToNextEntity();
-}
-
-function goToNextEntity() {
-    currentEntityIndex.value = (currentEntityIndex.value + 1) % mockEntities.length;
 }
 </script>
 
 <style scoped>
+.editor-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.editor-actions {
+  display: flex;
+  gap: 1rem;
+}
+.accept-btn {
+  font-size: 1rem;
+  padding: 0.5rem 1.5rem;
+  border-radius: 999px;
+  border: none;
+  background-color: #28a745;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.accept-btn.edited {
+  background-color: #007bff;
+}
+.accept-btn:hover {
+  filter: brightness(0.95);
+}
+.reject-btn {
+  font-size: 1rem;
+  padding: 0.5rem 1.5rem;
+  border-radius: 999px;
+  border: none;
+  background-color: #dc3545;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.reject-btn:hover {
+  filter: brightness(0.95);
+}
 .curation-page-header {
   padding: 0.75rem 1.5rem;
   background-color: #fff;
@@ -139,6 +175,7 @@ function goToNextEntity() {
   width: 100%;
   background-color: #f0f2f5;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow-y: hidden;
 }
 
 .journal-panel {
@@ -155,6 +192,14 @@ function goToNextEntity() {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+.entity-type-heading {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #007bff;
+  margin-bottom: 1.2rem;
+  letter-spacing: 0.5px;
 }
 
 /* Responsive layout for smaller screens */

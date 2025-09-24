@@ -74,6 +74,9 @@ async function fetchCurationData() {
     }
 
     const data = await response.json();
+
+
+
     // Pre-process tasks for easier display
     (data.journal_entry || []).forEach(journal => {
       (journal.tasks || []).forEach(task => {
