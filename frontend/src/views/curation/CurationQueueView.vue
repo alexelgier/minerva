@@ -4,7 +4,12 @@
       <h1>Curation Queue</h1>
       <p v-if="isLoading">Loading tasks...</p>
       <p v-if="!isLoading && error" class="error-message">{{ error }}</p>
-      <p v-if="!isLoading && !error && journalGroups.length === 0">No pending curation tasks.</p>
+      <div v-if="!isLoading && !error && journalGroups.length === 0" class="no-tasks-summary">
+        <div class="empty-icon">📝</div>
+        <h2 class="empty-title">No pending curation tasks</h2>
+        <p class="empty-desc">All journals have been curated. Here is a summary of your progress:</p>
+        <StatsBoard :stats="stats" />
+      </div>
     </header>
 
     <div v-if="!isLoading && !error" class="journal-groups-container">
@@ -40,69 +45,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useCurationStore } from '@/stores/curation';
+import StatsBoard from '@/components/curation/StatsBoard.vue';
 
 const router = useRouter();
-const isLoading = ref(true);
-const error = ref(null);
-const apiResponse = ref({ journal_entry: [], stats: {} });
+const curationStore = useCurationStore();
 
-const journalGroups = computed(() => {
-  if (!apiResponse.value || !apiResponse.value.journal_entry) {
-    return [];
-  }
-  console.log(apiResponse.value);
-  return apiResponse.value.journal_entry.map(journal => ({
-    ...journal,
-  }));
-});
+const isLoading = curationStore.isLoading;
+const error = curationStore.error;
+const journalGroups = curationStore.journalGroups;
+const stats = curationStore.stats;
 
 onMounted(() => {
-  fetchCurationData();
+  curationStore.fetchCurationQueue();
 });
-
-async function fetchCurationData() {
-  try {
-    isLoading.value = true;
-    error.value = null;
-
-    const response = await fetch('http://127.0.0.1:8000/api/curation/pending');
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-
-
-    // Pre-process tasks for easier display
-    (data.journal_entry || []).forEach(journal => {
-      (journal.tasks || []).forEach(task => {
-        console.log(task)
-        if (task.type === 'entity') {
-          task.displayName = task.data.name;
-          task.displayType = task.data.entity_type || task.data.type || 'Entity';
-        } else if (task.type === 'relationship') {
-          task.displayName = task.data.proposed_types ? task.data.proposed_types.join(', ') : task.data.relationship_type;
-          task.displayType = 'Relationship';
-        } else {
-          // Fallback for any other task types
-          task.displayName = task.data.name || task.id;
-          task.displayType = task.type || 'Unknown';
-        }
-      });
-    });
-
-    apiResponse.value = data;
-  } catch (err) {
-    console.error("Failed to fetch curation tasks:", err);
-    error.value = `Failed to load data: ${err.message}. Make sure the API server is running on port 8000.`;
-  } finally {
-    isLoading.value = false;
-  }
-}
 
 function formatDate(dateString) {
   const date = new Date(dateString);
@@ -117,65 +75,12 @@ function navigateToCuration(journalId) {
   router.push({ name: 'CurationView', params: { journalId } });
 }
 
-async function handleCurationAction(group, taskIndex, action) {
-  const task = group.tasks[taskIndex];
-  try {
-    const payload = {
-      action: action,
-      curated_data: action === 'accept' ? task.data : {},
-    };
-    const task_type = task.type === 'entity' ? "entities" : 'relationships';
-    console.log(task.type);
-    const response = await fetch(`http://127.0.0.1:8000/api/curation/${task_type}/${task.journal_id}/${task.id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-    }
-
-    group.tasks.splice(taskIndex, 1);
-  } catch (err) {
-    console.error(`Failed to ${action} task:`, err);
-    error.value = `Failed to ${action} '${task.displayName}': ${err.message}.`;
-  }
+function handleCurationAction(group, taskIndex, action) {
+  curationStore.handleCurationAction(group, taskIndex, action);
 }
-async function submitCuration(group) {
-  console.log(`Submitting ${group.phase} curation for journal`, group.journal_id);
 
-  try {
-    isLoading.value = true;
-    error.value = null;
-
-    // Use the full URL to your API endpoint with the journalId
-    const response = await fetch(`http://127.0.0.1:8000/api/curation/${group.phase}/${group.journal_id}/complete`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Curation completed successfully:', data);
-
-    // Remove the completed journal from the list
-    const groupIndex = apiResponse.value.journal_entry.findIndex(j => j.journal_id === group.journal_id);
-    if (groupIndex > -1) {
-      apiResponse.value.journal_entry.splice(groupIndex, 1);
-    }
-  } catch (err) {
-    console.error("Failed to complete curation:", err);
-    error.value = `Failed to complete curation: ${err.message}.`;
-  } finally {
-    isLoading.value = false;
-  }
+function submitCuration(group) {
+  curationStore.submitCuration(group);
 }
 </script>
 
@@ -370,3 +275,54 @@ async function submitCuration(group) {
   background-color: #0056b3;
 }
 </style>
+
+.no-tasks-summary {
+  margin: 2rem auto;
+  max-width: 700px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  padding: 2.5rem 2rem 2rem 2rem;
+  text-align: center;
+}
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+.empty-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #34495e;
+  margin-bottom: 0.5rem;
+}
+.empty-desc {
+  color: #6c757d;
+  margin-bottom: 2rem;
+}
+
+.no-tasks-summary {
+  margin: 2rem auto;
+  max-width: 600px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 2rem;
+  text-align: left;
+}
+.stats-summary h2, .stats-summary h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #34495e;
+}
+.stats-summary ul {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 1rem;
+}
+.stats-summary li {
+  margin-bottom: 0.3rem;
+  font-size: 1rem;
+}
+.stats-summary strong {
+  color: #007bff;
+}
