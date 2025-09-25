@@ -34,7 +34,7 @@ async def get_pending_curation(
         stats_model = await curation_manager.get_curation_stats()
 
         return PendingCurationResponse(
-            journal_entry=pending_journals,
+            journal_entries=pending_journals,
             stats=stats_model
         )
 

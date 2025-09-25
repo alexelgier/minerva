@@ -3,142 +3,152 @@ import { ref } from 'vue'
 
 
 export const useCurationStore = defineStore('curation', () => {
-  const entities = ref([])
-  const currentEntityIndex = ref(0)
-  const editedEntity = ref({})
-  const journalMarkdown = ref("")
+    const entities = ref([])
+    const currentEntityIndex = ref(0)
+    const editedEntity = ref({})
+    const journalMarkdown = ref("")
 
     // State
-    const journalGroups = ref([])
+    const journalGroups = ref({})
     const stats = ref({})
     const isLoading = ref(false)
     const error = ref(null)
 
     // Actions
     async function fetchCurationQueue() {
-      isLoading.value = true
-      error.value = null
-      try {
-        const response = await fetch('http://127.0.0.1:8000/api/curation/pending')
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-        const data = await response.json()
-        // Pre-process tasks for easier display
-        (data.journal_entry || []).forEach(journal => {
-          (journal.tasks || []).forEach(task => {
-            if (task.type === 'entity') {
-              task.displayName = task.data.name
-              task.displayType = task.data.entity_type || task.data.type || 'Entity'
-            } else if (task.type === 'relationship') {
-              task.displayName = task.data.proposed_types ? task.data.proposed_types.join(', ') : task.data.relationship_type
-              task.displayType = 'Relationship'
-            } else {
-              task.displayName = task.data.name || task.id
-              task.displayType = task.type || 'Unknown'
-            }
-          })
-        })
-        journalGroups.value = data.journal_entry || []
-        stats.value = data.stats || {}
-      } catch (err) {
-        error.value = `Failed to load data: ${err.message}. Make sure the API server is running on port 8000.`
-      } finally {
-        isLoading.value = false
-      }
+        isLoading.value = true
+        error.value = null
+        try {
+            const response = await fetch('http://127.0.0.1:8000/api/curation/pending')
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+            const data = await response.json()
+            // Pre-process tasks for easier display
+            const journal_entries = data.journal_entry || [];
+            journal_entries.forEach(journal => {
+                (journal.tasks || []).forEach(task => {
+                    if (task.type === 'entity') {
+                        task.displayName = task.data.name
+                        task.displayType = task.data.entity_type || task.data.type || 'Entity'
+                    } else if (task.type === 'relationship') {
+                        task.displayName = task.data.proposed_types ? task.data.proposed_types.join(', ') : task.data.relationship_type
+                        task.displayType = 'Relationship'
+                    } else {
+                        task.displayName = task.data.name || task.id
+                        task.displayType = task.type || 'Unknown'
+                    }
+                })
+            })
+            // Convert array to object keyed by journal_id
+            const groupsObj = {}
+            journal_entries.forEach(journal => {
+                if (journal.journal_id) {
+                    groupsObj[journal.journal_id] = journal
+                }
+            })
+            journalGroups.value = groupsObj
+            stats.value = data.stats || {}
+
+        } catch (err) {
+            error.value = `Failed to load data: ${err.message}. Make sure the API server is running on port 8000.`
+        } finally {
+            isLoading.value = false
+        }
     }
 
     async function handleCurationAction(group, taskIndex, action) {
-      const task = group.tasks[taskIndex]
-      try {
-        const payload = {
-          action: action,
-          curated_data: action === 'accept' ? task.data : {},
+        const task = group.tasks[taskIndex]
+        try {
+            const payload = {
+                action: action,
+                curated_data: action === 'accept' ? task.data : {},
+            }
+            const task_type = task.type === 'entity' ? 'entities' : 'relationships'
+            const response = await fetch(`http://127.0.0.1:8000/api/curation/${task_type}/${task.journal_id}/${task.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            })
+            if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+            }
+            group.tasks.splice(taskIndex, 1)
+        } catch (err) {
+            error.value = `Failed to ${action} '${task.displayName}': ${err.message}.`
         }
-        const task_type = task.type === 'entity' ? 'entities' : 'relationships'
-        const response = await fetch(`http://127.0.0.1:8000/api/curation/${task_type}/${task.journal_id}/${task.id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
-        }
-        group.tasks.splice(taskIndex, 1)
-      } catch (err) {
-        error.value = `Failed to ${action} '${task.displayName}': ${err.message}.`
-      }
     }
 
     async function submitCuration(group) {
-      try {
-        isLoading.value = true
-        error.value = null
-        const response = await fetch(`http://127.0.0.1:8000/api/curation/${group.phase}/${group.journal_id}/complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-        await response.json() // Remove unused variable assignment
-        // Remove the completed journal from the list
-        const groupIndex = journalGroups.value.findIndex(j => j.journal_id === group.journal_id)
-        if (groupIndex > -1) journalGroups.value.splice(groupIndex, 1)
-      } catch (err) {
-        error.value = `Failed to complete curation: ${err.message}.`
-      } finally {
-        isLoading.value = false
-      }
+        try {
+            isLoading.value = true
+            error.value = null
+            const response = await fetch(`http://127.0.0.1:8000/api/curation/${group.phase}/${group.journal_id}/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            })
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+            await response.json() // Remove unused variable assignment
+            // Remove the completed journal from the list
+            if (group.journal_id && journalGroups.value[group.journal_id]) {
+                delete journalGroups.value[group.journal_id]
+            }
+        } catch (err) {
+            error.value = `Failed to complete curation: ${err.message}.`
+        } finally {
+            isLoading.value = false
+        }
     }
 
     // Existing entity editing logic
     function setEntities(newEntities) {
-      entities.value = newEntities
+        entities.value = newEntities
     }
     function setCurrentEntityIndex(idx) {
-      currentEntityIndex.value = idx
+        currentEntityIndex.value = idx
     }
     function setEditedEntity(entity) {
-      editedEntity.value = { ...entity }
+        editedEntity.value = { ...entity }
     }
     function updateField(field, value) {
-      editedEntity.value = { ...editedEntity.value, [field]: value }
+        editedEntity.value = { ...editedEntity.value, [field]: value }
     }
     function resetEdits() {
-      editedEntity.value = { ...entities.value[currentEntityIndex.value] }
+        editedEntity.value = { ...entities.value[currentEntityIndex.value] }
     }
 
     function initializeMockEntities() {
-      // Example mock data, can be replaced with real API call
-      setEntities([
-        {
-          type: 'Person',
-          name: 'Ana Sorin',
-          summary_short: 'Amiga, compañera',
-          summary: 'Ana es una persona muy importante en mi vida.',
-          uuid: 'person-ana',
-          occupation: 'Filósofa',
-          birth_date: '1990-01-01',
-          spans: [
-            { start: 45, end: 48 },
-            { start: 120, end: 170 },
-          ]
-        },
-        {
-          type: 'Feeling',
-          name: 'Cansancio',
-          summary_short: 'Me sentí cansado al despertar',
-          summary: 'Desperté cansado, con poca energía.',
-          uuid: 'feeling-1',
-          timestamp: '2025-09-09T13:00:00',
-          intensity: 6,
-          duration: 30,
-          spans: {
-            0: { start: 13, end: 21, label: 'Desperté' }
-          }
-        }
-      ])
-      setCurrentEntityIndex(0)
-      setEditedEntity({ ...entities.value[0] })
-      journalMarkdown.value = `[[2025]] [[2025-09]] [[2025-09-09]]  Tuesday
+        // Example mock data, can be replaced with real API call
+        setEntities([
+            {
+                type: 'Person',
+                name: 'Ana Sorin',
+                summary_short: 'Amiga, compañera',
+                summary: 'Ana es una persona muy importante en mi vida.',
+                uuid: 'person-ana',
+                occupation: 'Filósofa',
+                birth_date: '1990-01-01',
+                spans: [
+                    { start: 45, end: 48 },
+                    { start: 120, end: 170 },
+                ]
+            },
+            {
+                type: 'Feeling',
+                name: 'Cansancio',
+                summary_short: 'Me sentí cansado al despertar',
+                summary: 'Desperté cansado, con poca energía.',
+                uuid: 'feeling-1',
+                timestamp: '2025-09-09T13:00:00',
+                intensity: 6,
+                duration: 30,
+                spans: {
+                    0: { start: 13, end: 21, label: 'Desperté' }
+                }
+            }
+        ])
+        setCurrentEntityIndex(0)
+        setEditedEntity({ ...entities.value[0] })
+        journalMarkdown.value = `[[2025]] [[2025-09]] [[2025-09-09]]  Tuesday
   13:00 Desperté, cansado. [[Ana Sorin|Ana]] me ayudó a despertarme suavemente.
 
   Bajé y me hice [[Mate]]. Tomé [[Mate]] y vi [[Al Jazeera]]. Hoy [[Israel]] bombardeó [[Qatar]], intentando matar líderes de [[Hamas]].
@@ -170,22 +180,22 @@ export const useCurationStore = defineStore('curation', () => {
     }
 
     return {
-      entities,
-      currentEntityIndex,
-      editedEntity,
-      journalMarkdown,
-      journalGroups,
-      stats,
-      isLoading,
-      error,
-      fetchCurationQueue,
-      handleCurationAction,
-      submitCuration,
-      setEntities,
-      setCurrentEntityIndex,
-      setEditedEntity,
-      updateField,
-      resetEdits,
-      initializeMockEntities,
+        entities,
+        currentEntityIndex,
+        editedEntity,
+        journalMarkdown,
+        journalGroups,
+        stats,
+        isLoading,
+        error,
+        fetchCurationQueue,
+        handleCurationAction,
+        submitCuration,
+        setEntities,
+        setCurrentEntityIndex,
+        setEditedEntity,
+        updateField,
+        resetEdits,
+        initializeMockEntities,
     }
-  })
+})

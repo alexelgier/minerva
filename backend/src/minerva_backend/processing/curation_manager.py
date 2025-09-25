@@ -258,7 +258,7 @@ class CurationManager:
                     WHERE owner_uuid = ?
                 """, (entity_uuid,)) as span_cursor:
                     span_rows = await span_cursor.fetchall()
-                    spans = {Span.model_validate(json.loads(row[0])) for row in span_rows}
+                    spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
 
                 results.append(EntitySpanMapping(entity, spans))
 
@@ -356,7 +356,7 @@ class CurationManager:
                     WHERE owner_uuid = ?
                 """, (rel_uuid,)) as span_cursor:
                     span_rows = await span_cursor.fetchall()
-                    spans = {Span.model_validate(json.loads(row[0])) for row in span_rows}
+                    spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
 
                 async with db.execute("""
                     SELECT entity_uuid, sub_type_json
@@ -378,7 +378,7 @@ class CurationManager:
 
     # ===== DASHBOARD API HELPERS =====
 
-    async def get_all_pending_curation_tasks(self) -> List[JournalEntryCuration]:
+    async def get_all_pending_curation_tasks(self) -> Dict[str, JournalEntryCuration]:
         """Get all pending curation tasks for the dashboard, grouped by journalentry"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -388,7 +388,7 @@ class CurationManager:
                 journal_rows = await cursor.fetchall()
 
             if not journal_rows:
-                return []
+                return {}
 
             journal_curations = {
                 row[0]: JournalEntryCuration(
@@ -430,8 +430,8 @@ class CurationManager:
                             entity_tasks[owner_uuid].data['spans'] = []
                         entity_tasks[owner_uuid].data['spans'].append(json.loads(span_json))
 
-            for task in entity_tasks.values():
-                journal_curations[task.journal_id].tasks.append(task)
+            for entity_uuid, task in entity_tasks.items():
+                journal_curations[task.journal_id].tasks[entity_uuid] = task
 
             # Process relationships
             async with db.execute(f"""
@@ -476,10 +476,10 @@ class CurationManager:
                             'sub_type': json.loads(sub_type_json)
                         })
 
-            for task in relationship_tasks.values():
-                journal_curations[task.journal_id].tasks.append(task)
+            for rel_uuid, task in relationship_tasks.items():
+                journal_curations[task.journal_id].tasks[rel_uuid] = task
 
-            return list(journal_curations.values())
+            return journal_curations
 
     async def get_curation_stats(self) -> CurationStats:
         """Get overall curation statistics for the dashboard"""

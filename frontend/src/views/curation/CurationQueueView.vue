@@ -32,7 +32,7 @@
             <div class="task-actions">
               <button @click="handleCurationAction(group, index, 'accept')" class="action-btn accept-btn" title="Quick Accept">✓</button>
               <button @click="handleCurationAction(group, index, 'reject')" class="action-btn reject-btn" title="Quick Reject">✗</button>
-              <button @click="navigateToCuration(group.journal_id)" class="action-btn details-btn" title="View Details">Details</button>
+              <button @click="navigateToCuration(group.journal_id, task.id)" class="action-btn details-btn" title="View Details">Details</button>
             </div>
           </li>
         </ul>
@@ -45,18 +45,17 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, computed} from 'vue';
 import { useRouter } from 'vue-router';
 import { useCurationStore } from '@/stores/curation';
 import StatsBoard from '@/components/curation/StatsBoard.vue';
 
 const router = useRouter();
 const curationStore = useCurationStore();
-
-const isLoading = curationStore.isLoading;
-const error = curationStore.error;
-const journalGroups = curationStore.journalGroups;
-const stats = curationStore.stats;
+const isLoading = computed(() => curationStore.isLoading);
+const error = computed(() => curationStore.error || "");
+const journalGroups = computed(() => curationStore.journalGroups || []);
+const stats = computed(() => curationStore.stats || {});
 
 onMounted(() => {
   curationStore.fetchCurationQueue();
@@ -71,8 +70,8 @@ function formatDate(dateString) {
   });
 }
 
-function navigateToCuration(journalId) {
-  router.push({ name: 'CurationView', params: { journalId } });
+function navigateToCuration(journalId, entityId) {
+  router.push({ name: 'CurationView', params: { journalId, entityId } });
 }
 
 function handleCurationAction(group, taskIndex, action) {

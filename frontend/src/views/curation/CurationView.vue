@@ -5,7 +5,7 @@
     </header>
     <div class="curation-view">
       <div class="journal-panel">
-        <JournalViewer :markdown="journalMarkdown" :spans="editedEntity.spans"/>
+        <JournalViewer :spans="editedEntity.spans"/>
       </div>
       <div class="editor-panel">
     <div class="editor-header-row">
@@ -35,16 +35,19 @@
 
 <script setup>
 import { ref, computed, defineAsyncComponent, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import JournalViewer from '@/components/curation/JournalViewer.vue';
 import { entityTypeFields } from '@/entityTypeFields.js';
 import { useCurationStore } from '@/stores/curation';
 
 const router = useRouter();
+const route = useRoute();
+const journalId = computed(() => route.params.journalId);
+const entityId = computed(() => route.params.entityId);
+
 const curation = useCurationStore();
 
-const journalMarkdown = computed(() => curation.journalMarkdown || "");
-const entityToEdit = computed(() => curation.entities[curation.currentEntityIndex] || {});
+const entityToEdit = computed(() => curation.journalGroups[journalId].tasks || {});
 
 // Build a map of computed refs, one per field
 function makeFieldRefs(fields) {

@@ -81,6 +81,8 @@ class BaseRepository(Generic[T], ABC):
                     pass
             elif isinstance(value, neo4j.time.Date):
                 properties[key] = value.to_native()  # gives datetime.date
+            elif isinstance(value, neo4j.time.DateTime):
+                properties[key] = value.to_native()  # gives datetime.datetime
 
         return self.entity_class(**properties)
 

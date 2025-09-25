@@ -113,8 +113,8 @@ class CurationStatsResponse(BaseResponse):
 
 class PendingCurationResponse(BaseResponse):
     """Response model for pending curation tasks."""
-    journal_entry: List[JournalEntryCuration] = Field(default_factory=list,
-                                                      description="List of pending journals with curation tasks")
+    journal_entries: Dict[str, JournalEntryCuration] = Field(default_factory=dict,
+                                                             description="List of pending journals with curation tasks")
     stats: CurationStats = Field(..., description="Curation statistics")
 
 

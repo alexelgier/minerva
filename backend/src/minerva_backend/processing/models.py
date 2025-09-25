@@ -46,7 +46,7 @@ class JournalEntryCuration(BaseModel):
     date: date_type = Field(..., description="Fecha de la entrada del diario")
     entry_text: str | None = Field(default=None, description="El texto principal de la entrada del diario")
     phase: Literal["entities", "relationships"] = Field(..., description="Phase")
-    tasks: List[CurationTask] = Field(default_factory=list, description="List of pending curation tasks")
+    tasks: Dict[str, CurationTask] = Field(default_factory=dict, description="List of pending curation tasks")
 
 
 class CurationEntityStats(BaseModel):

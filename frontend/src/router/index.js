@@ -15,7 +15,7 @@ const router = createRouter({
       component: CurationQueueView
     },
     {
-      path: '/curation/:journalId',
+      path: '/curation/:journalId/:entityId',
       name: 'CurationView',
       component: CurationView
     }
