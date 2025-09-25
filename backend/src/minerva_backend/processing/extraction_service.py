@@ -50,6 +50,9 @@ class ExtractionService:
         # Step 2: Extract entities using LLM
         llm_extracted_people = await self.extract_people(journal_entry)
 
+        if llm_extracted_people is None:
+            raise Exception("LLM did not return any people data.")
+
         # Step 3: Process and deduplicate people
         processed_people = await self._process_and_deduplicate_people(
             llm_extracted_people, obsidian_entities, journal_entry

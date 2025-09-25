@@ -19,6 +19,7 @@
         @input="onSpanChange(idx, 'end', $event.target.value)"
         placeholder="End"
       />
+      <span v-if="span.text" class="span-text">{{ span.text }}</span>
       <button class="remove-btn" @click="removeSpan(idx)">×</button>
     </div>
     <button class="add-btn" @click="addSpan">Add Span</button>
@@ -128,5 +129,13 @@ function removeSpan(idx) {
 }
 .remove-btn:hover {
   background: #b52a37;
+}
+.span-text {
+  margin-left: 0.7rem;
+  font-size: 0.98rem;
+  color: #333;
+  background: #f3f6fa;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
 }
 </style>

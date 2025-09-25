@@ -85,6 +85,11 @@ export const entityTypeFields = {
 			address: 'Input',
 			category: 'Input',
 		},
+		relationship: {
+			summary_short: 'TextAreaInput',
+			summary: 'TextAreaInput',
+			spans: 'SpansInput',
+		},
 };
 
 

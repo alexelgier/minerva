@@ -3,38 +3,30 @@
     <header class="curation-page-header">
       <button @click="goBackToQueue" class="back-btn">&larr; Back to Queue</button>
     </header>
-    <div class="curation-view">
+    <div v-if="isLoading" class="loading-message">Loading...</div>
+    <div v-else class="curation-view">
       <div class="journal-panel">
-        <JournalViewer :spans="editedEntity.spans"/>
+        <JournalViewer :spans="entityToEdit?.data.spans" :markdown="markdown" />
       </div>
-      <div class="editor-panel">
-    <div class="editor-header-row">
-      <h3 class="entity-type-heading">Entity Type: {{ entityToEdit.type }}</h3>
-      <div class="editor-actions">
-        <button
-          class="accept-btn"
-          @click="handleAccept"
-        >Accept</button>
-        <button class="reject-btn" @click="handleReject">Reject</button>
-      </div>
-    </div>
-    <div class="entity-fields-form">
-      <component
-        v-for="(inputType, field) in currentEntityFields"
-        :key="field"
-        :is="inputComponent(inputType)"
-        v-model="fieldRefs[field]"
-        :label="field"
-        :placeholder="field"
-      />
-    </div>
+      <div class="editor-panel" v-if="entityToEdit">
+        <div class="editor-header-row">
+          <h3 class="entity-type-heading">Entity Type: {{ entityToEdit.type }}</h3>
+          <div class="editor-actions">
+            <button class="accept-btn" @click="handleAccept">Accept</button>
+            <button class="reject-btn" @click="handleReject">Reject</button>
+          </div>
+        </div>
+        <div class="entity-fields-form">
+          <component v-for="(inputType, field) in currentEntityFields" :key="field" :is="inputComponent(inputType)"
+            v-model="fieldRefs[field]" :label="field" :placeholder="field" />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, defineAsyncComponent, onMounted, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import JournalViewer from '@/components/curation/JournalViewer.vue';
 import { entityTypeFields } from '@/entityTypeFields.js';
@@ -46,32 +38,35 @@ const journalId = computed(() => route.params.journalId);
 const entityId = computed(() => route.params.entityId);
 
 const curation = useCurationStore();
+onMounted(() => {
+  curation.fetchCurationQueue();
 
-const entityToEdit = computed(() => curation.journalGroups[journalId].tasks || {});
+});
+const markdown = computed(() => curation.journalEntries[journalId.value]?.entry_text || '');
+
+const entityToEdit = computed(() => curation.journalEntries[journalId.value]?.tasks[entityId.value]);
+const isLoading = computed(() => curation.isLoading);
+
+
 
 // Build a map of computed refs, one per field
 function makeFieldRefs(fields) {
   const result = {};
   for (const field in fields) {
     result[field] = computed({
-      get: () => entityToEdit.value[field],
-      set: (val) => curation.updateField(field, val),
+      get: () => entityToEdit.value.data[field],
+      set: (val) => curation.editedEntity[field].set(val),
     });
   }
   return result;
 }
-
-const fieldRefs = computed(() => makeFieldRefs(currentEntityFields.value));
 
 const currentEntityFields = computed(() => {
   const type = entityToEdit.value.type;
   return entityTypeFields[type] || {};
 });
 const editedEntity = computed(() => curation.editedEntity);
-
-onMounted(() => {
-  curation.initializeMockEntities();
-});
+const fieldRefs = computed(() => makeFieldRefs(currentEntityFields.value));
 
 function inputComponent(type) {
   switch (type) {
@@ -117,10 +112,12 @@ function handleReject() {
   justify-content: space-between;
   margin-bottom: 1.5rem;
 }
+
 .editor-actions {
   display: flex;
   gap: 1rem;
 }
+
 .accept-btn {
   font-size: 1rem;
   padding: 0.5rem 1.5rem;
@@ -132,12 +129,15 @@ function handleReject() {
   cursor: pointer;
   transition: background-color 0.2s;
 }
+
 .accept-btn.edited {
   background-color: #007bff;
 }
+
 .accept-btn:hover {
   filter: brightness(0.95);
 }
+
 .reject-btn {
   font-size: 1rem;
   padding: 0.5rem 1.5rem;
@@ -149,9 +149,11 @@ function handleReject() {
   cursor: pointer;
   transition: background-color 0.2s;
 }
+
 .reject-btn:hover {
   filter: brightness(0.95);
 }
+
 .curation-page-header {
   padding: 0.75rem 1.5rem;
   background-color: #fff;
@@ -211,11 +213,13 @@ function handleReject() {
     flex-direction: column;
     height: auto;
   }
+
   .journal-panel {
     border-right: none;
     border-bottom: 1px solid #dcdfe6;
     max-height: 50vh;
   }
+
   .editor-panel {
     max-height: 50vh;
   }

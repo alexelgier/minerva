@@ -4,7 +4,7 @@
       <h1>Curation Queue</h1>
       <p v-if="isLoading">Loading tasks...</p>
       <p v-if="!isLoading && error" class="error-message">{{ error }}</p>
-      <div v-if="!isLoading && !error && journalGroups.length === 0" class="no-tasks-summary">
+      <div v-if="!isLoading && !error && journalEntries.length === 0" class="no-tasks-summary">
         <div class="empty-icon">📝</div>
         <h2 class="empty-title">No pending curation tasks</h2>
         <p class="empty-desc">All journals have been curated. Here is a summary of your progress:</p>
@@ -12,32 +12,35 @@
       </div>
     </header>
 
-    <div v-if="!isLoading && !error" class="journal-groups-container">
-      <div v-for="group in journalGroups" :key="group.journal_id" class="journal-group-card">
+    <div v-if="!isLoading && !error" class="journal-entries-container">
+      <div v-for="journalEntry in journalEntries" :key="journalEntry.journal_id" class="journal-entry-card">
         <div class="journal-header">
-          <h2>Journal Entry: {{ formatDate(group.date) }}</h2>
+          <h2>Journal Entry: {{ formatDate(journalEntry.date) }}</h2>
           <div class="progress-container">
-            <span>{{ group.tasks.length }} pending tasks</span>
+            <span>{{ journalEntry.tasks.length }} pending tasks</span>
           </div>
         </div>
         <ul class="task-list">
-          <li v-for="(task, index) in group.tasks" :key="task.id" class="task-item">
+          <li v-for="task in journalEntry.tasks" :key="task.id" class="task-item">
             <div class="task-info">
               <div class="task-header-info">
                 <span class="task-name">{{ task.displayName }}</span>
-                <span class="task-type-badge">{{ task.displayType.toUpperCase() }}</span>
+                <span class="task-type-badge">{{ task.type.toUpperCase() }}</span>
               </div>
               <p class="task-summary">{{ task.data.summary_short }}</p>
             </div>
             <div class="task-actions">
-              <button @click="handleCurationAction(group, index, 'accept')" class="action-btn accept-btn" title="Quick Accept">✓</button>
-              <button @click="handleCurationAction(group, index, 'reject')" class="action-btn reject-btn" title="Quick Reject">✗</button>
-              <button @click="navigateToCuration(group.journal_id, task.id)" class="action-btn details-btn" title="View Details">Details</button>
+              <button @click="handleCurationAction(journalEntry, task.id, 'accept')" class="action-btn accept-btn"
+                title="Quick Accept">✓</button>
+              <button @click="handleCurationAction(journalEntry, task.id, 'reject')" class="action-btn reject-btn"
+                title="Quick Reject">✗</button>
+              <button @click="navigateToCuration(journalEntry.journal_id, task.id)" class="action-btn details-btn"
+                title="View Details">Details</button>
             </div>
           </li>
         </ul>
-        <div v-if="group.tasks.length === 0" class="card-footer">
-          <button @click="submitCuration(group)" class="submit-btn">Complete Curation</button>
+        <div v-if="journalEntry.tasks.length === 0" class="card-footer">
+          <button @click="submitCuration(journalEntry)" class="submit-btn">Complete Curation</button>
         </div>
       </div>
     </div>
@@ -45,7 +48,7 @@
 </template>
 
 <script setup>
-import { onMounted, computed} from 'vue';
+import { onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCurationStore } from '@/stores/curation';
 import StatsBoard from '@/components/curation/StatsBoard.vue';
@@ -54,7 +57,7 @@ const router = useRouter();
 const curationStore = useCurationStore();
 const isLoading = computed(() => curationStore.isLoading);
 const error = computed(() => curationStore.error || "");
-const journalGroups = computed(() => curationStore.journalGroups || []);
+const journalEntries = computed(() => curationStore.journalEntries || []);
 const stats = computed(() => curationStore.stats || {});
 
 onMounted(() => {
@@ -74,12 +77,12 @@ function navigateToCuration(journalId, entityId) {
   router.push({ name: 'CurationView', params: { journalId, entityId } });
 }
 
-function handleCurationAction(group, taskIndex, action) {
-  curationStore.handleCurationAction(group, taskIndex, action);
+function handleCurationAction(journalEntry, taskuuid, action) {
+  curationStore.handleCurationAction(journalEntry, taskuuid, action);
 }
 
-function submitCuration(group) {
-  curationStore.submitCuration(group);
+function submitCuration(journalEntry) {
+  curationStore.submitCuration(journalEntry);
 }
 </script>
 
@@ -110,15 +113,15 @@ function submitCuration(group) {
   border: 1px solid #f5c6cb;
 }
 
-.journal-groups-container {
+.journal-entries-container {
   max-width: 900px;
   margin: 0 auto;
 }
 
-.journal-group-card {
+.journal-entry-card {
   background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin-bottom: 2rem;
   overflow: hidden;
 }
@@ -184,7 +187,8 @@ function submitCuration(group) {
   font-size: 0.9rem;
   color: #6c757d;
   margin: 0;
-  padding-left: 2px; /* to align with task-name */
+  padding-left: 2px;
+  /* to align with task-name */
 }
 
 .task-name {
@@ -219,11 +223,13 @@ function submitCuration(group) {
   background-color: #007bff;
   color: white;
 }
+
 .details-btn:hover {
   background-color: #0056b3;
 }
 
-.accept-btn, .reject-btn {
+.accept-btn,
+.reject-btn {
   font-weight: bold;
   font-size: 1rem;
   width: 40px;
@@ -239,6 +245,7 @@ function submitCuration(group) {
   background-color: #28a745;
   color: white;
 }
+
 .accept-btn:hover {
   background-color: #218838;
 }
@@ -247,6 +254,7 @@ function submitCuration(group) {
   background-color: #dc3545;
   color: white;
 }
+
 .reject-btn:hover {
   background-color: #c82333;
 }
@@ -273,55 +281,57 @@ function submitCuration(group) {
 .submit-btn:hover {
   background-color: #0056b3;
 }
-</style>
+
 
 .no-tasks-summary {
-  margin: 2rem auto;
-  max-width: 700px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-  padding: 2.5rem 2rem 2rem 2rem;
-  text-align: center;
+margin: 2rem auto;
+max-width: 700px;
+background: #fff;
+border-radius: 16px;
+box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+padding: 2.5rem 2rem 2rem 2rem;
+text-align: center;
 }
 .empty-icon {
-  font-size: 3rem;
-  margin-bottom: 0.5rem;
+font-size: 3rem;
+margin-bottom: 0.5rem;
 }
 .empty-title {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #34495e;
-  margin-bottom: 0.5rem;
+font-size: 2rem;
+font-weight: 700;
+color: #34495e;
+margin-bottom: 0.5rem;
 }
 .empty-desc {
-  color: #6c757d;
-  margin-bottom: 2rem;
+color: #6c757d;
+margin-bottom: 2rem;
 }
 
 .no-tasks-summary {
-  margin: 2rem auto;
-  max-width: 600px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  padding: 2rem;
-  text-align: left;
+margin: 2rem auto;
+max-width: 600px;
+background: #fff;
+border-radius: 8px;
+box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+padding: 2rem;
+text-align: left;
 }
 .stats-summary h2, .stats-summary h3 {
-  margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
-  color: #34495e;
+margin-top: 1.5rem;
+margin-bottom: 0.5rem;
+color: #34495e;
 }
 .stats-summary ul {
-  list-style: none;
-  padding: 0;
-  margin-bottom: 1rem;
+list-style: none;
+padding: 0;
+margin-bottom: 1rem;
 }
 .stats-summary li {
-  margin-bottom: 0.3rem;
-  font-size: 1rem;
+margin-bottom: 0.3rem;
+font-size: 1rem;
 }
 .stats-summary strong {
-  color: #007bff;
+color: #007bff;
 }
+
+</style>
