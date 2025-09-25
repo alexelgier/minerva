@@ -24,8 +24,8 @@
           <li v-for="task in journalEntry.tasks" :key="task.id" class="task-item">
             <div class="task-info">
               <div class="task-header-info">
-                <span class="task-name">{{ task.displayName }}</span>
-                <span class="task-type-badge">{{ task.type.toUpperCase() }}</span>
+                <span class="task-name">{{ task.data.name }}</span>
+                <span class="task-type-badge">{{ task.data.type.toUpperCase() }}</span>
               </div>
               <p class="task-summary">{{ task.data.summary_short }}</p>
             </div>

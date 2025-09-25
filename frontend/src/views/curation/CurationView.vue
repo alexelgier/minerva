@@ -62,7 +62,7 @@ function makeFieldRefs(fields) {
 }
 
 const currentEntityFields = computed(() => {
-  const type = entityToEdit.value.type;
+  const type = entityToEdit.value.data.type;
   return entityTypeFields[type] || {};
 });
 const editedEntity = computed(() => curation.editedEntity);
