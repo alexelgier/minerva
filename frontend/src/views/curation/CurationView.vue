@@ -200,7 +200,7 @@ function handleReject() {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  background-color: #4a5565;
+  background-color: #373f4b;
 }
 
 .entity-type-heading {
