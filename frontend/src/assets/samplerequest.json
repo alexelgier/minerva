@@ -1,0 +1,385 @@
+{
+    "success": true,
+    "timestamp": "2025-09-26T20:30:36.423631",
+    "journal_entries": {
+        "6e333139-b344-48a3-93bb-ea74726fac61": {
+            "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+            "date": "2025-09-26",
+            "entry_text": "[[2025]] [[2025-09]]  Monday\n\n12:30, Desperté, [[Ana Sorin|Ana]] se estaba yendo y me ayudo a despertar amorosamente.\n\n[[Sady Antonia Baez|Sady]] esta limpiando, está triste porque se fue [[Marcelo]]. Hablamos un rato, también le conté del conflicto sostenido con [[Ana Sorin|Ana]], de lo triste y asustado que estoy. Sady piensa que [[Ana Sorin|Ana]] ya no me quiere mas, o muy poquito, y que seguramente nos terminemos separando.\n\n[[Minerva]] funcionó mal a la noche, está tardando como 1h por request.\n\nMañana es el [[cumpleaños]]  de [[Martin Alvarez Heymann|Martin]].\n\n16:21, [[journaling|Escribir ésto]]. Debo dos dias anteriores de [[Diario]] que no llené. Mi [[Proyectos|Proyecto]] [[Minerva]] me esta quitando mucho tiempo, estoy muy enganchado. Elegí modelos mas reducidos: 8b y 1.7b. Saque [[LM Studio]] y ahora el embedding lo hice funcionar con [[Ollama]], hice mi propio cliente también, así no tengo que patchear tanto el código de librería. De hecho tengo varios patch hechos y tengo que ver como hago para no perderlos si hay un update de [[Graphiti]].\n\n140s tardó Qwen3-8m (16384ctx) en el primer prompt (Entities). Quiero ver como le va con el de extraer Edges.\n\n\n02:42 [[journaling|Escribir ésto]]. \n[[Ana Sorin|Ana]] vino a apagar la estufa, le di un abrazo y le agradecí la charla de hoy ",
+            "phase": "entities",
+            "tasks": {
+                "a2b0ddd1-0a19-4a52-9a69-5dc42d14a4f6": {
+                    "id": "a2b0ddd1-0a19-4a52-9a69-5dc42d14a4f6",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "a2b0ddd1-0a19-4a52-9a69-5dc42d14a4f6",
+                        "created_at": "2025-09-26T18:12:21.444582",
+                        "name": "Alex Elgier",
+                        "type": "Person",
+                        "summary_short": "Persona que registra sus actividades diarias, con preocupaciones sobre relaciones personales y proyectos técnicos.",
+                        "summary": "Alex Elgier es una persona que mantiene un diario detallado de sus actividades y emociones. Se muestra afectado por las relaciones personales, especialmente con Ana Sorin y Sady. También está profundamente involucrado en proyectos técnicos, principalmente relacionados con Minerva, el uso de modelos de lenguaje como Qwen3-8m, y el desarrollo de herramientas con Ollama y LM Studio. Alex experimenta ansiedad por el futuro de sus relaciones y por la gestión de proyectos técnicos, mostrando una preocupación por la estabilidad de sus sistemas y el mantenimiento de sus modificaciones (patchs).",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "85ce195b-137c-45c1-a65f-a9601bf196e8",
+                                "created_at": "2025-09-26T18:12:21.445099",
+                                "type": "Span",
+                                "text": "Desperté, [[Ana Sorin|Ana]] se estaba yendo y me ayudo a despertar amorosamente.",
+                                "start": 37,
+                                "end": 117
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "dc54476b-c4ab-4e1d-9c96-659ce3cee8a7",
+                                "created_at": "2025-09-26T18:12:21.445099",
+                                "type": "Span",
+                                "text": "Hablamos un rato, también le conté del conflicto sostenido con [[Ana Sorin|Ana]], de lo triste y asustado que estoy.",
+                                "start": 201,
+                                "end": 317
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "24e499eb-510f-46a9-8295-878a89dd286a",
+                                "created_at": "2025-09-26T18:12:21.445099",
+                                "type": "Span",
+                                "text": "Sady piensa que [[Ana Sorin|Ana]] ya no me quiere mas, o muy poquito, y que seguramente nos terminemos separando.",
+                                "start": 318,
+                                "end": 431
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "ffe83955-cf24-47f2-9f0e-82b49d2ea17a",
+                                "created_at": "2025-09-26T18:12:21.445099",
+                                "type": "Span",
+                                "text": "Mi [[Proyectos|Proyecto]] [[Minerva]] me esta quitando mucho tiempo, estoy muy enganchado.",
+                                "start": 664,
+                                "end": 754
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "fbe84a6e-fbc3-49c5-b12a-97e60e322657",
+                                "created_at": "2025-09-26T18:12:21.445099",
+                                "type": "Span",
+                                "text": "Elegí modelos mas reducidos: 8b y 1.7b. Saque [[LM Studio]] y ahora el embedding lo hice funcionar con [[Ollama]], hice mi propio cliente también, así no tengo que patchear tanto el código de librería.",
+                                "start": 755,
+                                "end": 956
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "663739c1-7c65-446e-ac05-d32d482481a2",
+                                "created_at": "2025-09-26T18:12:21.445635",
+                                "type": "Span",
+                                "text": "De hecho tengo varios patch hechos y tengo que ver como hago para no perderlos si hay un update de [[Graphiti]].",
+                                "start": 957,
+                                "end": 1069
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "f9b1812c-720b-42a3-9f75-dd6f22cc0af8",
+                                "created_at": "2025-09-26T18:12:21.445635",
+                                "type": "Span",
+                                "text": "140s tardó Qwen3-8m (16384ctx) en el primer prompt (Entities). Quiero ver como le va con el de extraer Edges.",
+                                "start": 1071,
+                                "end": 1180
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "abaff93c-7cbb-423b-b70d-87fc739d8355",
+                                "created_at": "2025-09-26T18:12:21.445635",
+                                "type": "Span",
+                                "text": "02:42 [[journaling|Escribir ésto]].",
+                                "start": 1183,
+                                "end": 1218
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "1d3760fd-e74e-4466-b470-11fa63a25fc4",
+                                "created_at": "2025-09-26T18:12:21.445635",
+                                "type": "Span",
+                                "text": "[[Ana Sorin|Ana]] vino a apagar la estufa, le di un abrazo y le agradecí la charla de hoy",
+                                "start": 1220,
+                                "end": 1309
+                            }
+                        ]
+                    }
+                },
+                "06b5b3af-ce1b-43d0-9f7b-e1b28e1ecae4": {
+                    "id": "06b5b3af-ce1b-43d0-9f7b-e1b28e1ecae4",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "06b5b3af-ce1b-43d0-9f7b-e1b28e1ecae4",
+                        "created_at": "2025-09-26T18:12:21.444582",
+                        "name": "Ana Sorin",
+                        "type": "Person",
+                        "summary_short": "Persona mencionada en el diario que interactúa con el autor y con otros miembros del grupo.",
+                        "summary": "Ana Sorin aparece en varias entradas del diario como una persona con quien el autor tiene una relación afectiva y de interacción diaria. Se menciona que se fue de la casa, lo que generó tristeza en el autor. También se describe como alguien que ayuda al autor a despertar de manera amorosa. Más adelante, Ana vuelve a aparecer para apagar la estufa, donde el autor le da un abrazo y le agradece la charla. Hay un conflicto sostenido entre el autor y Ana, que el autor describe como triste y asustado. Sady (otro personaje) cree que Ana ya no le quiere, o solo le quiere poco, y que por eso podría terminarse la relación. Además, Ana se relaciona con el contexto de la casa, como una figura de apoyo cotidiano.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "9e5ab54e-2cf8-402d-8291-db24948ed32e",
+                                "created_at": "2025-09-26T18:12:21.445635",
+                                "type": "Span",
+                                "text": "Desperté, [[Ana Sorin|Ana]] se estaba yendo y me ayudo a despertar amorosamente.",
+                                "start": 37,
+                                "end": 117
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "d4e78c24-c351-4e7e-9f18-29a66edb8a89",
+                                "created_at": "2025-09-26T18:12:21.445635",
+                                "type": "Span",
+                                "text": "Hablamos un rato, también le conté del conflicto sostenido con [[Ana Sorin|Ana]], de lo triste y asustado que estoy.",
+                                "start": 201,
+                                "end": 317
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "fa50689e-a802-4e43-86b6-ab040aeeeac4",
+                                "created_at": "2025-09-26T18:12:21.445635",
+                                "type": "Span",
+                                "text": "Sady piensa que [[Ana Sorin|Ana]] ya no me quiere mas, o muy poquito, y que seguramente nos terminemos separando.",
+                                "start": 318,
+                                "end": 431
+                            }
+                        ]
+                    }
+                },
+                "468d8d1b-320a-482c-9538-50f0546846b2": {
+                    "id": "468d8d1b-320a-482c-9538-50f0546846b2",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "468d8d1b-320a-482c-9538-50f0546846b2",
+                        "created_at": "2025-09-26T18:12:21.444582",
+                        "name": "Sady Antonia Baez",
+                        "type": "Person",
+                        "summary_short": "Está limpiando y siente tristeza por la salida de Marcelo.",
+                        "summary": "Sady está ocupada limpiando y está triste porque Marcelo se fue. Habló con Ana Sorin sobre el conflicto entre Ana y el autor del diario, y cree que Ana ya no le quiere mucho, o muy poco, lo que podría llevar a la separación del autor y ella. También menciona que piensa que el autor y ella podrían terminar separados.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "cc87befd-c5df-479e-84cc-5770e8bd3c94",
+                                "created_at": "2025-09-26T18:12:21.447594",
+                                "type": "Span",
+                                "text": "[[Sady Antonia Baez|Sady]] esta limpiando, está triste porque se fue [[Marcelo]]. Hablamos un rato, también le conté del conflicto sostenido con [[Ana Sorin|Ana]], de lo triste y asustado que estoy. Sady piensa que [[Ana Sorin|Ana]] ya no me quiere mas, o muy poquito, y que seguramente nos terminemos separando.",
+                                "start": 119,
+                                "end": 431
+                            }
+                        ]
+                    }
+                },
+                "1c306927-90e8-4176-9919-e6d93035d875": {
+                    "id": "1c306927-90e8-4176-9919-e6d93035d875",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "1c306927-90e8-4176-9919-e6d93035d875",
+                        "created_at": "2025-09-26T18:12:21.445099",
+                        "name": "Marcelo",
+                        "type": "Person",
+                        "summary_short": "Person mentioned as having left, causing sadness in Sady Baez.",
+                        "summary": "Marcelo is referenced in the journal entry as someone who has left Sady Antonia Baez, causing her to feel sad. The entry indicates that Sady believes Ana Sorin may no longer care for the narrator, and that this emotional state is linked to the breakup or separation involving Marcelo. There is no direct mention of Marcelo's actions, emotions, or relationship status beyond his departure from Sady.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "4fc19aa7-9576-4218-b408-28b9d19ee52c",
+                                "created_at": "2025-09-26T18:12:21.447594",
+                                "type": "Span",
+                                "text": "[[Sady Antonia Baez|Sady]] esta limpiando, está triste porque se fue [[Marcelo]].",
+                                "start": 119,
+                                "end": 200
+                            }
+                        ]
+                    }
+                },
+                "d0a4dcbf-72ab-4fb6-a7aa-e44ad22214e1": {
+                    "id": "d0a4dcbf-72ab-4fb6-a7aa-e44ad22214e1",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "d0a4dcbf-72ab-4fb6-a7aa-e44ad22214e1",
+                        "created_at": "2025-09-26T18:12:21.445099",
+                        "name": "Minerva",
+                        "type": "Person",
+                        "summary_short": "Sistema o herramienta que tuvo un problema de rendimiento en la noche.",
+                        "summary": "Minerva tuvo un mal funcionamiento durante la noche, tardando aproximadamente 1 hora por solicitud. El autor del diario menciona que este problema está afectando significativamente su tiempo de trabajo, especialmente en el contexto de su proyecto. Además, el autor está preocupado por la posibilidad de perder parches de código si ocurre un update en Graphiti, lo que sugiere que Minerva está integrada en un sistema de desarrollo que involucra múltiples componentes de inteligencia artificial y herramientas de software.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "df04db1e-b34a-4dff-bbf3-3129b32016c9",
+                                "created_at": "2025-09-26T18:12:21.447594",
+                                "type": "Span",
+                                "text": "[[Minerva]] funcionó mal a la noche, está tardando como 1h por request.",
+                                "start": 433,
+                                "end": 504
+                            },
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "0db60187-ce25-46b3-8db8-b454c8495868",
+                                "created_at": "2025-09-26T18:12:21.447594",
+                                "type": "Span",
+                                "text": "Mi [[Proyectos|Proyecto]] [[Minerva]] me esta quitando mucho tiempo, estoy muy enganchado.",
+                                "start": 664,
+                                "end": 754
+                            }
+                        ]
+                    }
+                },
+                "ded05be7-ce37-4406-9425-b4218c915ad7": {
+                    "id": "ded05be7-ce37-4406-9425-b4218c915ad7",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "ded05be7-ce37-4406-9425-b4218c915ad7",
+                        "created_at": "2025-09-26T18:12:21.445099",
+                        "name": "Ollama",
+                        "type": "Person",
+                        "summary_short": "Un cliente de modelo de lenguaje local que fue adoptado por el autor para gestionar embeddings y ejecutar modelos como Qwen3-8m",
+                        "summary": "Ollama es una herramienta de gestión de modelos de lenguaje local que el autor ha integrado en su flujo de trabajo. Se utiliza como alternativa a LM Studio para ejecutar embeddings y modelos de lenguaje, permitiendo a la persona crear un cliente personalizado para evitar la necesidad de modificar continuamente el código de librerías. El autor menciona que ha configurado Ollama para funcionar con modelos como Qwen3-8m, y que está evaluando su rendimiento en tareas como la extracción de relaciones (edges). Además, el autor ha desarrollado varios parches para mejorar la integración con herramientas como Graphiti, aunque aún no ha definido un plan claro para gestionar estos cambios en caso de actualizaciones futuras.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "803be4d5-f1b9-4195-bff6-334525599768",
+                                "created_at": "2025-09-26T18:12:21.448116",
+                                "type": "Span",
+                                "text": "Saque [[LM Studio]] y ahora el embedding lo hice funcionar con [[Ollama]], hice mi propio cliente también, así no tengo que patchear tanto el código de librería.",
+                                "start": 795,
+                                "end": 956
+                            }
+                        ]
+                    }
+                },
+                "f20b411c-10a6-4ee9-a006-2ebb6fb483c4": {
+                    "id": "f20b411c-10a6-4ee9-a006-2ebb6fb483c4",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "f20b411c-10a6-4ee9-a006-2ebb6fb483c4",
+                        "created_at": "2025-09-26T18:12:21.445099",
+                        "name": "Graphiti",
+                        "type": "Person",
+                        "summary_short": "No se menciona directamente en el diario, pero aparece como un sistema o software que podría estar relacionado con el desarrollo de proyectos como Minerva.",
+                        "summary": "El nombre 'Graphiti' aparece en el contexto de una actualización de software. El usuario menciona que tiene varios patch hechos y que necesita ver cómo mantenerlos si hay un update de Graphiti. Esto indica que Graphiti es una herramienta o sistema de software que el usuario está desarrollando o usando en su proyecto, específicamente en relación con el código de librería y el funcionamiento de su sistema de embeddings o modelos. Sin embargo, no hay información sobre su funcionamiento, estado actual, o interacciones directas con personas.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "66b0f648-cd2c-44e8-87b2-28f2c6bb388c",
+                                "created_at": "2025-09-26T18:12:21.448116",
+                                "type": "Span",
+                                "text": "De hecho tengo varios patch hechos y tengo que ver como hago para no perderlos si hay un update de [[Graphiti]].",
+                                "start": 957,
+                                "end": 1069
+                            }
+                        ]
+                    }
+                },
+                "7a65386c-ea83-4485-9a9b-8fda257a01b8": {
+                    "id": "7a65386c-ea83-4485-9a9b-8fda257a01b8",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "7a65386c-ea83-4485-9a9b-8fda257a01b8",
+                        "created_at": "2025-09-26T18:12:21.445099",
+                        "name": "Qwen3-8m",
+                        "type": "Person",
+                        "summary_short": "Un modelo de lenguaje de 8 millones de parámetros mencionado en el diario como parte de pruebas de rendimiento.",
+                        "summary": "El modelo Qwen3-8m es mencionado en el diario como un modelo de lenguaje de 8 millones de parámetros (8b) que fue utilizado para pruebas de rendimiento en el primer prompt de extracción de entidades. Se indica que tardó 140 segundos (140s) en procesar un prompt con contexto de 16384 tokens (16384ctx). El autor del diario está interesado en evaluar su rendimiento en la tarea de extracción de relaciones (edges). Además, el modelo es parte de un conjunto de experimentos para mejorar la eficiencia del proyecto Minerva, donde se comparan diferentes modelos, incluyendo modelos más pequeños como el 8b y el 1.7b.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "a4c9184b-5e33-41f3-89bf-4b2b2fe33284",
+                                "created_at": "2025-09-26T18:12:21.448116",
+                                "type": "Span",
+                                "text": "140s tardó Qwen3-8m (16384ctx) en el primer prompt (Entities). Quiero ver como le va con el de extraer Edges.",
+                                "start": 1071,
+                                "end": 1180
+                            }
+                        ]
+                    }
+                },
+                "084da397-7c72-4559-82ab-10241c3b5121": {
+                    "id": "084da397-7c72-4559-82ab-10241c3b5121",
+                    "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-26T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "084da397-7c72-4559-82ab-10241c3b5121",
+                        "created_at": "2025-09-26T18:12:21.445099",
+                        "name": "LM Studio",
+                        "type": "Person",
+                        "summary_short": "No se puede crear un objeto Person para 'LM Studio' porque es una herramienta o software, no una persona.",
+                        "summary": "LM Studio es un software o herramienta de ejecución de modelos de lenguaje, mencionado en el diario como parte de un proceso de desarrollo donde el autor decidió cambiar de herramienta para mejorar la eficiencia en el manejo de modelos de lenguaje. Se menciona específicamente que el autor 'elegió modelos más reducidos: 8b y 1.7b' y que 'saque [LM Studio] y ahora el embedding lo hice funcionar con [Ollama]'. Esto indica que el autor utilizó LM Studio previamente, pero decidió migrar a Ollama para el embedding y para evitar mantener parches en la librería. Sin embargo, no hay ninguna propiedad personal (como emociones, relaciones, actividades humanas, etc.) asociada a 'LM Studio' en el texto, ya que no se trata de una persona, sino de un software.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "2df08cec-215c-42cc-84a0-5df1cdd0b351",
+                                "created_at": "2025-09-26T18:12:21.448116",
+                                "type": "Span",
+                                "text": "Saque [[LM Studio]] y ahora el embedding lo hice funcionar con [[Ollama]], hice mi propio cliente también, así no tengo que patchear tanto el código de librería.",
+                                "start": 795,
+                                "end": 956
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "stats": {
+        "total_journals": 1,
+        "pending_entities": 1,
+        "pending_relationships": 0,
+        "completed": 0,
+        "entity_stats": {
+            "total_extracted": 9,
+            "accepted": 0,
+            "rejected": 0,
+            "pending": 9,
+            "acceptance_rate": 0.0
+        },
+        "relationship_stats": {
+            "total_extracted": 0,
+            "accepted": 0,
+            "rejected": 0,
+            "pending": 0,
+            "acceptance_rate": 0.0
+        }
+    }
+}
