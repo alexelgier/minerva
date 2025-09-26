@@ -10,6 +10,7 @@ import logging
 from contextlib import contextmanager
 
 from minerva_backend.config import settings
+from minerva_backend.graph.models.enums import EmotionType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -195,44 +196,39 @@ class Neo4jConnection:
                 "connection_healthy": self.health_check()
             }
 
-    def close(self):
-        """Close the database connection and cleanup resources."""
-        if self.driver:
-            self.driver.close()
-            self.driver = None
-            logger.info("Neo4j connection closed")
+    def init_emotion_types(self) -> Dict[str, str]:
+        """
+        Insert all EmotionType values as nodes into the database (idempotent).
+        Ensures each node has a uuid. Returns a mapping of EmotionType to uuid.
+        Requires APOC plugin for uuid generation.
+        """
+        query = """
+        MERGE (e:Emotion {name: $name})
+        ON CREATE SET e.uuid = randomUUID()
+        RETURN e.name AS name, e.uuid AS uuid
+        """
+        result: Dict[str, str] = {}
+        with self.session() as session:
+            for emotion in EmotionType:
+                record = session.run(query, {"name": str(emotion)}).single()
+                if record:
+                    result[emotion] = str(record["uuid"])
+        return result
 
-    def __enter__(self):
-        """Context manager entry."""
-        return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit with cleanup."""
-        self.close()
-
-
+def close(self):
+    """Close the database connection and cleanup resources."""
+    if self.driver:
+        self.driver.close()
+        self.driver = None
+        logger.info("Neo4j connection closed")
 
 
-# Example usage and testing
-if __name__ == "__main__":
-    # Test connection
-    try:
-        with Neo4jConnection() as db:
-            print("Testing connection...")
+def __enter__(self):
+    """Context manager entry."""
+    return self
 
-            # Health check
-            if db.health_check():
-                print("✓ Connection healthy")
-            else:
-                print("✗ Connection unhealthy")
 
-            # Database stats
-            stats = db.get_database_stats()
-            print(f"✓ Database stats: {stats}")
-
-            # Simple query test
-            results = db.execute_query("RETURN 'Hello Minerva' as greeting")
-            print(f"✓ Query test: {results[0]['greeting']}")
-
-    except Exception as e:
-        print(f"✗ Connection test failed: {e}")
+def __exit__(self, exc_type, exc_val, exc_tb):
+    """Context manager exit with cleanup."""
+    self.close()

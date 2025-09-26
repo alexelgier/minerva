@@ -1,8 +1,10 @@
 import re
 from typing import Dict, List
 
+from rapidfuzz import fuzz
+
 from minerva_backend.graph.db import Neo4jConnection
-from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.graph.models.documents import JournalEntry, Span
 from minerva_backend.graph.models.entities import Person
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.graph.repositories.base import BaseRepository
@@ -18,6 +20,7 @@ from minerva_backend.graph.repositories.project_repository import ProjectReposit
 from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.llm_service import LLMService
 from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
+from minerva_backend.prompt.extract_emotions import ExtractEmotionsPrompt, Feelings
 from minerva_backend.prompt.extract_people import ExtractPeoplePrompt, People
 from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships
 from minerva_backend.prompt.hydrate_person import HydratePersonPrompt
@@ -25,7 +28,10 @@ from minerva_backend.prompt.merge_summaries import MergeSummariesPrompt
 
 
 class ExtractionService:
-    def __init__(self, connection: Neo4jConnection, llm_service: LLMService, obsidian_service: ObsidianService):
+    def __init__(self,
+                 connection: Neo4jConnection,
+                 llm_service: LLMService,
+                 obsidian_service: ObsidianService):
         self.llm_service = llm_service
         self.connection = connection
         self.entity_repositories: Dict[str, BaseRepository] = {
@@ -43,29 +49,15 @@ class ExtractionService:
 
     async def extract_entities(self, journal_entry: JournalEntry) -> List[EntitySpanMapping]:
         """Stage 1-2: Extract entities and related spans"""
+        entities_spans = []
 
         # Step 1: Build lookup tables from Obsidian links
         obsidian_entities = await self._build_obsidian_entity_lookup(journal_entry)
-
-        # Step 2: Extract entities using LLM
-        llm_extracted_people = await self.extract_people(journal_entry)
-
-        if llm_extracted_people is None:
-            raise Exception("LLM did not return any people data.")
-
-        # Step 3: Process and deduplicate people
-        processed_people = await self._process_and_deduplicate_people(
-            llm_extracted_people, obsidian_entities, journal_entry
-        )
-
-        # Step 4: Convert to EntitySpanMapping format
-        people_spans = [
-            EntitySpanMapping(person_data['entity'], person_data['spans'])
-            for person_data in processed_people
-        ]
-
-        entities_spans = []
+        people_spans = await self._process_people(journal_entry, obsidian_entities)
         entities_spans.extend(people_spans)
+
+        # feelings_spans = await self._process_emotions(journal_entry, people_spans)
+        # entities_spans.extend(feelings_spans)
 
         # TODO: Add other entity types
         # projects = await self._process_projects(journal_entry, obsidian_entities)
@@ -73,6 +65,84 @@ class ExtractionService:
         # etc.
 
         return entities_spans
+
+    def hydrate_spans_for_text(self, span_texts: List[str], entry_text: str) -> List[Span]:
+        """
+        Given a list of span texts and the entry text, return hydrated Span objects for all found spans.
+        Uses exact and fuzzy phrase matching (no word-level fallback).
+        """
+        spans = []
+        for span_text in span_texts:
+            entry_text_lower = entry_text.lower()
+            span_text_lower = span_text.lower()
+            span_start = entry_text_lower.find(span_text_lower)
+            if span_start != -1:
+                span_end = span_start + len(span_text)
+                actual_text = entry_text[span_start:span_end]
+                spans.append(Span(start=span_start, end=span_end, text=actual_text))
+            else:
+                if ' ' in span_text:
+                    best_phrase_match = self._find_best_phrase_match(span_text, entry_text)
+                    if best_phrase_match:
+                        phrase, start_pos, end_pos, score = best_phrase_match
+                        spans.append(Span(start=start_pos, end=end_pos, text=phrase))
+                        print(f"Fuzzy phrase match found: '{span_text}' -> '{phrase}' (score: {score})")
+                    else:
+                        print(f"Warning: No suitable phrase match found for span '{span_text}'")
+                else:
+                    print(
+                        f"Warning: No exact match found for single-word span '{span_text}' and word-level fallback is disabled.")
+        return spans
+
+    def _process_spans(self, processed_entities: List[Dict], journal_entry: JournalEntry) -> List[EntitySpanMapping]:
+        """
+        Generalized: takes a list of dicts with 'entity' and 'spans', hydrates spans, and returns EntitySpanMapping.
+        """
+        result = []
+        for item in processed_entities:
+            hydrated_spans = self.hydrate_spans_for_text(item['spans'], journal_entry.entry_text)
+            if hydrated_spans:
+                result.append(EntitySpanMapping(item['entity'], hydrated_spans))
+            else:
+                print(f"Warning: No valid spans found for entity '{item['entity']}'")
+        return result
+
+    def _find_best_phrase_match(self, target_span: str, text: str, min_score: int = 75) -> tuple:
+        """
+        Find the best matching phrase in text using a sliding window approach.
+        Returns (matched_phrase, start_pos, end_pos, score) or None if no good match found.
+        """
+
+        target_words = target_span.split()
+        text_words = text.split()
+
+        if not target_words or not text_words:
+            raise Exception("Target span or text is empty.")
+
+        best_match = None
+        best_score = 0
+
+        # Try different window sizes around the target length
+        for window_size in range(max(1, len(target_words) - 1), len(target_words) + 3):
+            if window_size > len(text_words):
+                break
+
+            for i in range(len(text_words) - window_size + 1):
+                window_words = text_words[i:i + window_size]
+                window_phrase = ' '.join(window_words)
+
+                # Calculate similarity score
+                score = fuzz.ratio(target_span.lower(), window_phrase.lower())
+
+                if score > best_score and score >= min_score:
+                    # Find the actual position in the original text
+                    start_pos = text.find(window_phrase)
+                    if start_pos != -1:
+                        end_pos = start_pos + len(window_phrase)
+                        best_match = (window_phrase, start_pos, end_pos, score)
+                        best_score = score
+
+        return best_match
 
     async def _build_obsidian_entity_lookup(self, journal_entry: JournalEntry) -> Dict[str, Dict]:
         """Build lookup tables for existing Obsidian entities and their aliases."""
@@ -232,17 +302,10 @@ class ExtractionService:
                 continue
             rel_data = rel.model_dump(exclude={'context', 'spans'})
             relation = Relation(**rel_data)
-            result.append(RelationSpanContextMapping(relation, rel.spans, rel.context))
+            # Hydrate relationship spans using the generalized method
+            hydrated_spans = self.hydrate_spans_for_text(rel.spans, journal_entry.entry_text) if rel.spans else []
+            result.append(RelationSpanContextMapping(relation, hydrated_spans, rel.context))
         return result
-
-    async def extract_people(self, journal_entry: JournalEntry) -> People | None:
-        result = await self.llm_service.generate(
-            prompt=ExtractPeoplePrompt.user_prompt({'text': journal_entry.entry_text}),
-            system_prompt=ExtractPeoplePrompt.system_prompt(),
-            response_model=ExtractPeoplePrompt.response_model()
-        )
-        if result:
-            return People(**result)
 
     async def _hydrate_person(self, journal_entry: JournalEntry, person_name: str) -> Person | None:
         """Hydrates a single person entity with more details using an LLM call."""
@@ -257,3 +320,38 @@ class ExtractionService:
 
     async def _filter_glossary(self, journal_entry: JournalEntry, glossary: Dict[str, str]):
         pass
+
+    async def _process_people(self, journal_entry: JournalEntry,
+                              obsidian_entities: Dict[str, Dict]) -> List[EntitySpanMapping]:
+        result = await self.llm_service.generate(
+            prompt=ExtractPeoplePrompt.user_prompt({'text': journal_entry.entry_text}),
+            system_prompt=ExtractPeoplePrompt.system_prompt(),
+            response_model=ExtractPeoplePrompt.response_model()
+        )
+        if not result:
+            raise Exception("LLM did not return any people data.")
+        llm_extracted_people = People(**result)
+
+        processed_people = await self._process_and_deduplicate_people(
+            llm_extracted_people, obsidian_entities, journal_entry
+        )
+
+        people_spans = self._process_spans(processed_people, journal_entry)
+        return people_spans
+
+    async def _process_emotions(self, journal_entry: JournalEntry,
+                                people_spans: List[EntitySpanMapping]) -> List[EntitySpanMapping]:
+        people_context = "\n".join(
+            [f"- {e.entity.name} uuid:'{e.entity.uuid}'" for e in sorted(people_spans, key=lambda e: e.entity.uuid)])
+        result = await self.llm_service.generate(
+            prompt=ExtractEmotionsPrompt.user_prompt({'text': journal_entry.entry_text, 'people': people_context}),
+            system_prompt=ExtractEmotionsPrompt.system_prompt(),
+            response_model=ExtractEmotionsPrompt.response_model()
+        )
+        if not result:
+            raise Exception("LLM did not return any feeling data.")
+        llm_extracted_feelings = Feelings(**result)
+
+        feelings_spans = self._process_spans([f.model_dump() for f in llm_extracted_feelings.feelings], journal_entry)
+
+        return feelings_spans

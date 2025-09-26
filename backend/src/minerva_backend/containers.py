@@ -36,9 +36,12 @@ class Container(containers.DeclarativeContainer):
         temporal_uri=config.TEMPORAL_URI,
     )
 
+    emotions_dict = db_connection.provided.init_emotion_types()()
+
     kg_service = providers.Singleton(
         KnowledgeGraphService,
         connection=db_connection,
+        emotions_dict=emotions_dict
     )
 
     llm_service = providers.Singleton(
@@ -54,5 +57,6 @@ class Container(containers.DeclarativeContainer):
         ExtractionService,
         connection=db_connection,
         llm_service=llm_service,
-        obsidian_service=obsidian_service
+        obsidian_service=obsidian_service,
+
     )

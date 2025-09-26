@@ -2,6 +2,7 @@ from typing import Any, Dict, List
 
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import JournalEntry
+from minerva_backend.graph.models.entities import EntityType
 from minerva_backend.graph.repositories.base import BaseRepository
 from minerva_backend.graph.repositories.concept_repository import ConceptRepository
 from minerva_backend.graph.repositories.consumable_repository import ConsumableRepository
@@ -28,7 +29,7 @@ class KnowledgeGraphService:
     Combines repository actions into complex workflows.
     """
 
-    def __init__(self, connection: Neo4jConnection):
+    def __init__(self, connection: Neo4jConnection, emotions_dict: Dict[str, str]):
         """
         Initializes the service with a database connection and all repositories.
         """
@@ -48,6 +49,7 @@ class KnowledgeGraphService:
             'Place': PlaceRepository(self.connection),
         }
         self.obsidian_service = ObsidianService()
+        self.emotions_dict = emotions_dict
 
     def add_journal_entry(self, journal_entry: JournalEntry,
                           entities: List[EntitySpanMapping],
@@ -81,18 +83,23 @@ class KnowledgeGraphService:
         for e in entities:
             entity = e.entity
             spans = e.spans
-
-            # Create/Update Entity
-            # TODO figure out if entity is linked to journal date (or other?)
-            if self.entity_repositories[entity.type].exists(entity.uuid):
-                entity_uuid = self.entity_repositories[entity.type].update(entity.uuid,
-                                                                           entity.model_dump(exclude_unset=True,
-                                                                                             exclude_defaults=True))
+            if entity.type == EntityType.EMOTION:
+                # Map emotion name to standard emotion if possible
+                mapped_name = self.emotions_dict.get(entity.name.lower())
+                if mapped_name:
+                    entity.name = mapped_name
             else:
-                entity_uuid = self.entity_repositories[entity.type].create(entity)
-            # Update Obsidian YAML metadata with entity information (summary merging should already be done)
-            self.obsidian_service.update_link(entity.name, {"entity_id": entity_uuid, "entity_type": entity.type,
-                                                            "short_summary": entity.summary_short})
+                # Create/Update Entity
+                # TODO figure out if entity is linked to journal date (or other?)
+                if self.entity_repositories[entity.type].exists(entity.uuid):
+                    entity_uuid = self.entity_repositories[entity.type].update(entity.uuid,
+                                                                               entity.model_dump(exclude_unset=True,
+                                                                                                 exclude_defaults=True))
+                else:
+                    entity_uuid = self.entity_repositories[entity.type].create(entity)
+                # Update Obsidian YAML metadata with entity information (summary merging should already be done)
+                self.obsidian_service.update_link(entity.name, {"entity_id": entity_uuid, "entity_type": entity.type,
+                                                                "short_summary": entity.summary_short})
             for span in spans:
                 found_chunks = span_index.query_containing(span.start, span.end)
                 for chunk in found_chunks:

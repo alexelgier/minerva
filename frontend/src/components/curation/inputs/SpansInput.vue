@@ -5,20 +5,23 @@
       <input
         type="number"
         class="span-input"
-        :min="0"
+        :min="localSpans[idx-1] ? localSpans[idx-1].end + 1 : 0"
+        :max="span.end-1"
         :value="span.start"
         @input="onSpanChange(idx, 'start', $event.target.value)"
         placeholder="Start"
       />
       <span class="span-separator">-</span>
+      <!-- TODO: change undefined to max journalentry char index -->
       <input
         type="number"
         class="span-input"
-        :min="0"
+        :min="span.start+1"
+        :max="localSpans[idx+1] ? localSpans[idx+1].start - 1 : undefined" 
         :value="span.end"
         @input="onSpanChange(idx, 'end', $event.target.value)"
         placeholder="End"
-      />
+      />  
       <span v-if="span.text" class="span-text">{{ span.text }}</span>
       <button class="remove-btn" @click="removeSpan(idx)">×</button>
     </div>

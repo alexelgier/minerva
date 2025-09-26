@@ -10,7 +10,7 @@
       </div>
       <div class="editor-panel" v-if="entityToEdit">
         <div class="editor-header-row">
-          <h3 class="entity-type-heading">Entity Type: {{ entityToEdit.type }}</h3>
+          <h3 class="entity-type-heading">Entity Type: {{ entityToEdit.data.type }}</h3>
           <div class="editor-actions">
             <button class="accept-btn" @click="handleAccept">Accept</button>
             <button class="reject-btn" @click="handleReject">Reject</button>

@@ -18,6 +18,38 @@ const props = defineProps({
   },
 });
 
+window.highlightMaybe = function($element) {
+  // highlight all elements with the same crossmark-N class
+  const classes = $element.className.split(' ');
+  console.log('highlightMaybe', classes);
+  $element.classList.add('highlighted-hover');
+  for (const cls of classes) {
+    if (cls.startsWith('crossmark-')) {
+      const els = document.getElementsByClassName(cls);
+      for (const el of els) {
+        if (el !== $element) 
+          el.classList.add('highlighted-hover');
+      }
+    }
+  }
+}
+
+window.unhighlight = function($element) {
+  // highlight all elements with the same crossmark-N class
+  const classes = $element.className.split(' ');
+  console.log('highlightMaybe', classes);
+  $element.classList.remove('highlighted-hover');
+  for (const cls of classes) {
+    if (cls.startsWith('crossmark-')) {
+      const els = document.getElementsByClassName(cls);
+      for (const el of els) {
+        if (el !== $element) 
+          el.classList.remove('highlighted-hover');
+      }
+    }
+  }
+}
+
 const renderedMarkdown = computed(() => {
   const spans = props.spans;
   if (!spans || !Array.isArray(spans) || spans.length === 0) return marked(props.markdown);
@@ -36,17 +68,18 @@ const renderedMarkdown = computed(() => {
   const sortedSpans = [...spans].sort((a, b) => a.start - b.start);
   let result = '';
   let lastIdx = 0;
-
+  let skips = 1;
   for (const span of sortedSpans) {
     let start = Math.max(0, Math.min(props.markdown.length, span.start));
     let end = Math.max(start, Math.min(props.markdown.length, span.end));
 
     // Find paragraph breaks within this span
     const breaksInSpan = paraBreaks.filter(b => b > start && b < end);
+    
     if (breaksInSpan.length === 0) {
       // Span is within a single paragraph
       result += props.markdown.slice(lastIdx, start);
-      result += `<mark style="background:yellow;">` + props.markdown.slice(start, end) + '</mark>';
+      result += `<mark class="highlighted" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(start, end) + '</mark>';
       lastIdx = end;
     } else {
       // Span crosses paragraph(s)
@@ -54,7 +87,7 @@ const renderedMarkdown = computed(() => {
       for (const b of breaksInSpan) {
         // Mark up to the break
         result += props.markdown.slice(lastIdx, segStart);
-        result += `<mark style="background:yellow;">` + props.markdown.slice(segStart, b) + '</mark>';
+        result += `<mark class="highlighted crossmark-${skips}" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(segStart, b) + '</mark>';
         // Add the paragraph break itself ("\n\n")
         result += props.markdown.slice(b, b + 2);
         lastIdx = b + 2;
@@ -63,9 +96,10 @@ const renderedMarkdown = computed(() => {
       // Final segment after last break
       if (segStart < end) {
         result += props.markdown.slice(lastIdx, segStart);
-        result += `<mark style="background:yellow;">` + props.markdown.slice(segStart, end) + '</mark>';
+        result += `<mark class="highlighted crossmark-${skips}" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(segStart, end) + '</mark>';
         lastIdx = end;
       }
+      skips += 1;
     }
   }
   result += props.markdown.slice(lastIdx);
@@ -77,6 +111,10 @@ const renderedMarkdown = computed(() => {
 </script>
 
 <style scoped>
+  .highlighted {
+    background: yellow;
+  }
+
   .journal-viewer {
     color: #303133;
     line-height: 1.6;

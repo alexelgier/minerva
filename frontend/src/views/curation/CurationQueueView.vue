@@ -89,7 +89,7 @@ function submitCuration(journalEntry) {
 <style scoped>
 .curation-queue-view {
   padding: 2rem;
-  background-color: #f0f2f5;
+  background-color: #101828;
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
@@ -101,7 +101,7 @@ function submitCuration(journalEntry) {
 
 .queue-header h1 {
   font-size: 2.5rem;
-  color: #333;
+  color: #949999;
 }
 
 .error-message {
@@ -119,7 +119,8 @@ function submitCuration(journalEntry) {
 }
 
 .journal-entry-card {
-  background-color: #fff;
+  background-color: #4a5565;
+  color: rgb(211, 211, 211);
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin-bottom: 2rem;
@@ -131,14 +132,14 @@ function submitCuration(journalEntry) {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  background-color: #f7f9fa;
-  border-bottom: 1px solid #e0e0e0;
+  background-color: #1e2939;
+  border-bottom: 1px solid #4a5565;
 }
 
 .journal-header h2 {
   font-size: 1.25rem;
   margin: 0;
-  color: #34495e;
+  color: #9eb0c2;
 }
 
 .progress-container {
@@ -146,7 +147,7 @@ function submitCuration(journalEntry) {
   align-items: center;
   gap: 0.75rem;
   font-size: 0.9rem;
-  color: #555;
+  color: #b9b9b9;
 }
 
 .curation-progress {
@@ -164,7 +165,7 @@ function submitCuration(journalEntry) {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid #373f4b;
 }
 
 .task-item:last-child {
@@ -185,7 +186,7 @@ function submitCuration(journalEntry) {
 
 .task-summary {
   font-size: 0.9rem;
-  color: #6c757d;
+  color: #b1c0cc;
   margin: 0;
   padding-left: 2px;
   /* to align with task-name */
@@ -196,8 +197,8 @@ function submitCuration(journalEntry) {
 }
 
 .task-type-badge {
-  background-color: #e9ecef;
-  color: #495057;
+  background-color: #4d0d79;
+  color: #d3d3d3;
   padding: 0.25em 0.6em;
   border-radius: 10px;
   font-size: 0.75rem;

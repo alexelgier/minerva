@@ -382,13 +382,13 @@ def sample_entity_span_mappings(sample_journal_entry):
     person_span = Span(
         uuid=str(uuid4()),
         text="María",
-        start_char=16,
-        end_char=21,
+        start=16,
+        end=21,
         document_uuid=sample_journal_entry.uuid
     )
     person_mapping = EntitySpanMapping(
         entity=person,
-        spans={person_span}
+        spans=[person_span]
     )
 
     # Create Emotion entity
@@ -401,13 +401,13 @@ def sample_entity_span_mappings(sample_journal_entry):
     emotion_span = Span(
         uuid=str(uuid4()),
         text="muy feliz",
-        start_char=50,
-        end_char=59,
+        start=50,
+        end=59,
         document_uuid=sample_journal_entry.uuid
     )
     emotion_mapping = EntitySpanMapping(
         entity=emotion,
-        spans={emotion_span}
+        spans=[emotion_span]
     )
 
     return [person_mapping, emotion_mapping]
@@ -435,7 +435,7 @@ def sample_relation_span_mappings(sample_entity_span_mappings, sample_journal_en
 
     relation_mapping = RelationSpanContextMapping(
         relation=relation,
-        spans={relation_span}
+        spans=[relation_span]
     )
 
     return [relation_mapping]
