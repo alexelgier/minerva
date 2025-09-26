@@ -135,7 +135,7 @@ function handleReject() {
 }
 
 .accept-btn:hover {
-  filter: brightness(0.95);
+  background-color: #218838;
 }
 
 .reject-btn {
@@ -151,44 +151,47 @@ function handleReject() {
 }
 
 .reject-btn:hover {
-  filter: brightness(0.95);
+  background-color: #c82333;
 }
 
 .curation-page-header {
   padding: 0.75rem 1.5rem;
-  background-color: #fff;
-  border-bottom: 1px solid #dcdfe6;
+  background-color: #1e2939;
+  border-bottom: 1px solid #4a5565;
 }
 
 .back-btn {
   font-size: 0.9rem;
   padding: 0.5rem 1rem;
   border-radius: 5px;
-  border: 1px solid #ced4da;
-  background-color: #f8f9fa;
+  border: 1px solid #4a5565;
+  background-color: #1e2939;
+  color: #9eb0c2;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
 
 .back-btn:hover {
-  background-color: #e9ecef;
+  background-color: #4a5565;
+  color: white;
 }
 
 .curation-view {
   display: flex;
   height: calc(100vh - 62px);
   width: 100%;
-  background-color: #f0f2f5;
+  background-color: #101828;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   overflow-y: hidden;
+  color: rgb(211, 211, 211);
 }
 
 .journal-panel {
   flex: 1;
   padding: 2rem;
-  border-right: 1px solid #dcdfe6;
+  border-right: 1px solid #373f4b;
   overflow-y: auto;
-  background-color: #ffffff;
+  background-color: #4a5565;
 }
 
 .editor-panel {
@@ -197,12 +200,13 @@ function handleReject() {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  background-color: #4a5565;
 }
 
 .entity-type-heading {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #007bff;
+  color: #9eb0c2;
   margin-bottom: 1.2rem;
   letter-spacing: 0.5px;
 }
@@ -216,7 +220,7 @@ function handleReject() {
 
   .journal-panel {
     border-right: none;
-    border-bottom: 1px solid #dcdfe6;
+    border-bottom: 1px solid #373f4b;
     max-height: 50vh;
   }
 
