@@ -1,8 +1,5 @@
 <template>
   <div>
-    <header class="curation-page-header">
-      <button @click="goBackToQueue" class="back-btn">&larr; Back to Queue</button>
-    </header>
     <div v-if="isLoading" class="loading-message">Loading...</div>
     <div v-else class="curation-view">
       <div class="journal-panel">
@@ -89,10 +86,6 @@ function inputComponent(type) {
   }
 }
 
-function goBackToQueue() {
-  router.push({ name: 'CurationQueueView' });
-}
-
 function handleAccept() {
   console.log('Accepted:', editedEntity.value);
   // Here you would typically send the data to an API
@@ -154,31 +147,9 @@ function handleReject() {
   background-color: #c82333;
 }
 
-.curation-page-header {
-  padding: 0.75rem 1.5rem;
-  background-color: #1e2939;
-  border-bottom: 1px solid #4a5565;
-}
-
-.back-btn {
-  font-size: 0.9rem;
-  padding: 0.5rem 1rem;
-  border-radius: 5px;
-  border: 1px solid #4a5565;
-  background-color: #1e2939;
-  color: #9eb0c2;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.back-btn:hover {
-  background-color: #4a5565;
-  color: white;
-}
-
 .curation-view {
   display: flex;
-  height: calc(100vh - 62px);
+  height: calc(100vh - 59px); /* Full height minus header */
   width: 100%;
   background-color: #101828;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;

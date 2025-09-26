@@ -34,7 +34,7 @@ function onInput(event) {
   font-size: 1.1rem;
   font-weight: 500;
   margin-bottom: 0.5rem;
-  color: #34495e;
+  color: rgb(105, 132, 156);
   text-transform: capitalize;
 }
 .styled-input {

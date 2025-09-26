@@ -34,7 +34,7 @@ function onInput(event) {
   font-size: 1.1rem;
   font-weight: 500;
   margin-bottom: 0.5rem;
-  color: #34495e;
+  color: rgb(105, 132, 156);
   text-transform: capitalize;
 }
 .styled-textarea {
@@ -42,13 +42,13 @@ function onInput(event) {
   padding: 0.75rem 1rem;
   border: 1.5px solid #bfc9d1;
   border-radius: 6px;
-  background: #f9fbfd;
+  background: #ced0d1;
   transition: border-color 0.2s;
   resize: vertical;
 }
 .styled-textarea:focus {
   border-color: #007bff;
   outline: none;
-  background: #fff;
+  background: #e0e3e4;
 }
 </style>

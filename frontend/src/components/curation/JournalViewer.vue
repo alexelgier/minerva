@@ -1,6 +1,8 @@
 
 <template>
-  <div class="journal-viewer prose" v-html="renderedMarkdown"></div>
+  <div class="journal-viewer-well">
+    <div class="journal-viewer prose" v-html="renderedMarkdown"></div>
+  </div>
 </template>
 
 <script setup>
@@ -79,7 +81,7 @@ const renderedMarkdown = computed(() => {
     if (breaksInSpan.length === 0) {
       // Span is within a single paragraph
       result += props.markdown.slice(lastIdx, start);
-      result += `<mark class="highlighted" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(start, end) + '</mark>';
+      result += `<span class="highlighted" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(start, end) + '</span>';
       lastIdx = end;
     } else {
       // Span crosses paragraph(s)
@@ -87,7 +89,7 @@ const renderedMarkdown = computed(() => {
       for (const b of breaksInSpan) {
         // Mark up to the break
         result += props.markdown.slice(lastIdx, segStart);
-        result += `<mark class="highlighted crossmark-${skips}" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(segStart, b) + '</mark>';
+        result += `<span class="highlighted crossmark-${skips}" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(segStart, b) + '</span>';
         // Add the paragraph break itself ("\n\n")
         result += props.markdown.slice(b, b + 2);
         lastIdx = b + 2;
@@ -96,7 +98,7 @@ const renderedMarkdown = computed(() => {
       // Final segment after last break
       if (segStart < end) {
         result += props.markdown.slice(lastIdx, segStart);
-        result += `<mark class="highlighted crossmark-${skips}" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(segStart, end) + '</mark>';
+        result += `<span class="highlighted crossmark-${skips}" onmouseover="highlightMaybe(this)" onmouseleave="unhighlight(this)">` + props.markdown.slice(segStart, end) + '</span>';
         lastIdx = end;
       }
       skips += 1;
@@ -111,13 +113,16 @@ const renderedMarkdown = computed(() => {
 </script>
 
 <style scoped>
-  .highlighted {
-    background: yellow;
+  .journal-viewer {
+    color: rgb(211, 211, 211);
+    line-height: 1.8;
   }
 
-  .journal-viewer {
-    color: #303133;
-    line-height: 1.6;
+  .journal-viewer-well {
+    padding: 1.2rem;
+    background: #2d3748;
+    border-radius: 5px;
+    box-shadow: 2px 4px 8px rgb(0, 0, 0, 0.5);
   }
 
   /* Basic styling for rendered markdown.
