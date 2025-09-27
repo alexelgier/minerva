@@ -43,12 +43,12 @@ function onInput(event) {
   padding: 0.75rem 1rem;
   border: 1.5px solid #bfc9d1;
   border-radius: 6px;
-  background: #f9fbfd;
+  background: #ced0d1;
   transition: border-color 0.2s;
 }
 .styled-input:focus {
   border-color: #007bff;
   outline: none;
-  background: #fff;
+  background: #e0e3e4;
 }
 </style>

@@ -168,36 +168,47 @@ function handleReject() {
   font-size: 1rem;
   padding: 0.5rem 1.5rem;
   border-radius: 999px;
-  border: none;
-  background-color: #28a745;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(40, 167, 69, 0.3);
+  backdrop-filter: blur(10px);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
 }
 
 .accept-btn.edited {
-  background-color: #007bff;
+  background: rgba(0, 123, 255, 0.3);
 }
 
 .accept-btn:hover {
-  background-color: #218838;
+  background: rgba(40, 167, 69, 0.5);
+  border-color: rgba(40, 167, 69, 1);
+  transform: translateY(-1px);
+}
+
+.accept-btn.edited:hover {
+  background: rgba(0, 123, 255, 0.5);
+  border-color: rgba(0, 123, 255, 1);
 }
 
 .reject-btn {
   font-size: 1rem;
   padding: 0.5rem 1.5rem;
   border-radius: 999px;
-  border: none;
-  background-color: #dc3545;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(220, 53, 69, 0.3);
+  backdrop-filter: blur(10px);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
 }
 
 .reject-btn:hover {
-  background-color: #c82333;
+  background: rgba(220, 53, 69, 0.5);
+  border-color: rgba(220, 53, 69, 1);
+  transform: translateY(-1px);
 }
 
 .curation-view {
@@ -219,7 +230,6 @@ function handleReject() {
 .editor-panel {
   flex: 1;
   padding: 2rem;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
@@ -230,6 +240,8 @@ function handleReject() {
   backdrop-filter: blur(4px);
   border-radius: 5px;
   box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 .entity-type-heading {
@@ -289,7 +301,7 @@ function handleReject() {
 }
 
 .nav-arrow-left {
-  margin-left: 1rem;
+  margin-left: 0;
 }
 
 .nav-arrow-right {

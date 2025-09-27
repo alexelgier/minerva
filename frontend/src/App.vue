@@ -20,7 +20,7 @@ import MinervaHeader from '@/components/curation/MinervaHeader.vue';
   background-size: cover;
   background-position: center center;
   background-repeat: no-repeat;
-  height: 100vh;
+  height: calc(100vh - 59px);
 }
 .fade-enter-active, .fade-leave-active {
   transition: opacity .5s;

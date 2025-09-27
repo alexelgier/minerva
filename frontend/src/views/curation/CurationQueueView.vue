@@ -204,13 +204,22 @@ function submitCuration(journalEntry) {
 }
 
 .task-type-badge {
-  background-color: #4d0d79;
+  background: rgba(77, 13, 121, 0.4);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: #d3d3d3;
   padding: 0.25em 0.6em;
   border-radius: 10px;
   font-size: 0.75rem;
   text-transform: uppercase;
   font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.task-type-badge:hover {
+  background: rgba(77, 13, 121, 0.6);
+  border-color: rgba(77, 13, 121, 1);
+  transform: translateY(-1px);
 }
 
 .task-actions {
@@ -228,12 +237,17 @@ function submitCuration(journalEntry) {
 }
 
 .details-btn {
-  background-color: #007bff;
+  background: rgba(0, 123, 255, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
+  transition: all 0.3s ease;
 }
 
 .details-btn:hover {
-  background-color: #0056b3;
+  background: rgba(0, 123, 255, 0.5);
+  border-color: rgba(0, 123, 255, 1);
+  transform: translateY(-1px);
 }
 
 .accept-btn,
@@ -247,24 +261,32 @@ function submitCuration(journalEntry) {
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
 }
 
 .accept-btn {
-  background-color: #28a745;
+  background: rgba(40, 167, 69, 0.3);
+  backdrop-filter: blur(10px);
   color: white;
 }
 
 .accept-btn:hover {
-  background-color: #218838;
+  background: rgba(40, 167, 69, 0.5);
+  border-color: rgba(40, 167, 69, 1);
+  transform: translateY(-1px);
 }
 
 .reject-btn {
-  background-color: #dc3545;
+  background: rgba(220, 53, 69, 0.3);
+  backdrop-filter: blur(10px);
   color: white;
 }
 
 .reject-btn:hover {
-  background-color: #c82333;
+  background: rgba(220, 53, 69, 0.5);
+  border-color: rgba(220, 53, 69, 1);
+  transform: translateY(-1px);
 }
 
 .card-footer {

@@ -1,31 +1,42 @@
 <template>
   <div class="spans-input-group">
     <label v-if="label" class="input-label">{{ label }}</label>
-    <div v-for="(span, idx) in localSpans" :key="idx" class="span-row">
-      <input
-        type="number"
-        class="span-input"
-        :min="localSpans[idx-1] ? localSpans[idx-1].end + 1 : 0"
-        :max="span.end-1"
-        :value="span.start"
-        @input="onSpanChange(idx, 'start', $event.target.value)"
-        placeholder="Start"
-      />
-      <span class="span-separator">-</span>
-      <!-- TODO: change undefined to max journalentry char index -->
-      <input
-        type="number"
-        class="span-input"
-        :min="span.start+1"
-        :max="localSpans[idx+1] ? localSpans[idx+1].start - 1 : undefined" 
-        :value="span.end"
-        @input="onSpanChange(idx, 'end', $event.target.value)"
-        placeholder="End"
-      />  
-      <span v-if="span.text" class="span-text">{{ span.text }}</span>
-      <button class="remove-btn" @click="removeSpan(idx)">×</button>
+    <div class="spans-container">
+      <div class="spans-list">
+        <div v-for="(span, idx) in localSpans" :key="idx" class="span-row">
+          <input
+            type="number"
+            class="span-input"
+            :min="localSpans[idx-1] ? localSpans[idx-1].end + 1 : 0"
+            :max="span.end-1"
+            :value="span.start"
+            @input="onSpanChange(idx, 'start', $event.target.value)"
+            placeholder="Start"
+          />
+          <span class="span-separator">-</span>
+          <!-- TODO: change undefined to max journalentry char index -->
+          <input
+            type="number"
+            class="span-input"
+            :min="span.start+1"
+            :max="localSpans[idx+1] ? localSpans[idx+1].start - 1 : undefined" 
+            :value="span.end"
+            @input="onSpanChange(idx, 'end', $event.target.value)"
+            placeholder="End"
+          />  
+          <span v-if="span.text" class="span-text">{{ span.text }}</span>
+          <button class="remove-btn" @click="removeSpan(idx)">×</button>
+        </div>
+      </div>
+      <div class="add-btn-container">
+        <button class="add-btn" @click="addSpan">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Add Span
+        </button>
+      </div>
     </div>
-    <button class="add-btn" @click="addSpan">Add Span</button>
   </div>
 </template>
 <script setup>
@@ -76,6 +87,18 @@ function removeSpan(idx) {
   color: rgb(105, 132, 156);
   text-transform: capitalize;
 }
+.spans-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.spans-list {
+  width: 100%;
+}
+.add-btn-container {
+  display: flex;
+  justify-content: flex-end;
+}
 .span-row {
   display: flex;
   align-items: center;
@@ -88,32 +111,38 @@ function removeSpan(idx) {
   border: 1.5px solid #bfc9d1;
   border-radius: 6px;
   margin-right: 0.3rem;
-  background: #f9fbfd;
+  background: #ced0d1;
   transition: border-color 0.2s;
 }
 .span-input:focus {
   border-color: #007bff;
   outline: none;
-  background: #fff;
+  background: #e0e3e4;
 }
 .span-separator {
   margin: 0 0.3rem;
   color: #888;
 }
 .add-btn {
-  margin-top: 0.5rem;
-  padding: 0.3rem 1rem;
-  border-radius: 5px;
-  border: 1px solid #ced4da;
-  background-color: #f8f9fa;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 123, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 0.95rem;
-  color: #007bff;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .add-btn:hover {
-  background-color: #e9ecef;
+  background: rgba(0, 123, 255, 0.5);
+  border-color: rgba(0, 123, 255, 1);
+  transform: translateY(-1px);
 }
 .remove-btn {
   margin-left: 0.5rem;

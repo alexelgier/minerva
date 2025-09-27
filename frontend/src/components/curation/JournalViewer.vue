@@ -1,6 +1,7 @@
 
 <template>
   <div class="journal-viewer-well">
+    <h3 class="journal-entry-heading">Journal Entry</h3>
     <div class="journal-viewer prose" v-html="renderedMarkdown"></div>
   </div>
 </template>
@@ -123,6 +124,14 @@ const renderedMarkdown = computed(() => {
     background: rgba(69, 76, 82, 0.3);
     border-radius: 5px;
     box-shadow: 2px 4px 8px rgb(0, 0, 0, 0.5);
+  }
+
+  .journal-entry-heading {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #9eb0c2;
+    margin-bottom: 1.2rem;
+    letter-spacing: 0.5px;
   }
 
   /* Basic styling for rendered markdown.

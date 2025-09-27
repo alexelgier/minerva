@@ -42,6 +42,13 @@ function onInput(event) {
 }
 .styled-slider {
   margin: 0.5rem 0;
+  background: #ced0d1;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+.styled-slider:focus {
+  background: #e0e3e4;
+  outline: none;
 }
 .slider-value {
   font-size: 1.1rem;
