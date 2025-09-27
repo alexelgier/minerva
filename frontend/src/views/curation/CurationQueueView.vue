@@ -89,10 +89,14 @@ function submitCuration(journalEntry) {
 <style scoped>
 .curation-queue-view {
   padding: 2rem;
-  background-color: #101828;
-  min-height: 100vh;
+  background-color: transparent;
+  height: calc(100vh - 59px);
+  overflow-y: auto;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  box-sizing: border-box;
+  position: relative;
 }
+
 
 .queue-header {
   margin-bottom: 2rem;
@@ -116,10 +120,12 @@ function submitCuration(journalEntry) {
 .journal-entries-container {
   max-width: 900px;
   margin: 0 auto;
+  padding-bottom: 2rem;
 }
 
 .journal-entry-card {
-  background-color: #4a5565;
+  background-color: rgba(69, 76, 82, 0.3);
+  backdrop-filter: blur(5px);
   color: rgb(211, 211, 211);
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -132,7 +138,8 @@ function submitCuration(journalEntry) {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  background-color: #1e2939;
+  background-color: rgba(52, 56, 60, 0.3);
+  backdrop-filter: blur(2px);
   border-bottom: 1px solid #4a5565;
 }
 

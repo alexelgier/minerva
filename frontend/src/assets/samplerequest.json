@@ -2,6 +2,42 @@
     "success": true,
     "timestamp": "2025-09-26T20:30:36.423631",
     "journal_entries": {
+        "4a1b2c3d-5e6f-7890-abcd-ef1234567890": {
+            "journal_id": "4a1b2c3d-5e6f-7890-abcd-ef1234567890",
+            "date": "2025-09-25",
+            "entry_text": "[[2025]] [[2025-09]] Sunday\n\n10:15, Desperté tarde después de una noche larga trabajando en [[Minerva]]. [[Ana Sorin|Ana]] ya estaba despierta y preparando el desayuno. Hablamos sobre los planes para el día y ella mencionó que [[Sady Antonia Baez|Sady]] vendría a visitar.\n\n[[Martin Alvarez Heymann|Martin]] llamó para confirmar que mañana es su [[cumpleaños]]. Estoy emocionado por la celebración.\n\n14:30, Trabajé en optimizar el rendimiento de [[Minerva]]. Los modelos más pequeños están funcionando mejor, pero aún necesito ajustar algunos parámetros.\n\n[[Ollama]] está funcionando bien con los embeddings. Creo que fue una buena decisión cambiar de [[LM Studio]].\n\n19:45, [[Ana Sorin|Ana]] y yo cocinamos juntos. Fue un momento agradable, aunque noto que hay cierta tensión entre nosotros últimamente.\n\n22:00, [[journaling|Escribir ésto]]. Mañana tengo que terminar de configurar [[Graphiti]] y revisar todos los patch que hice.",
+            "phase": "entities",
+            "tasks": {
+                "b1c2d3e4-f5g6-h7i8-j9k0-l1m2n3o4p5": {
+                    "id": "b1c2d3e4-f5g6-h7i8-j9k0-l1m2n3o4p5",
+                    "journal_id": "4a1b2c3d-5e6f-7890-abcd-ef1234567890",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-25T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "b1c2d3e4-f5g6-h7i8-j9k0-l1m2n3o4p5",
+                        "created_at": "2025-09-25T18:12:21.444582",
+                        "name": "Ana Sorin",
+                        "type": "Person",
+                        "summary_short": "Persona que prepara el desayuno y cocina con el autor, con cierta tensión en la relación.",
+                        "summary": "Ana Sorin aparece como una persona que prepara el desayuno y cocina junto con el autor. Aunque comparten momentos agradables como cocinar juntos, el autor nota cierta tensión en su relación. Ana está presente en las actividades cotidianas del autor y parece ser una figura importante en su vida diaria.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "c1d2e3f4-g5h6-i7j8-k9l0-m1n2o3p4q5",
+                                "created_at": "2025-09-25T18:12:21.445099",
+                                "type": "Span",
+                                "text": "[[Ana Sorin|Ana]] ya estaba despierta y preparando el desayuno.",
+                                "start": 45,
+                                "end": 95
+                            }
+                        ]
+                    }
+                }
+            }
+        },
         "6e333139-b344-48a3-93bb-ea74726fac61": {
             "journal_id": "6e333139-b344-48a3-93bb-ea74726fac61",
             "date": "2025-09-26",
@@ -360,18 +396,54 @@
                     }
                 }
             }
+        },
+        "8f9g0h1i-2j3k-4l5m-6n7o-8p9q0r1s2t": {
+            "journal_id": "8f9g0h1i-2j3k-4l5m-6n7o-8p9q0r1s2t",
+            "date": "2025-09-27",
+            "entry_text": "[[2025]] [[2025-09]] Tuesday\n\n09:00, Desperté temprano para el [[cumpleaños]] de [[Martin Alvarez Heymann|Martin]]. [[Ana Sorin|Ana]] ya había preparado todo para la celebración.\n\n[[Sady Antonia Baez|Sady]] llegó con regalos para Martin. Parece que se ha recuperado un poco de la tristeza por [[Marcelo]].\n\n12:00, Fiesta de cumpleaños de Martin. Fue una celebración muy agradable. [[Ana Sorin|Ana]] y yo preparamos una comida especial.\n\n15:30, Después de la fiesta, trabajé en [[Minerva]]. Los ajustes que hice ayer están funcionando mejor. [[Ollama]] está procesando los embeddings más rápido.\n\n18:00, [[Ana Sorin|Ana]] y yo tuvimos una conversación seria sobre nuestra relación. Hablamos sobre las tensiones que hemos estado sintiendo. Fue una charla difícil pero necesaria.\n\n20:30, [[journaling|Escribir ésto]]. Hoy fue un día emocionalmente intenso. La fiesta de Martin fue alegre, pero la conversación con Ana me dejó pensando mucho sobre el futuro de nuestra relación.\n\n[[Minerva]] está funcionando mejor ahora. Creo que los cambios que implementé están dando resultados positivos.",
+            "phase": "entities",
+            "tasks": {
+                "d1e2f3g4-h5i6-j7k8-l9m0-n1o2p3q4r5": {
+                    "id": "d1e2f3g4-h5i6-j7k8-l9m0-n1o2p3q4r5",
+                    "journal_id": "8f9g0h1i-2j3k-4l5m-6n7o-8p9q0r1s2t",
+                    "type": "entity",
+                    "status": "pending",
+                    "created_at": "2025-09-27T21:12:21",
+                    "data": {
+                        "partition": "DOMAIN",
+                        "uuid": "d1e2f3g4-h5i6-j7k8-l9m0-n1o2p3q4r5",
+                        "created_at": "2025-09-27T18:12:21.444582",
+                        "name": "Martin Alvarez Heymann",
+                        "type": "Person",
+                        "summary_short": "Persona que celebra su cumpleaños, con una fiesta organizada por el autor y Ana.",
+                        "summary": "Martin Alvarez Heymann es una persona cuyo cumpleaños se celebra en esta entrada del diario. El autor y Ana Sorin organizan una fiesta especial para él, preparando una comida especial. La celebración es descrita como muy agradable y alegre. Martin parece ser una persona importante en la vida del autor, ya que se menciona que el autor se despertó temprano específicamente para su cumpleaños y que Sady llegó con regalos para él.",
+                        "name_embedding": null,
+                        "spans": [
+                            {
+                                "partition": "LEXICAL",
+                                "uuid": "e1f2g3h4-i5j6-k7l8-m9n0-o1p2q3r4s5",
+                                "created_at": "2025-09-27T18:12:21.445099",
+                                "type": "Span",
+                                "text": "Desperté temprano para el [[cumpleaños]] de [[Martin Alvarez Heymann|Martin]].",
+                                "start": 25,
+                                "end": 85
+                            }
+                        ]
+                    }
+                }
+            }
         }
     },
     "stats": {
-        "total_journals": 1,
-        "pending_entities": 1,
+        "total_journals": 3,
+        "pending_entities": 3,
         "pending_relationships": 0,
         "completed": 0,
         "entity_stats": {
-            "total_extracted": 9,
+            "total_extracted": 11,
             "accepted": 0,
             "rejected": 0,
-            "pending": 9,
+            "pending": 11,
             "acceptance_rate": 0.0
         },
         "relationship_stats": {

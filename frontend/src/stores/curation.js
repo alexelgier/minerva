@@ -15,7 +15,7 @@ export const useCurationStore = defineStore('curation', () => {
         isLoading.value = true
         error.value = null
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/curation/pending')
+            const response = await fetch('/src/assets/samplerequest.json')
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
             const data = await response.json()
             // Pre-process tasks for easier display
@@ -72,6 +72,28 @@ export const useCurationStore = defineStore('curation', () => {
         }
     }
 
+    // Navigation methods
+    function getJournalEntryIds() {
+        return Object.keys(journalEntries.value);
+    }
+
+    function getCurrentJournalIndex(currentJournalId) {
+        const ids = getJournalEntryIds();
+        return ids.indexOf(currentJournalId);
+    }
+
+    function getPreviousJournalId(currentJournalId) {
+        const ids = getJournalEntryIds();
+        const currentIndex = getCurrentJournalIndex(currentJournalId);
+        return currentIndex > 0 ? ids[currentIndex - 1] : null;
+    }
+
+    function getNextJournalId(currentJournalId) {
+        const ids = getJournalEntryIds();
+        const currentIndex = getCurrentJournalIndex(currentJournalId);
+        return currentIndex < ids.length - 1 ? ids[currentIndex + 1] : null;
+    }
+
     return {
         editedEntity,
         journalEntries,
@@ -81,5 +103,8 @@ export const useCurationStore = defineStore('curation', () => {
         fetchCurationQueue,
         handleCurationAction,
         submitCuration,
+        getJournalEntryIds,
+        getPreviousJournalId,
+        getNextJournalId,
     }
 })

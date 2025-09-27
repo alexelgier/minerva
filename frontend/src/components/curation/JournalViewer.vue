@@ -120,7 +120,7 @@ const renderedMarkdown = computed(() => {
 
   .journal-viewer-well {
     padding: 1.2rem;
-    background: #2d3748;
+    background: rgba(69, 76, 82, 0.3);
     border-radius: 5px;
     box-shadow: 2px 4px 8px rgb(0, 0, 0, 0.5);
   }
