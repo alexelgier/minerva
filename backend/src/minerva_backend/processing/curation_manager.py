@@ -19,7 +19,7 @@ from minerva_backend.graph.models.entities import (
     Content,
 )
 from minerva_backend.graph.models.relations import Relation
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping, JournalEntryCuration, \
+from minerva_backend.processing.models import EntityMapping, RelationSpanContextMapping, JournalEntryCuration, \
     CurationStats, CurationTask, CurationEntityStats, CurationRelationshipStats
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 
@@ -175,7 +175,7 @@ class CurationManager:
     # ===== ENTITY CURATION =====
 
     async def queue_entities_for_curation(self, journal_uuid: str, journal_text: str,
-                                          entities: List[EntitySpanMapping]) -> None:
+                                          entities: List[EntityMapping]) -> None:
         """Add entities to curation queue"""
         # First ensure journal exists
         await self.create_journal_for_curation(journal_uuid, journal_text)
@@ -230,7 +230,7 @@ class CurationManager:
             await db.commit()
             return cursor.rowcount > 0
 
-    async def get_accepted_entities_with_spans(self, journal_uuid: str) -> List[EntitySpanMapping]:
+    async def get_accepted_entities_with_spans(self, journal_uuid: str) -> List[EntityMapping]:
         """Get all accepted entities for a journal with their spans"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -260,7 +260,7 @@ class CurationManager:
                     span_rows = await span_cursor.fetchall()
                     spans = [Span.model_validate(json.loads(row[0])) for row in span_rows]
 
-                results.append(EntitySpanMapping(entity, spans))
+                results.append(EntityMapping(entity, spans))
 
             return results
 

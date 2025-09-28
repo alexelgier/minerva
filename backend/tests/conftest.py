@@ -16,7 +16,7 @@ from minerva_backend.graph.repositories import (
     ConceptRepository, ContentRepository, ConsumableRepository,
     EmotionRepository, JournalEntryRepository
 )
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
+from minerva_backend.processing.models import EntityMapping, RelationSpanContextMapping
 
 
 @pytest.fixture(scope="session")
@@ -386,7 +386,7 @@ def sample_entity_span_mappings(sample_journal_entry):
         end=21,
         document_uuid=sample_journal_entry.uuid
     )
-    person_mapping = EntitySpanMapping(
+    person_mapping = EntityMapping(
         entity=person,
         spans=[person_span]
     )
@@ -405,7 +405,7 @@ def sample_entity_span_mappings(sample_journal_entry):
         end=59,
         document_uuid=sample_journal_entry.uuid
     )
-    emotion_mapping = EntitySpanMapping(
+    emotion_mapping = EntityMapping(
         entity=emotion,
         spans=[emotion_span]
     )

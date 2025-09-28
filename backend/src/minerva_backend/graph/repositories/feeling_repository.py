@@ -4,7 +4,7 @@ Handles all Feeling entity database operations.
 """
 
 from datetime import datetime
-from typing import List
+from typing import List, Dict, Any
 
 from .base import BaseRepository
 from ..models.entities import Feeling
@@ -21,6 +21,26 @@ class FeelingRepository(BaseRepository[Feeling]):
     @property
     def entity_class(self) -> type[Feeling]:
         return Feeling
+
+    def _node_to_properties(self, node: Feeling) -> Dict[str, Any]:
+        """
+        Convert Pydantic node to Neo4j properties.
+        Handles datetime serialization and other conversions.
+
+        Args:
+            node: Pydantic node instance
+
+        Returns:
+            Dict of properties ready for Neo4j storage
+        """
+        properties = node.model_dump()
+
+        # Convert datetime objects to ISO strings for Neo4j
+        for key, value in properties.items():
+            if isinstance(value, datetime):
+                properties[key] = value.isoformat()
+
+        return properties
 
     def find_by_date_range(self, start_date: datetime, end_date: datetime) -> List[Feeling]:
         """

@@ -50,6 +50,59 @@ class ResourceStatus(str, Enum):
     ABANDONED = "ABANDONED"
 
 
+class EmotionType(str, Enum):
+    ANGER = "anger"
+    ANNOYANCE = "annoyance"
+    CONTEMPT = "contempt"
+    DISGUST = "disgust"
+    IRRITATION = "irritation"
+    ANXIETY = "anxiety"
+    EMBARRASSMENT = "embarrassment"
+    FEAR = "fear"
+    HELPLESSNESS = "helplessness"
+    POWERLESSNESS = "powerlessness"
+    WORRY = "worry"
+    DOUBT = "doubt"
+    ENVY = "envy"
+    FRUSTRATION = "frustration"
+    GUILT = "guilt"
+    SHAME = "shame"
+    CONFUSION = "confusion"
+    BOREDOM = "boredom"
+    DESPAIR = "despair"
+    DISAPPOINTMENT = "disappointment"
+    HURT = "hurt"
+    SADNESS = "sadness"
+    LONELINESS = "loneliness"
+    STRESS = "stress"
+    TENSION = "tension"
+    AMUSEMENT = "amusement"
+    DELIGHT = "delight"
+    ELATION = "elation"
+    EXCITEMENT = "excitement"
+    HAPPINESS = "happiness"
+    JOY = "joy"
+    PLEASURE = "pleasure"
+    SATISFACTION = "satisfaction"
+    AFFECTION = "affection"
+    EMPATHY = "empathy"
+    LOVE = "love"
+    PRIDE = "pride"
+    GRATITUDE = "gratitude"
+    HOPE = "hope"
+    TRUST = "trust"
+    ANTICIPATION = "anticipation"
+    CALMNESS = "calmness"
+    CONTENTMENT = "contentment"
+    RELAXATION = "relaxation"
+    RELIEF = "relief"
+    SERENITY = "serenity"
+    AWE = "awe"
+    NOSTALGIA = "nostalgia"
+    INTEREST = "interest"
+    SURPRISE = "surprise"
+
+
 class Entity(Node, ABC):
     name: str = Field(..., description='nombre de la entidad')
     type: EntityType = Field(..., description="Tipo de entidad (Persona, Evento, etc)")
@@ -81,6 +134,9 @@ class Feeling(Entity):
     type: Literal[EntityType.FEELING] = EntityType.FEELING.value
     intensity: int | None = Field(default=None, description="Nivel de intensidad (1-10)", ge=1, le=10)
     duration: timedelta | None = Field(default=None, description="Cuánto duró el sentimiento")
+    emotion: EmotionType | None = Field(default=None, exclude=True)
+    emotion_uuid: EmotionType | None = Field(default=None, exclude=True)
+    person_uuid: str | None = Field(default=None, exclude=True)
 
 
 class Event(Entity):
@@ -132,5 +188,3 @@ class Place(Entity):
     type: Literal[EntityType.PLACE] = EntityType.PLACE.value
     address: str | None = Field(default=None, description="Dirección o descripción de la ubicación")
     category: str | None = Field(default=None, description="Categoría del lugar (p. ej., casa, parque, restaurante)")
-
-

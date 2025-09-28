@@ -1,8 +1,9 @@
+from datetime import datetime, timedelta
 from typing import List, Type
 
 from pydantic import BaseModel, Field
 
-from minerva_backend.graph.models.enums import EmotionType
+from minerva_backend.graph.models.entities import EmotionType
 from minerva_backend.prompt.base import Prompt
 
 
@@ -11,6 +12,11 @@ class Feeling(BaseModel):
     emotion: EmotionType = Field(..., description="Type of emotion felt")
     person_uuid: str = Field(..., description="UUID of person feeling the emotion")
     spans: List[str] = Field(..., description="Exact text fragments where the feeling is mentioned", min_length=1)
+    timestamp: datetime = Field(..., description="Cuándo ocurrió este sentimiento")
+    intensity: int | None = Field(default=None, description="Nivel de intensidad (1-10)", ge=1, le=10)
+    duration: timedelta | None = Field(default=None, description="Cuánto duró el sentimiento")
+    summary_short: str = Field(..., description="Resumen del sentimiento. Máximo 30 palabras")
+    summary: str = Field(..., description="Resumen del sentimiento. Máximo 100 palabras")
 
 
 class Feelings(BaseModel):
@@ -27,7 +33,7 @@ class ExtractEmotionsPrompt(Prompt):
     def system_prompt() -> str:
         return """Extrae todos los sentimientos y emociones expresados en esta entrada del diario.
 
-    Para cada sentimiento, incluye:
+    Para cada sentimiento, incluye mínimo:
     - El tipo de emoción sentida (usando los tipos disponibles)
     - El UUID de la persona que siente la emoción
     - Todos los fragmentos de texto exactos donde se expresa el sentimiento
@@ -58,7 +64,14 @@ class ExtractEmotionsPrompt(Prompt):
     - **Emoción**: [Tipo de emoción de la lista anterior]
     - **Persona**: [UUID de quien siente la emoción]
     - **Fragmentos**: [Lista de fragmentos de texto exactos]
-
+     
+    Opcionalmente, si está disponible en el texto:
+    - **Intensidad**: [Nivel de intensidad del 1 al 10]
+    - **Duración**: [Duración del sentimiento]
+    - **Timestamp**: [Fecha y hora aproximada del sentimiento]
+    - **Resumen corto**: [Resumen del sentimiento. Máximo 30 palabras]
+    - **Resumen**: [Resumen del sentimiento. Máximo 100 palabras]
+    
     ## VERIFICACIÓN FINAL:
 
     Confirma que cada fragmento:

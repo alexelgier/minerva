@@ -235,6 +235,47 @@ class ObsidianService:
         except (IOError, yaml.YAMLError, UnicodeDecodeError):
             return False
 
+    def _build_obsidian_entity_lookup(self, links: List[str]) -> Dict[str, Dict]:
+        """Build lookup tables for existing Obsidian entities and their aliases."""
+
+        # Resolve all links to get entity metadata
+        resolved_links = []
+        for link in links:
+            resolved = self.resolve_link(link)
+            resolved_links.append(resolved)
+
+        # Remove duplicates based on entity_long_name
+        unique_links = list({link['entity_long_name']: link for link in resolved_links}.values())
+
+        # Build name-to-entity lookup (including aliases)
+        name_to_entity = {}
+        entities_with_db_ids = []
+
+        for link_data in unique_links:
+            entity_name = link_data['entity_name']
+
+            # Store entities that exist in the database
+            if link_data['entity_id']:
+                entities_with_db_ids.append(link_data)
+
+            # Map primary name to entity data
+            if entity_name and entity_name not in name_to_entity:
+                name_to_entity[entity_name] = link_data
+
+            # Map aliases to the same entity data
+            if link_data['aliases']:
+                for alias in link_data['aliases']:
+                    if alias not in name_to_entity:
+                        name_to_entity[alias] = link_data
+
+        return {
+            'name_lookup': name_to_entity,
+            'db_entities': entities_with_db_ids,
+            'glossary': {link['entity_name']: link['short_summary']
+                         for link in unique_links
+                         if link['entity_name'] and link['short_summary']}
+        }
+
     def get_cache_stats(self) -> Dict:
         """Returns statistics about the vault cache."""
         cache = self._build_cache()

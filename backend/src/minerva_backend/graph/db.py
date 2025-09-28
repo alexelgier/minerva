@@ -10,7 +10,7 @@ import logging
 from contextlib import contextmanager
 
 from minerva_backend.config import settings
-from minerva_backend.graph.models.enums import EmotionType
+from minerva_backend.graph.models.entities import EmotionType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -210,7 +210,7 @@ class Neo4jConnection:
         result: Dict[str, str] = {}
         with self.session() as session:
             for emotion in EmotionType:
-                record = session.run(query, {"name": str(emotion)}).single()
+                record = session.run(query, {"name": emotion}).single()
                 if record:
                     result[emotion] = str(record["uuid"])
         return result

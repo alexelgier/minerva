@@ -6,7 +6,7 @@ import pytest
 from minerva_backend.graph.models.documents import JournalEntry, Span
 from minerva_backend.graph.models.entities import Person
 from minerva_backend.processing.extraction_service import ExtractionService
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
+from minerva_backend.processing.models import EntityMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_people import People
 from minerva_backend.prompt.extract_people import Person as ExtractedPerson
 
@@ -276,26 +276,38 @@ class TestExtractionService:
                                      "amorosamente.")
             assert spans[0].start == 30
             assert spans[0].end == 117
+            assert sample_journal_entry.entry_text[spans[0].start:spans[0].end] == spans[0].text
             assert spans[1].text == "Debo dos dias anteriores de [[Diario]] que no llené."
             assert spans[1].start == 611
             assert spans[1].end == 663
+            assert sample_journal_entry.entry_text[spans[1].start:spans[1].end] == spans[1].text
             assert spans[2].text == ("Mi [[Proyectos|Proyecto]] [[Minerva]] me esta quitando mucho tiempo, estoy muy "
                                      "enganchado. ")
             assert spans[2].start == 664
             assert spans[2].end == 755
+            assert sample_journal_entry.entry_text[spans[2].start:spans[2].end] == spans[2].text
             assert spans[3].text == ("[[Ana Sorin|Ana]] vino a apagar la estufa, le di un abrazo y le agradecí la "
                                      "charla de hoy ")
             assert spans[3].start == 1220
             assert spans[3].end == 1310
+            assert sample_journal_entry.entry_text[spans[3].start:spans[3].end] == spans[3].text
 
         def test_fuzzy_phrase_matching(self, extraction_service, sample_journal_entry):
             # The span_text is similar but not identical to the phrase in entry_text
-            span_texts = ["Debo dos dias de [[Diario]] que no llené."]
+            span_texts = ["Debo dos dias de [[Diario]] que no llené.", "02:42 [[journaling|Escribir ésto]]. "
+                                                                       "[[Ana Sorin|Ana]] vino a apagar la estufa, "
+                                                                       "le di un abrazo y le agradecí la charla de hoy"]
             spans = extraction_service.hydrate_spans_for_text(span_texts, sample_journal_entry.entry_text)
-            assert len(spans) == 1
+            assert len(spans) == 2
             assert spans[0].text == "Debo dos dias anteriores de [[Diario]] que no llené."
             assert spans[0].start == 611
             assert spans[0].end == 663
+            assert sample_journal_entry.entry_text[spans[0].start:spans[0].end] == spans[0].text
+            assert spans[1].text == """02:42 [[journaling|Escribir ésto]]. 
+[[Ana Sorin|Ana]] vino a apagar la estufa, le di un abrazo y le agradecí la charla de hoy"""
+            assert spans[1].start == 1183
+            assert spans[1].end == 1309
+            assert sample_journal_entry.entry_text[spans[1].start:spans[1].end] == spans[1].text
 
         def test_no_match_found(self, extraction_service, sample_journal_entry):
             # The span_text does not appear in entry_text, and fuzzy also fails
@@ -709,8 +721,8 @@ class TestExtractionService:
             person1 = Person(uuid="uuid-1", name="John", summary="", summary_short="")
             person2 = Person(uuid="uuid-2", name="Sarah", summary="", summary_short="")
             entities = [
-                EntitySpanMapping(person1, [Span(start=0, end=4, text="John")]),
-                EntitySpanMapping(person2, [Span(start=5, end=10, text="Sarah")])
+                EntityMapping(person1, [Span(start=0, end=4, text="John")]),
+                EntityMapping(person2, [Span(start=5, end=10, text="Sarah")])
             ]
 
             # Mock LLM response
@@ -745,9 +757,9 @@ class TestExtractionService:
             person2 = Person(uuid="uuid-2", name="Sarah")
             person3 = Person(uuid="uuid-3", name="Mike")
             entities = [
-                EntitySpanMapping(person1, []),
-                EntitySpanMapping(person2, []),
-                EntitySpanMapping(person3, [])
+                EntityMapping(person1, []),
+                EntityMapping(person2, []),
+                EntityMapping(person3, [])
             ]
 
             mock_context = [{"entity_uuid": "uuid-3", "context_type": "LOCATION"}]
@@ -770,7 +782,7 @@ class TestExtractionService:
 
         @pytest.mark.asyncio
         async def test_invalid_source_uuid(self, extraction_service, sample_journal_entry):
-            entities = [EntitySpanMapping(Person(uuid="valid-uuid", name="John"), [])]
+            entities = [EntityMapping(Person(uuid="valid-uuid", name="John"), [])]
 
             mock_response = {
                 "relationships": [{
@@ -788,7 +800,7 @@ class TestExtractionService:
 
         @pytest.mark.asyncio
         async def test_invalid_target_uuid(self, extraction_service, sample_journal_entry):
-            entities = [EntitySpanMapping(Person(uuid="valid-uuid", name="John"), [])]
+            entities = [EntityMapping(Person(uuid="valid-uuid", name="John"), [])]
 
             mock_response = {
                 "relationships": [{
@@ -807,8 +819,8 @@ class TestExtractionService:
         @pytest.mark.asyncio
         async def test_invalid_context_uuid(self, extraction_service, sample_journal_entry):
             entities = [
-                EntitySpanMapping(Person(uuid="uuid-1", name="John"), []),
-                EntitySpanMapping(Person(uuid="uuid-2", name="Sarah"), [])
+                EntityMapping(Person(uuid="uuid-1", name="John"), []),
+                EntityMapping(Person(uuid="uuid-2", name="Sarah"), [])
             ]
 
             mock_context = [{"entity_uuid": "invalid-context-uuid", "context_type": "LOCATION"}]
@@ -830,8 +842,8 @@ class TestExtractionService:
         @pytest.mark.asyncio
         async def test_relationship_without_spans(self, extraction_service, sample_journal_entry):
             entities = [
-                EntitySpanMapping(Person(uuid="uuid-1", name="John"), []),
-                EntitySpanMapping(Person(uuid="uuid-2", name="Sarah"), [])
+                EntityMapping(Person(uuid="uuid-1", name="John"), []),
+                EntityMapping(Person(uuid="uuid-2", name="Sarah"), [])
             ]
 
             mock_response = {
@@ -871,13 +883,13 @@ class TestExtractionService:
             mock_processed_people = [{'entity': Person(name="John"), 'spans': ["John"]}]
             extraction_service._process_and_deduplicate_people = AsyncMock(return_value=mock_processed_people)
 
-            mock_spans = [EntitySpanMapping(Person(name="John"), [Span(start=0, end=4, text="John")])]
+            mock_spans = [EntityMapping(Person(name="John"), [Span(start=0, end=4, text="John")])]
             extraction_service._process_spans = Mock(return_value=mock_spans)
 
             result = await extraction_service.extract_entities(sample_journal_entry)
 
             assert len(result) == 1
-            assert isinstance(result[0], EntitySpanMapping)
+            assert isinstance(result[0], EntityMapping)
 
             # Verify all methods were called in correct order
             extraction_service._build_obsidian_entity_lookup.assert_called_once_with(sample_journal_entry)

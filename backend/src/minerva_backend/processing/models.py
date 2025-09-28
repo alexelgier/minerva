@@ -10,7 +10,7 @@ from minerva_backend.graph.models.relations import Relation
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 
 
-class EntitySpanMapping(BaseModel):
+class EntityMapping(BaseModel):
     entity: Entity
     spans: List[Span]
 

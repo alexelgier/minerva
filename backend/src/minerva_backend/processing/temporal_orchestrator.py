@@ -11,7 +11,7 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
 from minerva_backend.graph.models.documents import JournalEntry
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
+from minerva_backend.processing.models import EntityMapping, RelationSpanContextMapping
 
 
 class PipelineStage(str, Enum):
@@ -30,8 +30,8 @@ class PipelineState(BaseModel):
     stage: PipelineStage
     created_at: Optional[datetime] = None
     journal_entry: Optional[JournalEntry] = None
-    entities_extracted: Optional[List[EntitySpanMapping]] = None
-    entities_curated: Optional[List[EntitySpanMapping]] = None
+    entities_extracted: Optional[List[EntityMapping]] = None
+    entities_curated: Optional[List[EntityMapping]] = None
     relationships_extracted: Optional[List[RelationSpanContextMapping]] = None
     relationships_curated: Optional[List[RelationSpanContextMapping]] = None
     error_count: int = 0
@@ -45,7 +45,7 @@ class PipelineState(BaseModel):
 class PipelineActivities:
 
     @activity.defn
-    async def extract_entities(self, journal_entry: JournalEntry) -> List[EntitySpanMapping]:
+    async def extract_entities(self, journal_entry: JournalEntry) -> List[EntityMapping]:
         """Extract entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -53,7 +53,7 @@ class PipelineActivities:
         return await container.extraction_service().extract_entities(journal_entry)
 
     @activity.defn
-    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[EntitySpanMapping]) -> List[RelationSpanContextMapping]:
+    async def extract_relationships(self, journal_entry: JournalEntry, entities: List[EntityMapping]) -> List[RelationSpanContextMapping]:
         """Extract relationships between entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -62,7 +62,7 @@ class PipelineActivities:
 
     @activity.defn
     async def submit_entity_curation(self, journal_entry: JournalEntry,
-                                     entities_spans: List[EntitySpanMapping]) -> None:
+                                     entities_spans: List[EntityMapping]) -> None:
         """Human-in-the-loop: Wait for user to curate entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -72,7 +72,7 @@ class PipelineActivities:
                                                                        entities_spans)
 
     @activity.defn
-    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[EntitySpanMapping]:
+    async def wait_for_entity_curation(self, journal_entry: JournalEntry) -> List[EntityMapping]:
         """Human-in-the-loop: Wait for user to curate entities"""
         from minerva_backend.containers import Container
         container = Container()
@@ -109,7 +109,7 @@ class PipelineActivities:
             await asyncio.sleep(30)  # Check every 30 seconds
 
     @activity.defn
-    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[EntitySpanMapping],
+    async def write_to_knowledge_graph(self, journal_entry: JournalEntry, entities: List[EntityMapping],
                                        relationships: List[RelationSpanContextMapping]) -> bool:
         """Final stage: Write curated data to Neo4j"""
         from minerva_backend.containers import Container

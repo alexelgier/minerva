@@ -15,7 +15,8 @@ export const useCurationStore = defineStore('curation', () => {
         isLoading.value = true
         error.value = null
         try {
-            const response = await fetch('/src/assets/samplerequest.json')
+            // const response = await fetch('/src/assets/samplerequest.json')
+            const response = await fetch('http://127.0.0.1:8000/api/curation/pending')
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
             const data = await response.json()
             // Pre-process tasks for easier display

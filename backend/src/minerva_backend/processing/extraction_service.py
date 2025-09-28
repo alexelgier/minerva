@@ -1,11 +1,11 @@
 import re
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from rapidfuzz import fuzz
 
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.graph.models.documents import JournalEntry, Span
-from minerva_backend.graph.models.entities import Person
+from minerva_backend.graph.models.entities import Person, Feeling, Project
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.graph.repositories.base import BaseRepository
 from minerva_backend.graph.repositories.concept_repository import ConceptRepository
@@ -19,9 +19,10 @@ from minerva_backend.graph.repositories.place_repository import PlaceRepository
 from minerva_backend.graph.repositories.project_repository import ProjectRepository
 from minerva_backend.obsidian.obsidian_service import ObsidianService
 from minerva_backend.processing.llm_service import LLMService
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
+from minerva_backend.processing.models import EntityMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_emotions import ExtractEmotionsPrompt, Feelings
 from minerva_backend.prompt.extract_people import ExtractPeoplePrompt, People
+from minerva_backend.prompt.extract_projects import ExtractProjectsPrompt, Projects
 from minerva_backend.prompt.extract_relationships import ExtractRelationshipsPrompt, Relationships
 from minerva_backend.prompt.hydrate_person import HydratePersonPrompt
 from minerva_backend.prompt.merge_summaries import MergeSummariesPrompt
@@ -47,17 +48,25 @@ class ExtractionService:
         }
         self.obsidian_service = obsidian_service
 
-    async def extract_entities(self, journal_entry: JournalEntry) -> List[EntitySpanMapping]:
+    async def extract_entities(self, journal_entry: JournalEntry) -> List[EntityMapping]:
         """Stage 1-2: Extract entities and related spans"""
         entities_spans = []
 
         # Step 1: Build lookup tables from Obsidian links
         obsidian_entities = await self._build_obsidian_entity_lookup(journal_entry)
+
+        # Step 2: Extract and process entities by type
+        # People
         people_spans = await self._process_people(journal_entry, obsidian_entities)
         entities_spans.extend(people_spans)
 
-        # feelings_spans = await self._process_emotions(journal_entry, people_spans)
-        # entities_spans.extend(feelings_spans)
+        # Feelings/Emotions (requires people context)
+        feelings_spans = await self._process_emotions(journal_entry, people_spans)
+        entities_spans.extend(feelings_spans)
+
+        # Projects
+        projects_spans = await self._process_projects(journal_entry, obsidian_entities)
+        entities_spans.extend(projects_spans)
 
         # TODO: Add other entity types
         # projects = await self._process_projects(journal_entry, obsidian_entities)
@@ -94,7 +103,7 @@ class ExtractionService:
                         f"Warning: No exact match found for single-word span '{span_text}' and word-level fallback is disabled.")
         return spans
 
-    def _process_spans(self, processed_entities: List[Dict], journal_entry: JournalEntry) -> List[EntitySpanMapping]:
+    def _process_spans(self, processed_entities: List[Dict], journal_entry: JournalEntry) -> List[EntityMapping]:
         """
         Generalized: takes a list of dicts with 'entity' and 'spans', hydrates spans, and returns EntitySpanMapping.
         """
@@ -102,7 +111,7 @@ class ExtractionService:
         for item in processed_entities:
             hydrated_spans = self.hydrate_spans_for_text(item['spans'], journal_entry.entry_text)
             if hydrated_spans:
-                result.append(EntitySpanMapping(item['entity'], hydrated_spans))
+                result.append(EntityMapping(item['entity'], hydrated_spans))
             else:
                 print(f"Warning: No valid spans found for entity '{item['entity']}'")
         return result
@@ -112,9 +121,19 @@ class ExtractionService:
         Find the best matching phrase in text using a sliding window approach.
         Returns (matched_phrase, start_pos, end_pos, score) or None if no good match found.
         """
-
+        # Create word mappings that preserve original positions
         target_words = target_span.split()
-        text_words = text.split()
+        text_word_positions = []
+
+        # Find each word and its position in the original text
+        for match in re.finditer(r'\S+', text):
+            text_word_positions.append({
+                'word': match.group(),
+                'start': match.start(),
+                'end': match.end()
+            })
+
+        text_words = [pos['word'] for pos in text_word_positions]
 
         if not target_words or not text_words:
             raise Exception("Target span or text is empty.")
@@ -135,12 +154,14 @@ class ExtractionService:
                 score = fuzz.ratio(target_span.lower(), window_phrase.lower())
 
                 if score > best_score and score >= min_score:
-                    # Find the actual position in the original text
-                    start_pos = text.find(window_phrase)
-                    if start_pos != -1:
-                        end_pos = start_pos + len(window_phrase)
-                        best_match = (window_phrase, start_pos, end_pos, score)
-                        best_score = score
+                    # Get positions from original text
+                    start_pos = text_word_positions[i]['start']
+                    end_pos = text_word_positions[i + window_size - 1]['end']
+
+                    # Extract the actual matched phrase with original whitespace/formatting
+                    matched_phrase = text[start_pos:end_pos]
+                    best_match = (matched_phrase, start_pos, end_pos, score)
+                    best_score = score
 
         return best_match
 
@@ -270,7 +291,7 @@ class ExtractionService:
         return new_entity
 
     async def extract_relationships(self, journal_entry: JournalEntry,
-                                    entities: List[EntitySpanMapping]) -> List[RelationSpanContextMapping]:
+                                    entities: List[EntityMapping]) -> List[RelationSpanContextMapping]:
         """Stage 3: Extract relationships between entities"""
 
         # 1. Detection: Find potential relationships
@@ -322,7 +343,7 @@ class ExtractionService:
         pass
 
     async def _process_people(self, journal_entry: JournalEntry,
-                              obsidian_entities: Dict[str, Dict]) -> List[EntitySpanMapping]:
+                              obsidian_entities: Dict[str, Dict]) -> List[EntityMapping]:
         result = await self.llm_service.generate(
             prompt=ExtractPeoplePrompt.user_prompt({'text': journal_entry.entry_text}),
             system_prompt=ExtractPeoplePrompt.system_prompt(),
@@ -340,7 +361,8 @@ class ExtractionService:
         return people_spans
 
     async def _process_emotions(self, journal_entry: JournalEntry,
-                                people_spans: List[EntitySpanMapping]) -> List[EntitySpanMapping]:
+                                people_spans: List[EntityMapping]) -> List[EntityMapping]:
+        people_dict = {str(p.entity.uuid): p.entity.name for p in people_spans}
         people_context = "\n".join(
             [f"- {e.entity.name} uuid:'{e.entity.uuid}'" for e in sorted(people_spans, key=lambda e: e.entity.uuid)])
         result = await self.llm_service.generate(
@@ -352,6 +374,45 @@ class ExtractionService:
             raise Exception("LLM did not return any feeling data.")
         llm_extracted_feelings = Feelings(**result)
 
-        feelings_spans = self._process_spans([f.model_dump() for f in llm_extracted_feelings.feelings], journal_entry)
+        feelings: List[Dict[str, Any]] = []
+        for feeling in llm_extracted_feelings.feelings:
+            feelings.append({'entity': Feeling(
+                name=f"{people_dict[feeling.person_uuid]} sintió {feeling.emotion}",
+                timestamp=feeling.timestamp,
+                intensity=feeling.intensity,
+                duration=feeling.duration,
+                emotion=feeling.emotion,
+                person_uuid=feeling.person_uuid,
+                summary=feeling.summary,
+                summary_short=feeling.summary_short
+            ), 'spans': feeling.spans})
+
+        feelings_spans = self._process_spans(feelings, journal_entry)
 
         return feelings_spans
+
+    async def _process_projects(self, journal_entry: JournalEntry,
+                                obsidian_entities: Dict[str, Dict]) -> List[EntityMapping]:
+        result = await self.llm_service.generate(
+            prompt=ExtractProjectsPrompt.user_prompt({'text': journal_entry.entry_text}),
+            system_prompt=ExtractProjectsPrompt.system_prompt(),
+            response_model=ExtractProjectsPrompt.response_model()
+        )
+        if not result:
+            raise Exception("LLM did not return any projects data.")
+        llm_extracted_projects = Projects(**result)
+        projects = []
+        for project in llm_extracted_projects.projects:
+            projects.append({'entity': Project(
+                status=project.status,
+                start_date=project.start_date,
+                target_completion=project.target_completion,
+                progress=project.progress,
+                name=project.name,
+                summary=project.summary,
+                summary_short=project.summary_short
+            ), 'spans': project.spans})
+        # TODO deduplication with existing projects
+
+        project_spans = self._process_spans(projects, journal_entry)
+        return project_spans

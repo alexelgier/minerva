@@ -20,7 +20,7 @@ from minerva_backend.graph.repositories.relation_repository import RelationRepos
 from minerva_backend.graph.repositories.temporal_repository import TemporalRepository
 from minerva_backend.graph.services.lexical_utils import build_and_insert_lexical_tree, SpanIndex
 from minerva_backend.obsidian.obsidian_service import ObsidianService
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
+from minerva_backend.processing.models import EntityMapping, RelationSpanContextMapping
 
 
 class KnowledgeGraphService:
@@ -52,7 +52,7 @@ class KnowledgeGraphService:
         self.emotions_dict = emotions_dict
 
     def add_journal_entry(self, journal_entry: JournalEntry,
-                          entities: List[EntitySpanMapping],
+                          entities: List[EntityMapping],
                           relationships: List[RelationSpanContextMapping]) -> str:
         """
 

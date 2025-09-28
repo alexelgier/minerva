@@ -12,7 +12,7 @@ from minerva_backend.graph.models.documents import Span, JournalEntry
 from minerva_backend.graph.models.entities import Person
 from minerva_backend.graph.models.relations import Relation
 from minerva_backend.processing.curation_manager import CurationManager
-from minerva_backend.processing.models import EntitySpanMapping, RelationSpanContextMapping
+from minerva_backend.processing.models import EntityMapping, RelationSpanContextMapping
 from minerva_backend.prompt.extract_relationships import RelationshipContext
 from uuid import uuid4
 
@@ -80,7 +80,7 @@ def sample_span():
 
 @pytest_asyncio.fixture
 def sample_entity_span_mapping(sample_person_entity, sample_span):
-    return EntitySpanMapping(entity=sample_person_entity, spans=[sample_span])
+    return EntityMapping(entity=sample_person_entity, spans=[sample_span])
 
 
 @pytest_asyncio.fixture
@@ -465,7 +465,7 @@ async def test_get_curation_stats(curation_manager_db: CurationManager, sample_j
     # Journal 1: Pending entities with mixed entity statuses
     entity2 = create_person("Jane Smith", "entity-2")
     span2 = create_span("Jane Smith", journal1_uuid, 10, 20, "span-2")
-    entity_mapping2 = EntitySpanMapping(entity=entity2, spans=[span2])
+    entity_mapping2 = EntityMapping(entity=entity2, spans=[span2])
     await curation_manager_db.queue_entities_for_curation(
         journal1_uuid, "Journal 1 text", [sample_entity_span_mapping, entity_mapping2]
     )
