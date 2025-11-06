@@ -1,0 +1,9 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "quote_parse_graph": "./src/zettel_agent/quote_parse_graph.py:graph",
+    "concept_extraction_graph": "./src/zettel_agent/concept_extraction_graph.py:graph"
+  },
+  "env": ".env"
+}

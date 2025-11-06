@@ -1,23 +1,26 @@
 """Pipeline status and monitoring endpoints."""
+
 import logging
-from typing import Dict, Any
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends
 
 from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator
-from ..dependencies import get_pipeline_orchestrator, validate_workflow_id
-from ..exceptions import handle_errors, NotFoundError
-from ..models import PipelineStatusResponse, PendingPipelinesResponse
+from minerva_backend.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+from ..dependencies import get_pipeline_orchestrator, validate_workflow_id
+from ..exceptions import NotFoundError, handle_errors
+from ..models import PendingPipelinesResponse, PipelineStatusResponse
+
+logger = get_logger("minerva_backend.api.pipeline")
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
 
 @router.get("/status/{workflow_id}", response_model=PipelineStatusResponse)
 @handle_errors(404)
 async def get_pipeline_status(
-        workflow_id: str = Depends(validate_workflow_id),
-        orchestrator: PipelineOrchestrator = Depends(get_pipeline_orchestrator)
+    workflow_id: str = Depends(validate_workflow_id),
+    orchestrator: PipelineOrchestrator = Depends(get_pipeline_orchestrator),
 ) -> PipelineStatusResponse:
     """
     Get the current status of a specific pipeline workflow.
@@ -32,19 +35,19 @@ async def get_pipeline_status(
             raise NotFoundError("Workflow", workflow_id)
 
         logger.debug(
-            f"Retrieved status for workflow {workflow_id}: {status.stage.value if hasattr(status, 'stage') else 'unknown'}")
+            f"Retrieved status for workflow {workflow_id}: {status.stage.value if hasattr(status, 'stage') else 'unknown'}"
+        )
 
         # Enhance status with additional metadata
         status_dict = status.model_dump()
-        status_dict.update({
-            "workflow_id": workflow_id,
-            "retrieval_timestamp": "now"  # Could be actual timestamp
-        })
-
-        return PipelineStatusResponse(
-            workflow_id=workflow_id,
-            status=status_dict
+        status_dict.update(
+            {
+                "workflow_id": workflow_id,
+                "retrieval_timestamp": "now",  # Could be actual timestamp
+            }
         )
+
+        return PipelineStatusResponse(workflow_id=workflow_id, status=status_dict)
 
     except Exception as e:
         logger.error(f"Failed to get pipeline status for {workflow_id}: {e}")
@@ -54,7 +57,7 @@ async def get_pipeline_status(
 @router.get("/all-pending", response_model=PendingPipelinesResponse)
 @handle_errors(500)
 async def get_all_pending_pipelines(
-        orchestrator: PipelineOrchestrator = Depends(get_pipeline_orchestrator)
+    orchestrator: PipelineOrchestrator = Depends(get_pipeline_orchestrator),
 ) -> PendingPipelinesResponse:
     """
     Get all pipelines that are currently pending human action.
@@ -65,13 +68,14 @@ async def get_all_pending_pipelines(
     try:
         # This method might need to be implemented in the orchestrator
         # For now, returning empty list as in original implementation
-        pending_workflows = []  # await orchestrator.get_pending_workflows()
+        pending_workflows: List[Dict[str, Any]] = (
+            []
+        )  # await orchestrator.get_pending_workflows()
 
         logger.info(f"Found {len(pending_workflows)} pending pipelines")
 
         return PendingPipelinesResponse(
-            pending_pipelines=pending_workflows,
-            total_count=len(pending_workflows)
+            pending_pipelines=pending_workflows, total_count=len(pending_workflows)
         )
 
     except Exception as e:
@@ -82,8 +86,8 @@ async def get_all_pending_pipelines(
 @router.get("/recent")
 @handle_errors(500)
 async def get_recent_pipelines(
-        limit: int = 10,
-        orchestrator: PipelineOrchestrator = Depends(get_pipeline_orchestrator)
+    limit: int = 10,
+    orchestrator: PipelineOrchestrator = Depends(get_pipeline_orchestrator),
 ) -> Dict[str, Any]:
     """
     Get recently completed or active pipeline workflows.
@@ -93,13 +97,13 @@ async def get_recent_pipelines(
     try:
         # This would need to be implemented in the orchestrator
         # For now, returning placeholder structure
-        recent_workflows = []
+        recent_workflows: List[Dict[str, Any]] = []
 
         return {
             "success": True,
             "recent_workflows": recent_workflows,
             "limit": limit,
-            "message": f"Retrieved {len(recent_workflows)} recent workflows"
+            "message": f"Retrieved {len(recent_workflows)} recent workflows",
         }
 
     except Exception as e:
@@ -110,8 +114,8 @@ async def get_recent_pipelines(
 @router.delete("/{workflow_id}/cancel")
 @handle_errors(404)
 async def cancel_pipeline(
-        workflow_id: str = Depends(validate_workflow_id),
-        orchestrator: PipelineOrchestrator = Depends(get_pipeline_orchestrator)
+    workflow_id: str = Depends(validate_workflow_id),
+    orchestrator: PipelineOrchestrator = Depends(get_pipeline_orchestrator),
 ) -> Dict[str, Any]:
     """
     Cancel a running pipeline workflow.
@@ -131,7 +135,7 @@ async def cancel_pipeline(
         return {
             "success": True,
             "workflow_id": workflow_id,
-            "message": "Workflow cancelled successfully"
+            "message": "Workflow cancelled successfully",
         }
 
     except Exception as e:

@@ -1,4 +1,19 @@
-"""Shared dependencies for FastAPI dependency injection."""
+"""Shared dependencies for FastAPI dependency injection.
+
+This module defines FastAPI dependency functions that use dependency-injector
+to resolve services from the container.
+
+For testing patterns and usage, see:
+- backend/docs/architecture/dependency-injection.md
+- backend/docs/development/testing.md
+
+Key patterns:
+- @inject decorator enables dependency injection
+- Provide[Container.service] resolves services from container
+- Dependencies are injected into FastAPI endpoints
+- Test container overrides providers for testing
+"""
+
 import asyncio
 import logging
 from typing import Optional
@@ -9,26 +24,26 @@ from fastapi import Depends, HTTPException
 from minerva_backend.containers import Container
 from minerva_backend.graph.db import Neo4jConnection
 from minerva_backend.processing.curation_manager import CurationManager
+from minerva_backend.processing.llm_service import LLMService
 from minerva_backend.processing.temporal_orchestrator import PipelineOrchestrator
-from .exceptions import ServiceUnavailableError
+
 from ..config import settings
+from .exceptions import ServiceUnavailableError
 
 logger = logging.getLogger(__name__)
 
 
 @inject
 async def get_db_connection(
-        db: Neo4jConnection = Depends(Provide[Container.db_connection])
+    db: Neo4jConnection = Depends(Provide[Container.db_connection]),
 ) -> Neo4jConnection:
-    """Get Neo4j database connection with health check."""
-    if not db.health_check():
-        raise ServiceUnavailableError("Neo4j Database", "Database connection failed")
+    """Get Neo4j database connection."""
     return db
 
 
 @inject
 async def get_curation_manager(
-        manager: CurationManager = Depends(Provide[Container.curation_manager])
+    manager: CurationManager = Depends(Provide[Container.curation_manager]),
 ) -> CurationManager:
     """Get curation manager with initialization check."""
     try:
@@ -40,8 +55,23 @@ async def get_curation_manager(
 
 
 @inject
+async def get_llm_service(
+    llm_service: LLMService = Depends(Provide[Container.llm_service]),
+) -> LLMService:
+    """Get LLM service with health check."""
+    try:
+        # Basic health check - could be expanded
+        return llm_service
+    except Exception as e:
+        logger.error(f"LLM service error: {e}")
+        raise ServiceUnavailableError("LLM Service", str(e))
+
+
+@inject
 async def get_pipeline_orchestrator(
-        orchestrator: PipelineOrchestrator = Depends(Provide[Container.pipeline_orchestrator])
+    orchestrator: PipelineOrchestrator = Depends(
+        Provide[Container.pipeline_orchestrator]
+    ),
 ) -> PipelineOrchestrator:
     """Get pipeline orchestrator with connectivity check."""
     try:
@@ -53,8 +83,7 @@ async def get_pipeline_orchestrator(
 
 
 async def poll_for_initial_status(
-        orchestrator: PipelineOrchestrator,
-        workflow_id: str
+    orchestrator: PipelineOrchestrator, workflow_id: str
 ) -> Optional[dict]:
     """
     Poll for initial workflow status with timeout.
@@ -64,17 +93,23 @@ async def poll_for_initial_status(
     for attempt in range(settings.max_status_poll_attempts):
         try:
             status = await orchestrator.get_pipeline_status(workflow_id)
-            if status and hasattr(status, 'stage') and status.stage:
+            if status and hasattr(status, "stage") and status.stage:
                 logger.info(f"Workflow {workflow_id} status: {status.stage.value}")
                 return status.model_dump()
         except Exception as e:
-            logger.warning(f"Status poll attempt {attempt + 1} failed: {e}")
+            # Only log warning for the first few attempts, then debug for the rest
+            if attempt < 3:
+                logger.warning(f"Status poll attempt {attempt + 1} failed: {e}")
+            else:
+                logger.debug(f"Status poll attempt {attempt + 1} failed: {e}")
 
         if attempt < settings.max_status_poll_attempts - 1:
             await asyncio.sleep(settings.status_poll_interval)
 
+    # Only log as warning if we've exhausted all attempts
     logger.warning(
-        f"Failed to get initial status for workflow {workflow_id} after {settings.max_status_poll_attempts} attempts")
+        f"Failed to get initial status for workflow {workflow_id} after {settings.max_status_poll_attempts} attempts"
+    )
     return None
 
 

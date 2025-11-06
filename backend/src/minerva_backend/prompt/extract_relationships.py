@@ -1,15 +1,18 @@
-from typing import Type, List, Optional
+from typing import List, Optional, Type
 
 from pydantic import BaseModel, Field
 
-from minerva_backend.graph.models.relations import Relation
+from minerva_models import Relation
 from minerva_backend.prompt.base import Prompt
 
 
 class RelationshipContext(BaseModel):
     """Una entidad relacionada de alguna manera con la relación"""
+
     entity_uuid: str = Field(..., description="El UUID de la entidad")
-    sub_type: List[str] = Field(..., description="Propuestas de subtipo para la relación", min_length=1)
+    sub_type: List[str] = Field(
+        ..., description="Propuestas de subtipo para la relación", min_length=1
+    )
 
     def __hash__(self):
         return hash(self.entity_uuid + "".join(self.sub_type))
@@ -17,14 +20,24 @@ class RelationshipContext(BaseModel):
 
 class Relationship(Relation):
     """Una relación entre dos entidades encontrada en el texto."""
-    spans: List[str] = Field(..., description="Exact text fragments where the relationship is mentioned", min_length=1)
-    context: Optional[List[RelationshipContext]] = Field(default=None, description="Entidades relacionadas de alguna "
-                                                                                   "manera con la relación")
+
+    spans: List[str] = Field(
+        ...,
+        description="Exact text fragments where the relationship is mentioned",
+        min_length=1,
+    )
+    context: Optional[List[RelationshipContext]] = Field(
+        default=None,
+        description="Entidades relacionadas de alguna " "manera con la relación",
+    )
 
 
 class Relationships(BaseModel):
     """Una lista de relaciones encontradas en el texto."""
-    relationships: List[Relationship] = Field(..., description="Una lista de relaciones")
+
+    relationships: List[Relationship] = Field(
+        ..., description="Una lista de relaciones"
+    )
 
 
 class ExtractRelationshipsPrompt(Prompt):

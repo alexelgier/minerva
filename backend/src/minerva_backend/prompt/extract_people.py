@@ -7,13 +7,21 @@ from minerva_backend.prompt.base import Prompt
 
 class Person(BaseModel):
     """A person extracted from a text."""
+
     name: str = Field(..., description="Name of person")
-    spans: List[str] = Field(..., description="Exact text fragments where the person is mentioned", min_length=1)
+    spans: List[str] = Field(
+        ...,
+        description="Exact text fragments where the person is mentioned",
+        min_length=1,
+    )
 
 
 class People(BaseModel):
     """A list of people extracted from a text."""
-    people: List[Person] = Field(..., description="List of people mentioned in the text")
+
+    people: List[Person] = Field(
+        ..., description="List of people mentioned in the text"
+    )
 
 
 class ExtractPeoplePrompt(Prompt):

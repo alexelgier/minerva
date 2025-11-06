@@ -43,7 +43,8 @@
             </div>
             <div class="entity-fields-form">
               <component v-for="(inputType, field) in currentEntityFields" :key="field" :is="inputComponent(inputType)"
-                v-model="fieldRefs[field]" :label="field" :placeholder="field" />
+                v-model="fieldRefs[field]" :label="field" :placeholder="field" 
+                v-bind="inputType === 'SpansInput' ? { textLength: markdown.length, text: markdown } : {}" />
             </div>
           </div>
         </div>

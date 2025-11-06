@@ -3,20 +3,21 @@ Base Repository Pattern for Minerva
 Provides common functionality for all node repositories.
 """
 
-from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, TypeVar, Generic
-from datetime import datetime
 import logging
+from abc import ABC, abstractmethod
+from datetime import datetime
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 import neo4j
 
 from minerva_backend.graph.db import Neo4jConnection
-from minerva_backend.graph.models.base import Node
+from minerva_models import Node
+from minerva_backend.processing.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
 # Generic type for nodes
-T = TypeVar('T', bound=Node)
+T = TypeVar("T", bound=Node)
 
 
 class BaseRepository(Generic[T], ABC):
@@ -25,9 +26,10 @@ class BaseRepository(Generic[T], ABC):
     All node repositories should inherit from this class.
     """
 
-    def __init__(self, connection: Neo4jConnection):
-        """Initialize repository with database connection."""
+    def __init__(self, connection: Neo4jConnection, llm_service: LLMService):
+        """Initialize repository with database connection and LLM service."""
         self.connection = connection
+        self.llm_service = llm_service
 
     @property
     @abstractmethod
@@ -73,9 +75,15 @@ class BaseRepository(Generic[T], ABC):
         """
         # Convert ISO datetime strings back to datetime objects
         for key, value in properties.items():
-            if isinstance(value, str) and 'T' in value and key.endswith(('_at', 'timestamp', 'date')):
+            if (
+                isinstance(value, str)
+                and "T" in value
+                and key.endswith(("_at", "timestamp", "date"))
+            ):
                 try:
-                    properties[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    properties[key] = datetime.fromisoformat(
+                        value.replace("Z", "+00:00")
+                    )
                 except ValueError:
                     # If parsing fails, keep as string
                     pass
@@ -86,9 +94,9 @@ class BaseRepository(Generic[T], ABC):
 
         return self.entity_class(**properties)
 
-    def create(self, node: T) -> str:
+    async def create(self, node: T) -> str:
         """
-        Create a new node in the database.
+        Create a new node in the database with embedding generation.
 
         Args:
             node: Pydantic node to create
@@ -99,6 +107,8 @@ class BaseRepository(Generic[T], ABC):
         Raises:
             Exception: If creation fails
         """
+        # Ensure node has embedding before saving
+        node = await self._ensure_embedding(node)
         properties = self._node_to_properties(node)
 
         query = f"""
@@ -106,24 +116,26 @@ class BaseRepository(Generic[T], ABC):
         RETURN e.uuid as uuid
         """
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(query, properties=properties)
-                record = result.single()
+                result = await session.run(query, properties=properties)
+                record = await result.single()
 
                 if not record:
                     raise Exception(f"Failed to create {self.entity_label}")
 
                 node_uuid = record["uuid"]
-                log_name = getattr(node, 'name', getattr(node, 'title', node_uuid))
-                logger.info(f"Created {self.entity_label}: {log_name} (UUID: {node_uuid})")
+                log_name = getattr(node, "name", getattr(node, "title", node_uuid))
+                logger.info(
+                    f"Created {self.entity_label}: {log_name} (UUID: {node_uuid})"
+                )
                 return node_uuid
 
             except Exception as e:
                 logger.error(f"Error creating {self.entity_label}: {e}")
                 raise
 
-    def find_by_uuid(self, uuid: str) -> Optional[T]:
+    async def find_by_uuid(self, uuid: str) -> Optional[T]:
         """
         Find node by UUID.
 
@@ -135,9 +147,9 @@ class BaseRepository(Generic[T], ABC):
         """
         query = f"MATCH (e:{self.entity_label} {{uuid: $uuid}}) RETURN e"
 
-        with self.connection.session() as session:
-            result = session.run(query, uuid=uuid)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query, uuid=uuid)
+            record = await result.single()
 
             if record:
                 properties = dict(record["e"])
@@ -145,7 +157,7 @@ class BaseRepository(Generic[T], ABC):
 
             return None
 
-    def list_all(self, limit: int = 100, offset: int = 0) -> List[T]:
+    async def list_all(self, limit: int = 100, offset: int = 0) -> List[T]:
         """
         List all nodes with pagination.
 
@@ -163,19 +175,19 @@ class BaseRepository(Generic[T], ABC):
         SKIP $offset LIMIT $limit
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, offset=offset, limit=limit)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, offset=offset, limit=limit)
             nodes = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["e"])
                 nodes.append(self._properties_to_node(properties))
 
             return nodes
 
-    def update(self, uuid: str, updates: Dict[str, Any]) -> Optional[str]:
+    async def update(self, uuid: str, updates: Dict[str, Any]) -> Optional[str]:
         """
-        Update node properties.
+        Update node properties with embedding regeneration if summary changed.
 
         Args:
             uuid: Node UUID
@@ -185,7 +197,16 @@ class BaseRepository(Generic[T], ABC):
             Optional[str]: UUID if update succeeded, None otherwise
         """
         # Add updated timestamp
-        updates['updated_at'] = datetime.now().isoformat()
+        updates["updated_at"] = datetime.now().isoformat()
+
+        # If summary is being updated, regenerate embedding
+        if "summary" in updates and updates["summary"]:
+            try:
+                new_embedding = await self._generate_embedding(updates["summary"])
+                updates["embedding"] = new_embedding
+                logger.debug(f"Regenerated embedding for {self.entity_label}: {uuid}")
+            except Exception as e:
+                logger.warning(f"Failed to regenerate embedding for {uuid}: {e}")
 
         query = f"""
         MATCH (e:{self.entity_label} {{uuid: $uuid}})
@@ -193,10 +214,10 @@ class BaseRepository(Generic[T], ABC):
         RETURN e.uuid as uuid
         """
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(query, uuid=uuid, updates=updates)
-                record = result.single()
+                result = await session.run(query, uuid=uuid, updates=updates)
+                record = await result.single()
                 if record and record.get("uuid"):
                     logger.info(f"Updated {self.entity_label}: {uuid}")
                     return record["uuid"]
@@ -205,7 +226,7 @@ class BaseRepository(Generic[T], ABC):
                 logger.error(f"Error updating {self.entity_label} {uuid}: {e}")
                 return None
 
-    def delete(self, uuid: str) -> bool:
+    async def delete(self, uuid: str) -> bool:
         """
         Delete node and all its relationships.
 
@@ -221,10 +242,10 @@ class BaseRepository(Generic[T], ABC):
         RETURN count(e) as deleted
         """
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(query, uuid=uuid)
-                record = result.single()
+                result = await session.run(query, uuid=uuid)
+                record = await result.single()
                 success = record["deleted"] > 0
 
                 if success:
@@ -236,7 +257,7 @@ class BaseRepository(Generic[T], ABC):
                 logger.error(f"Error deleting {self.entity_label} {uuid}: {e}")
                 return False
 
-    def count(self) -> int:
+    async def count(self) -> int:
         """
         Count total number of nodes of this type.
 
@@ -245,12 +266,12 @@ class BaseRepository(Generic[T], ABC):
         """
         query = f"MATCH (e:{self.entity_label}) RETURN count(e) as count"
 
-        with self.connection.session() as session:
-            result = session.run(query)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query)
+            record = await result.single()
             return record["count"] if record else 0
 
-    def search_by_text(self, search_term: str, limit: int = 50) -> List[T]:
+    async def search_by_text(self, search_term: str, limit: int = 50) -> List[T]:
         """
         Search nodes by text across string properties.
 
@@ -269,17 +290,17 @@ class BaseRepository(Generic[T], ABC):
         LIMIT $limit
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, search_term=search_term, limit=limit)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, search_term=search_term, limit=limit)
             nodes = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["e"])
                 nodes.append(self._properties_to_node(properties))
 
             return nodes
 
-    def exists(self, uuid: str) -> bool:
+    async def exists(self, uuid: str) -> bool:
         """
         Check if node exists by UUID.
 
@@ -291,7 +312,132 @@ class BaseRepository(Generic[T], ABC):
         """
         query = f"MATCH (e:{self.entity_label} {{uuid: $uuid}}) RETURN count(e) > 0 as exists"
 
-        with self.connection.session() as session:
-            result = session.run(query, uuid=uuid)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query, uuid=uuid)
+            record = await result.single()
             return record["exists"] if record else False
+
+    async def _generate_embedding(self, text: str) -> List[float]:
+        """
+        Generate embedding for text using LLM service.
+
+        Args:
+            text: Text to generate embedding for
+
+        Returns:
+            List of float values representing the embedding
+        """
+        try:
+            # Use a simple embedding model - you can adjust this
+            embedding = await self.llm_service.create_embedding(text=text)
+            return embedding
+        except Exception as e:
+            logger.error(f"Failed to generate embedding: {e}")
+            return []
+
+    async def _ensure_embedding(self, node: T) -> T:
+        """
+        Ensure node has an embedding. Generate one if missing.
+
+        Args:
+            node: Node to ensure has embedding
+
+        Returns:
+            Node with embedding (generated if missing)
+        """
+        if node.embedding is None or len(node.embedding) == 0:
+            # Generate embedding from summary
+            summary_text = getattr(node, "summary", "")
+            if summary_text:
+                node.embedding = await self._generate_embedding(summary_text)
+                logger.debug(
+                    f"Generated embedding for {self.entity_label}: {node.name}"
+                )
+            else:
+                logger.warning(
+                    f"No summary available for embedding generation: {node.name}"
+                )
+
+        return node
+
+    async def vector_search(
+        self, query_text: str, limit: int = 10, threshold: float = 0.7
+    ) -> List[T]:
+        """
+        Search for similar nodes using vector similarity.
+
+        Args:
+            query_text: Text to search for
+            limit: Maximum number of results
+            threshold: Minimum similarity threshold (0.0-1.0)
+
+        Returns:
+            List of similar nodes
+        """
+        try:
+            # Generate embedding for query text
+            query_embedding = await self._generate_embedding(query_text)
+            if not query_embedding:
+                logger.warning("Failed to generate embedding for vector search")
+                return []
+
+            # Use Neo4j async vector search
+            results = await self.connection.vector_search(
+                label=self.entity_label,
+                query_embedding=query_embedding,
+                limit=limit,
+                threshold=threshold,
+            )
+
+            # Convert results to entity objects
+            nodes = []
+            for record in results:
+                node_properties = dict(record["node"])
+                node = self._properties_to_node(node_properties)
+                nodes.append(node)
+
+            return nodes
+
+        except Exception as e:
+            logger.error(f"Vector search failed: {e}")
+            return []
+
+    async def find_similar(self, node: T, limit: int = 5) -> List[T]:
+        """
+        Find nodes similar to the given node.
+
+        Args:
+            node: Node to find similar nodes for
+            limit: Maximum number of similar nodes
+
+        Returns:
+            List of similar nodes
+        """
+        if not node.embedding:
+            logger.warning(f"No embedding available for similarity search: {node.name}")
+            return []
+
+        try:
+            # Use Neo4j async vector search with the node's embedding
+            results = await self.connection.vector_search(
+                label=self.entity_label,
+                query_embedding=node.embedding,
+                limit=limit + 1,  # +1 to exclude the node itself
+                threshold=0.7,
+            )
+
+            # Convert results to entity objects and filter out the node itself
+            nodes = []
+            for record in results:
+                node_properties = dict(record["node"])
+                if node_properties.get("uuid") != node.uuid:  # Exclude the node itself
+                    similar_node = self._properties_to_node(node_properties)
+                    nodes.append(similar_node)
+                    if len(nodes) >= limit:
+                        break
+
+            return nodes
+
+        except Exception as e:
+            logger.error(f"Similarity search failed: {e}")
+            return []

@@ -3,12 +3,13 @@ Repository for Relation nodes with dual edge/node management.
 Handles both the direct RELATED_TO edges and the rich reified Relation nodes.
 Edge UUID pattern: Node stores the edge UUID, not vice versa.
 """
+
 import logging
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List, Tuple
 
-from minerva_backend.graph.models.relations import Relation
+from minerva_models import Relation
 from minerva_backend.graph.repositories.base import BaseRepository
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,9 @@ class RelationRepository(BaseRepository[Relation]):
     def entity_class(self) -> type[Relation]:
         return Relation
 
-    def create_edge_only(self, source_uuid: str, target_uuid: str, proposed_types: List[str]) -> str:
+    async def create_edge_only(
+        self, source_uuid: str, target_uuid: str, proposed_types: List[str]
+    ) -> str:
         """
         Create only the direct RELATED_TO edge without a reified node.
         Useful for simple relationships that don't need rich context.
@@ -59,30 +62,32 @@ class RelationRepository(BaseRepository[Relation]):
         RETURN edge.uuid as edge_uuid
         """
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(
+                result = await session.run(
                     query,
                     source_uuid=source_uuid,
                     target_uuid=target_uuid,
                     edge_uuid=edge_uuid,
                     proposed_types=proposed_types,
                     created_at=datetime.now().isoformat(),
-                    summary_short=""  # TODO
+                    summary_short="",  # TODO
                 )
-                record = result.single()
+                record = await result.single()
 
                 if not record:
                     raise Exception("Failed to create edge relationship")
 
-                logger.info(f"Created edge relationship: {proposed_types} (Edge UUID: {edge_uuid})")
+                logger.info(
+                    f"Created edge relationship: {proposed_types} (Edge UUID: {edge_uuid})"
+                )
                 return edge_uuid
 
             except Exception as e:
                 logger.error(f"Error creating edge relationship: {e}")
                 raise
 
-    def create_full_relationship(self, relation: Relation) -> str:
+    async def create_full_relationship(self, relation: Relation) -> str:
         """
         Create both the direct edge and the reified relation node.
         The reified node will store the edge's UUID for linking.
@@ -101,7 +106,7 @@ class RelationRepository(BaseRepository[Relation]):
 
         # Add edge UUID to relation properties
         properties = self._node_to_properties(relation)
-        properties['edge_uuid'] = edge_uuid
+        properties["edge_uuid"] = edge_uuid
 
         query = """
         // Find source and target entities first
@@ -126,33 +131,34 @@ class RelationRepository(BaseRepository[Relation]):
         RETURN r.uuid as relation_uuid, edge.uuid as edge_uuid
         """
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(
+                result = await session.run(
                     query,
                     properties=properties,
                     source_uuid=relation.source,
                     target_uuid=relation.target,
                     edge_uuid=edge_uuid,
                     type=relation.type,
-                    created_at=properties.get('created_at'),
-                    summary_short=relation.summary_short
+                    created_at=properties.get("created_at"),
+                    summary_short=relation.summary_short,
                 )
-                record = result.single()
+                record = await result.single()
 
                 if not record:
                     raise Exception("Failed to create reified relationship")
 
                 relation_uuid = record["relation_uuid"]
                 logger.info(
-                    f"Created reified relationship: {relation.summary_short} (Node: {relation_uuid}, Edge: {edge_uuid})")
+                    f"Created reified relationship: {relation.summary_short} (Node: {relation_uuid}, Edge: {edge_uuid})"
+                )
                 return relation_uuid
 
             except Exception as e:
                 logger.error(f"Error creating reified relationship: {e}")
                 raise
 
-    def delete_full_relationship(self, relation_uuid: str) -> bool:
+    async def delete_full_relationship(self, relation_uuid: str) -> bool:
         """
         Delete both the reified relation node and its associated direct edge.
 
@@ -175,10 +181,10 @@ class RelationRepository(BaseRepository[Relation]):
         RETURN count(r) as deleted
         """
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(query, relation_uuid=relation_uuid)
-                record = result.single()
+                result = await session.run(query, relation_uuid=relation_uuid)
+                record = await result.single()
                 success = record["deleted"] > 0
 
                 if success:
@@ -187,10 +193,14 @@ class RelationRepository(BaseRepository[Relation]):
                 return success
 
             except Exception as e:
-                logger.error(f"Error deleting reified relationship {relation_uuid}: {e}")
+                logger.error(
+                    f"Error deleting reified relationship {relation_uuid}: {e}"
+                )
                 return False
 
-    def update_relationship(self, relation_uuid: str, updates: Dict[str, Any]) -> bool:
+    async def update_relationship(
+        self, relation_uuid: str, updates: Dict[str, Any]
+    ) -> bool:
         """
         Update reified relationship and sync relevant changes to the direct edge.
 
@@ -202,16 +212,16 @@ class RelationRepository(BaseRepository[Relation]):
             bool: True if update succeeded
         """
         # Add updated timestamp
-        updates['updated_at'] = datetime.now().isoformat()
+        updates["updated_at"] = datetime.now().isoformat()
 
         # Prepare edge updates (only sync specific fields that should be on both)
         edge_updates = {}
-        if 'type' in updates:
-            edge_updates['type'] = updates['type']
-        if 'summary_short' in updates:
-            edge_updates['summary_short'] = updates['summary_short']
-        if 'updated_at' in updates:
-            edge_updates['updated_at'] = updates['updated_at']
+        if "type" in updates:
+            edge_updates["type"] = updates["type"]
+        if "summary_short" in updates:
+            edge_updates["summary_short"] = updates["summary_short"]
+        if "updated_at" in updates:
+            edge_updates["updated_at"] = updates["updated_at"]
 
         query = """
         MATCH (r:Relation {uuid: $relation_uuid})
@@ -225,15 +235,15 @@ class RelationRepository(BaseRepository[Relation]):
         RETURN r.uuid as uuid
         """
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(
+                result = await session.run(
                     query,
                     relation_uuid=relation_uuid,
                     updates=updates,
-                    edge_updates=edge_updates
+                    edge_updates=edge_updates,
                 )
-                record = result.single()
+                record = await result.single()
                 success = record is not None
 
                 if success:
@@ -242,10 +252,12 @@ class RelationRepository(BaseRepository[Relation]):
                 return success
 
             except Exception as e:
-                logger.error(f"Error updating reified relationship {relation_uuid}: {e}")
+                logger.error(
+                    f"Error updating reified relationship {relation_uuid}: {e}"
+                )
                 return False
 
-    def create_mention(self, chunk_uuid: str, node_uuid: str) -> bool:
+    async def create_mention(self, chunk_uuid: str, node_uuid: str) -> bool:
         """
         Connect a chunk to a node with a MENTIONS relation
 
@@ -262,10 +274,12 @@ MATCH (n {uuid: $node_uuid})
 MERGE (c)-[:MENTIONS]->(n)
 RETURN count(*) as created
         """
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(query, chunk_uuid=chunk_uuid, node_uuid=node_uuid)
-                record = result.single()
+                result = await session.run(
+                    query, chunk_uuid=chunk_uuid, node_uuid=node_uuid
+                )
+                record = await result.single()
                 success = record["created"] > 0
                 if success:
                     logger.info(f"Connected chunk {chunk_uuid} to node {node_uuid}")
@@ -274,7 +288,7 @@ RETURN count(*) as created
                 logger.error(f"Error connecting chunk to node: {e}")
                 return False
 
-    def create_mentions_batch(self, mentions: List[Tuple[str, str]]) -> int:
+    async def create_mentions_batch(self, mentions: List[Tuple[str, str]]) -> int:
         """
         Connect multiple chunks to nodes with MENTIONS relations in batch.
 
@@ -301,13 +315,15 @@ RETURN count(*) as created
             for chunk_uuid, node_uuid in mentions
         ]
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(query, mentions=mention_dicts)
-                record = result.single()
+                result = await session.run(query, mentions=mention_dicts)
+                record = await result.single()
                 created_count = record["created"]
                 if created_count > 0:
-                    logger.info(f"Created {created_count} MENTIONS relationships in batch")
+                    logger.info(
+                        f"Created {created_count} MENTIONS relationships in batch"
+                    )
                 return created_count
             except Exception as e:
                 logger.error(f"Error creating batch mentions: {e}")

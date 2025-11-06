@@ -14,17 +14,16 @@
             placeholder="Start"
           />
           <span class="span-separator">-</span>
-          <!-- TODO: change undefined to max journalentry char index -->
           <input
             type="number"
             class="span-input"
             :min="span.start+1"
-            :max="localSpans[idx+1] ? localSpans[idx+1].start - 1 : undefined" 
+            :max="localSpans[idx+1] ? localSpans[idx+1].start - 1 : props.textLength" 
             :value="span.end"
             @input="onSpanChange(idx, 'end', $event.target.value)"
             placeholder="End"
           />  
-          <span v-if="span.text" class="span-text">{{ span.text }}</span>
+          <span class="span-text">{{ getSpanText(span) }}</span>
           <button class="remove-btn" @click="removeSpan(idx)">×</button>
         </div>
       </div>
@@ -47,7 +46,15 @@ const props = defineProps({
     type: Object,
     default: () => {}
   },
-  label: String
+  label: String,
+  textLength: {
+    type: Number,
+    default: 1000 // fallback for when text length is not provided
+  },
+  text: {
+    type: String,
+    default: '' // the full text content to extract span text from
+  }
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -57,14 +64,86 @@ watch(() => props.modelValue.value, (val) => {
   localSpans.value = val;
 });
 
+function getSpanText(span) {
+  if (!props.text || !span.start || !span.end) {
+    return '';
+  }
+  
+  const start = Math.max(0, Math.min(span.start, props.text.length));
+  const end = Math.max(start, Math.min(span.end, props.text.length));
+  
+  if (start >= end) {
+    return '';
+  }
+  
+  return props.text.slice(start, end);
+}
+
+function sortSpans() {
+  localSpans.value.sort((a, b) => a.start - b.start);
+}
+
 function onSpanChange(idx, key, value) {
   const newVal = Number(value);
   localSpans.value[idx][key] = isNaN(newVal) ? 0 : newVal;
+  sortSpans();
   emit('update:modelValue', localSpans.value.map(s => ({...s})));
 }
 
 function addSpan() {
-  localSpans.value.push({ start: 0, end: 0 });
+  // Ensure localSpans.value is an array
+  if (!Array.isArray(localSpans.value)) {
+    localSpans.value = [];
+  }
+  
+  // Find the best position to add a new span
+  let defaultStart, defaultEnd;
+  
+  if (localSpans.value.length === 0) {
+    // No spans exist, add at the beginning
+    defaultStart = 0;
+    defaultEnd = Math.min(10, props.textLength);
+  } else {
+    // Find the largest gap between spans or add at the end
+    let bestGap = 0;
+    let bestPosition = 0;
+    
+    // Check gap at the beginning
+    if (localSpans.value[0].start > 10) {
+      bestGap = localSpans.value[0].start;
+      bestPosition = 0;
+    }
+    
+    // Check gaps between spans
+    for (let i = 0; i < localSpans.value.length - 1; i++) {
+      const gap = localSpans.value[i + 1].start - localSpans.value[i].end;
+      if (gap > bestGap && gap >= 10) {
+        bestGap = gap;
+        bestPosition = localSpans.value[i].end;
+      }
+    }
+    
+    // Check gap at the end
+    const lastSpanEnd = Math.max(...localSpans.value.map(span => span.end || 0));
+    const endGap = props.textLength - lastSpanEnd;
+    if (endGap > bestGap && endGap >= 10) {
+      bestGap = endGap;
+      bestPosition = lastSpanEnd;
+    }
+    
+    if (bestGap >= 10) {
+      // Found a good gap
+      defaultStart = bestPosition;
+      defaultEnd = Math.min(defaultStart + 10, props.textLength);
+    } else {
+      // No good gaps, add at the end anyway (user can adjust)
+      defaultStart = Math.max(0, props.textLength - 10);
+      defaultEnd = props.textLength;
+    }
+  }
+  
+  localSpans.value.push({ start: defaultStart, end: defaultEnd });
+  sortSpans();
   emit('update:modelValue', localSpans.value.map(s => ({...s})));
 }
 

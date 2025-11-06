@@ -6,9 +6,9 @@ Handles all Event entity database operations.
 from datetime import datetime
 from typing import List
 
-from .base import BaseRepository
 from ..models.entities import Event
 from ..models.enums import EntityType
+from .base import BaseRepository
 
 
 class EventRepository(BaseRepository[Event]):
@@ -22,7 +22,7 @@ class EventRepository(BaseRepository[Event]):
     def entity_class(self) -> type[Event]:
         return Event
 
-    def find_by_category(self, category: str) -> List[Event]:
+    async def find_by_category(self, category: str) -> List[Event]:
         """
         Find all events in a specific category.
 
@@ -38,17 +38,19 @@ class EventRepository(BaseRepository[Event]):
         ORDER BY e.date DESC
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, category=category)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, category=category)
             events = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["e"])
                 events.append(self._properties_to_node(properties))
 
             return events
 
-    def find_by_date_range(self, start_date: datetime, end_date: datetime) -> List[Event]:
+    async def find_by_date_range(
+        self, start_date: datetime, end_date: datetime
+    ) -> List[Event]:
         """
         Find all events within a specific date range.
 
@@ -66,17 +68,17 @@ class EventRepository(BaseRepository[Event]):
         ORDER BY e.date ASC
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, start_date=start_date, end_date=end_date)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, start_date=start_date, end_date=end_date)
             events = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["e"])
                 events.append(self._properties_to_node(properties))
 
             return events
-            
-    def find_by_location(self, location: str) -> List[Event]:
+
+    async def find_by_location(self, location: str) -> List[Event]:
         """
         Find all events that occurred at a specific location.
 
@@ -93,17 +95,17 @@ class EventRepository(BaseRepository[Event]):
         ORDER BY e.date DESC
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, location=location)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, location=location)
             events = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["e"])
                 events.append(self._properties_to_node(properties))
 
             return events
 
-    def search_by_name_partial(self, partial_name: str) -> List[Event]:
+    async def search_by_name_partial(self, partial_name: str) -> List[Event]:
         """
         Search for events by partial name match (case-insensitive).
 
@@ -120,17 +122,17 @@ class EventRepository(BaseRepository[Event]):
         ORDER BY e.name ASC
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, partial_name=partial_name)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, partial_name=partial_name)
             events = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["e"])
                 events.append(self._properties_to_node(properties))
 
             return events
 
-    def get_statistics(self) -> dict:
+    async def get_statistics(self) -> dict:
         """
         Get statistics about events in the database.
 
@@ -145,9 +147,9 @@ class EventRepository(BaseRepository[Event]):
             count(DISTINCT e.location) as unique_locations
         """
 
-        with self.connection.session() as session:
-            result = session.run(query)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query)
+            record = await result.single()
 
             if record:
                 return {

@@ -1,26 +1,26 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from minerva_backend.graph.db import Neo4jConnection
-from minerva_backend.graph.models.documents import JournalEntry
-from minerva_backend.graph.models.entities import EntityType
+from minerva_models import JournalEntry, EntityType
 from minerva_backend.graph.repositories.base import BaseRepository
-from minerva_backend.graph.repositories.concept_repository import ConceptRepository
-from minerva_backend.graph.repositories.consumable_repository import ConsumableRepository
-from minerva_backend.graph.repositories.content_repository import ContentRepository
-from minerva_backend.graph.repositories.emotion_repository import EmotionRepository
-from minerva_backend.graph.repositories.event_repository import EventRepository
-from minerva_backend.graph.repositories.feeling_repository import FeelingRepository
 from minerva_backend.graph.repositories.journal_entry_repository import (
     JournalEntryRepository,
 )
-from minerva_backend.graph.repositories.person_repository import PersonRepository
-from minerva_backend.graph.repositories.place_repository import PlaceRepository
-from minerva_backend.graph.repositories.project_repository import ProjectRepository
 from minerva_backend.graph.repositories.relation_repository import RelationRepository
 from minerva_backend.graph.repositories.temporal_repository import TemporalRepository
-from minerva_backend.graph.services.lexical_utils import build_and_insert_lexical_tree, SpanIndex
+from minerva_backend.graph.services.lexical_utils import (
+    SpanIndex,
+    build_and_insert_lexical_tree,
+)
+from minerva_backend.obsidian.frontmatter_constants import (
+    ENTITY_ID_KEY,
+    ENTITY_TYPE_KEY,
+    SHORT_SUMMARY_KEY,
+    SUMMARY_KEY,
+)
 from minerva_backend.obsidian.obsidian_service import ObsidianService
-from minerva_backend.processing.models import EntityMapping, RelationSpanContextMapping
+from minerva_backend.processing.llm_service import LLMService
+from minerva_backend.processing.models import CuratableMapping, EntityMapping
 
 
 class KnowledgeGraphService:
@@ -29,31 +29,38 @@ class KnowledgeGraphService:
     Combines repository actions into complex workflows.
     """
 
-    def __init__(self, connection: Neo4jConnection, emotions_dict: Dict[str, str]):
+    def __init__(
+        self,
+        connection: Neo4jConnection,
+        llm_service: LLMService,
+        emotions_dict: Dict[str, str],
+        obsidian_service: ObsidianService,
+        journal_entry_repository: JournalEntryRepository,
+        temporal_repository: TemporalRepository,
+        relation_repository: RelationRepository,
+        entity_repositories: Dict[str, BaseRepository],
+    ):
         """
-        Initializes the service with a database connection and all repositories.
+        Initializes the service with injected dependencies.
         """
+        print(
+            f"KnowledgeGraphService initialized with llm_service: {llm_service is not None}"
+        )
         self.connection = connection
-        self.journal_entry_repository = JournalEntryRepository(self.connection)
-        self.temporal_repository = TemporalRepository(self.connection)
-        self.relation_repository = RelationRepository(self.connection)
-        self.entity_repositories: Dict[str, BaseRepository] = {
-            'Person': PersonRepository(self.connection),
-            'Feeling': FeelingRepository(self.connection),
-            'Emotion': EmotionRepository(self.connection),
-            'Event': EventRepository(self.connection),
-            'Project': ProjectRepository(self.connection),
-            'Concept': ConceptRepository(self.connection),
-            'Content': ContentRepository(self.connection),
-            'Consumable': ConsumableRepository(self.connection),
-            'Place': PlaceRepository(self.connection),
-        }
-        self.obsidian_service = ObsidianService()
+        self.llm_service = llm_service
+        self.journal_entry_repository = journal_entry_repository
+        self.temporal_repository = temporal_repository
+        self.relation_repository = relation_repository
+        self.entity_repositories = entity_repositories
+        self.obsidian_service = obsidian_service
         self.emotions_dict = emotions_dict
 
-    def add_journal_entry(self, journal_entry: JournalEntry,
-                          entities: List[EntityMapping],
-                          relationships: List[RelationSpanContextMapping]) -> str:
+    async def add_journal_entry(
+        self,
+        journal_entry: JournalEntry,
+        entities: List[EntityMapping],
+        relationships: List[CuratableMapping],
+    ) -> str:
         """
 
 
@@ -66,14 +73,16 @@ class KnowledgeGraphService:
             The UUID of the created journal entry.
         """
         node_day = []
-        node_mentions = []
+        node_mentions: list[tuple[str, str]] = []
 
         # Create journal node
-        journal_uuid = self.journal_entry_repository.create(journal_entry)
+        journal_uuid = await self.journal_entry_repository.create(journal_entry)
 
         # Create lexical nodes from journal text
-        span_index: SpanIndex = build_and_insert_lexical_tree(self.connection, journal_entry)
-        chunk_uuids = [x[1] for x in span_index]
+        span_index: Optional[SpanIndex] = await build_and_insert_lexical_tree(
+            self.connection, journal_entry
+        )
+        chunk_uuids = [x[1] for x in span_index] if span_index else []
 
         # Link journal and chunks to day
         node_day.append(journal_uuid)
@@ -92,43 +101,73 @@ class KnowledgeGraphService:
                 # Create/Update Entity
                 # TODO figure out if entity is linked to journal date (or other?)
                 if self.entity_repositories[entity.type].exists(entity.uuid):
-                    entity_uuid = self.entity_repositories[entity.type].update(entity.uuid,
-                                                                               entity.model_dump(exclude_unset=True,
-                                                                                                 exclude_defaults=True))
+                    entity_uuid = await self.entity_repositories[entity.type].update(
+                        entity.uuid,
+                        entity.model_dump(exclude_unset=True, exclude_defaults=True),
+                    )
                 else:
-                    entity_uuid = self.entity_repositories[entity.type].create(entity)
+                    entity_uuid = await self.entity_repositories[entity.type].create(
+                        entity
+                    )
                 # Update Obsidian YAML metadata with entity information (summary merging should already be done)
-                self.obsidian_service.update_link(entity.name, {"entity_id": entity_uuid, "entity_type": entity.type,
-                                                                "short_summary": entity.summary_short})
+                self.obsidian_service.update_link(
+                    entity.name,
+                    {
+                        ENTITY_ID_KEY: entity_uuid,
+                        ENTITY_TYPE_KEY: entity.type,
+                        SHORT_SUMMARY_KEY: entity.summary_short,
+                        SUMMARY_KEY: entity.summary,
+                    },
+                )
             for span in spans:
-                found_chunks = span_index.query_containing(span.start, span.end)
+                found_chunks = (
+                    span_index.query_containing(span.start, span.end)
+                    if span_index
+                    else []
+                )
                 for chunk in found_chunks:
                     # Entity span is in chunk, add mention
-                    node_mentions.append((chunk[2], entity_uuid))
+                    if entity_uuid and isinstance(chunk[2], str):
+                        node_mentions.append((chunk[2], entity_uuid))
 
         # Create Relationship edge, ReifiedRelationship node, context relations and Mentions
         for r in relationships:
-            relationship = r.relation
+            relationship = r.data
             spans = r.spans
             context = r.context
             # Create RELATED_TO edge and RELATION node
-            relationship_uuid = self.relation_repository.create_full_relationship(relationship)
+            relationship_uuid = await self.relation_repository.create_full_relationship(
+                relationship
+            )
             for span in spans:
-                found_chunks = span_index.query_containing(span.start, span.end)
+                found_chunks = (
+                    span_index.query_containing(span.start, span.end)
+                    if span_index
+                    else []
+                )
                 for chunk in found_chunks:
                     # Relation span is in chunk, add mention
-                    node_mentions.append((chunk[2], relationship_uuid))
+                    if relationship_uuid and isinstance(chunk[2], str):
+                        node_mentions.append((chunk[2], relationship_uuid))
             if context and len(context) > 0:
-                for entity in context:
+                for relationship_context in context:
                     # Create subsequent RELATED_TO for reified relation
-                    self.relation_repository.create_edge_only(relationship_uuid, entity.entity_uuid, entity.sub_type)
+                    await self.relation_repository.create_edge_only(
+                        relationship_uuid,
+                        relationship_context.entity_uuid,
+                        relationship_context.sub_type,
+                    )
 
         # TODO Batch previous insertions
         # Create MENTIONS
-        mentions_created = self.relation_repository.create_mentions_batch(node_mentions)
+        mentions_created = await self.relation_repository.create_mentions_batch(
+            node_mentions
+        )
 
         # Ensure time tree has corresponding nodes and link nodes
-        self.temporal_repository.link_nodes_to_day_batch(node_day, journal_entry.date)
+        await self.temporal_repository.link_nodes_to_day_batch(
+            node_day, journal_entry.date
+        )
 
         return journal_uuid
 

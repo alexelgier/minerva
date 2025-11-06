@@ -1,0 +1,31 @@
+[flake8]
+max-line-length = 88
+extend-ignore = E203, W503, W291, W293, E501, F401, F841, F541, E722, E226
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    .mypy_cache,
+    .pytest_cache,
+    build,
+    dist,
+    docs,
+    tests
+per-file-ignores =
+    __init__.py:F401
+    # Ignore line length for LLM prompts (Spanish text)
+    src/minerva_backend/prompt/*.py:E501
+    # Ignore some complexity issues for now
+    src/minerva_backend/graph/services/knowledge_graph_service.py:C901
+    src/minerva_backend/obsidian/obsidian_service.py:C901
+    src/minerva_backend/processing/curation_manager.py:C901
+    src/minerva_backend/processing/llm_service.py:C901
+    # Ignore debug file issues
+    src/debug.py:C901,E501,F401,F841,E722,E226
+    # Ignore vulture warnings for exception handling
+    src/minerva_backend/graph/db.py:F841
+    # Ignore unused imports
+    src/minerva_backend/graph/models/base.py:F401
+max-complexity = 15
+select = C,E,F,W,B,B950

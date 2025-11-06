@@ -5,9 +5,9 @@ Handles all Person entity database operations.
 
 from typing import List
 
-from .base import BaseRepository
 from ..models.entities import Person
 from ..models.enums import EntityType
+from .base import BaseRepository
 
 
 class PersonRepository(BaseRepository[Person]):
@@ -21,7 +21,7 @@ class PersonRepository(BaseRepository[Person]):
     def entity_class(self) -> type[Person]:
         return Person
 
-    def find_by_occupation(self, occupation: str) -> List[Person]:
+    async def find_by_occupation(self, occupation: str) -> List[Person]:
         """
         Find all persons with a specific occupation.
 
@@ -37,17 +37,17 @@ class PersonRepository(BaseRepository[Person]):
         ORDER BY p.name ASC
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, occupation=occupation)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, occupation=occupation)
             persons = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["p"])
                 persons.append(self._properties_to_node(properties))
 
             return persons
 
-    def find_by_birth_year(self, year: int) -> List[Person]:
+    async def find_by_birth_year(self, year: int) -> List[Person]:
         """
         Find all persons born in a specific year.
 
@@ -65,17 +65,17 @@ class PersonRepository(BaseRepository[Person]):
         ORDER BY p.birth_date ASC
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, year=year)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, year=year)
             persons = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["p"])
                 persons.append(self._properties_to_node(properties))
 
             return persons
 
-    def get_persons_with_recent_mentions(self, days: int = 30) -> List[Person]:
+    async def get_persons_with_recent_mentions(self, days: int = 30) -> List[Person]:
         """
         Get persons who have been mentioned recently.
         Note: This requires relationships to JournalEntry entities.
@@ -93,11 +93,11 @@ class PersonRepository(BaseRepository[Person]):
         ORDER BY mention_count DESC, p.name ASC
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, days=days)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, days=days)
             persons = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["p"])
                 person = self._properties_to_node(properties)
                 # You could add mention_count as a dynamic property if needed
@@ -105,7 +105,7 @@ class PersonRepository(BaseRepository[Person]):
 
             return persons
 
-    def search_by_name_partial(self, partial_name: str) -> List[Person]:
+    async def search_by_name_partial(self, partial_name: str) -> List[Person]:
         """
         Search for persons by partial name match (case-insensitive).
 
@@ -122,17 +122,17 @@ class PersonRepository(BaseRepository[Person]):
         ORDER BY p.name ASC
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, partial_name=partial_name)
+        async with self.connection.session_async() as session:
+            result = await session.run(query, partial_name=partial_name)
             persons = []
 
-            for record in result:
+            async for record in result:
                 properties = dict(record["p"])
                 persons.append(self._properties_to_node(properties))
 
             return persons
 
-    def get_statistics(self) -> dict:
+    async def get_statistics(self) -> dict:
         """
         Get statistics about persons in the database.
 
@@ -149,21 +149,23 @@ class PersonRepository(BaseRepository[Person]):
             avg(COUNT {(p)-[:MENTIONED_IN]->()}) as avg_mentions_per_person
         """
 
-        with self.connection.session() as session:
-            result = session.run(query)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query)
+            record = await result.single()
 
             if record:
                 return {
                     "total_persons": record["total_persons"],
                     "total_mentions": record["total_mentions"],
                     "unique_occupations": record["unique_occupations"],
-                    "avg_mentions_per_person": float(record["avg_mentions_per_person"] or 0)
+                    "avg_mentions_per_person": float(
+                        record["avg_mentions_per_person"] or 0
+                    ),
                 }
 
             return {
                 "total_persons": 0,
                 "total_mentions": 0,
                 "unique_occupations": 0,
-                "avg_mentions_per_person": 0.0
+                "avg_mentions_per_person": 0.0,
             }

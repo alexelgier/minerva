@@ -1,13 +1,17 @@
 """Processing control and scheduling endpoints."""
+
 import logging
 from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends
 
-from ..models import ProcessingControl, SuccessResponse, ProcessingWindowsResponse
-from ..exceptions import handle_errors, ProcessingError
-from ...config import settings
+from minerva_backend.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+from ...config import settings
+from ..exceptions import ProcessingError, handle_errors
+from ..models import ProcessingControl, ProcessingWindowsResponse, SuccessResponse
+
+logger = get_logger("minerva_backend.api.processing")
 router = APIRouter(prefix="/api/processing", tags=["processing"])
 
 
@@ -31,7 +35,9 @@ class ProcessingManager:
 
         # Check if we're in the default processing window
         now = datetime.now()
-        start_time = datetime.strptime(settings.default_processing_start, "%H:%M").time()
+        start_time = datetime.strptime(
+            settings.default_processing_start, "%H:%M"
+        ).time()
         end_time = datetime.strptime(settings.default_processing_end, "%H:%M").time()
         current_time = now.time()
 
@@ -43,7 +49,9 @@ class ProcessingManager:
         self._manual_control = True
         if duration_hours:
             self._manual_end_time = datetime.now() + timedelta(hours=duration_hours)
-        logger.info(f"Manual processing started for {duration_hours or 'indefinite'} hours")
+        logger.info(
+            f"Manual processing started for {duration_hours or 'indefinite'} hours"
+        )
 
     def pause_processing(self):
         """Pause all processing."""
@@ -102,11 +110,13 @@ async def control_processing(control: ProcessingControl) -> SuccessResponse:
 
         return SuccessResponse(
             message=message,
+            workflow_id=None,
+            journal_id=None,
             data={
                 "action": control.action,
                 "duration_hours": control.duration_hours,
-                "currently_active": processing_manager.is_currently_active()
-            }
+                "currently_active": processing_manager.is_currently_active(),
+            },
         )
 
     except Exception as e:
@@ -133,12 +143,12 @@ async def get_processing_status() -> dict:
             "next_window": processing_manager.get_next_window_description(),
             "default_window": {
                 "start_time": settings.default_processing_start,
-                "end_time": settings.default_processing_end
+                "end_time": settings.default_processing_end,
             },
             "queue_info": {
                 "estimated_pending_time_minutes": 0,  # Would come from actual queue
-                "active_workflows": 0  # Would come from Temporal
-            }
+                "active_workflows": 0,  # Would come from Temporal
+            },
         }
 
     except Exception as e:
@@ -160,12 +170,20 @@ async def get_processing_windows() -> ProcessingWindowsResponse:
             default_window={
                 "start_time": settings.default_processing_start,
                 "end_time": settings.default_processing_end,
-                "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
-                "timezone": "local"
+                "days": [
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                    "sunday",
+                ],
+                "timezone": "local",
             },
             currently_active=processing_manager.is_currently_active(),
             next_window=processing_manager.get_next_window_description(),
-            manual_control=processing_manager._manual_control
+            manual_control=processing_manager._manual_control,
         )
 
     except Exception as e:
@@ -176,9 +194,7 @@ async def get_processing_windows() -> ProcessingWindowsResponse:
 @router.post("/windows/configure")
 @handle_errors(400)
 async def configure_processing_window(
-        start_time: str,
-        end_time: str,
-        days: list[str] = None
+    start_time: str, end_time: str, days: list[str] = None
 ) -> SuccessResponse:
     """
     Configure the default processing window.
@@ -196,11 +212,22 @@ async def configure_processing_window(
 
         return SuccessResponse(
             message="Processing window configured successfully",
+            workflow_id=None,
+            journal_id=None,
             data={
                 "start_time": start_time,
                 "end_time": end_time,
-                "days": days or ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-            }
+                "days": days
+                or [
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                    "sunday",
+                ],
+            },
         )
 
     except ValueError as e:
@@ -229,13 +256,13 @@ async def get_queue_statistics() -> dict:
                 "pending_relationship_extraction": 0,
                 "pending_curation_reviews": 0,
                 "average_processing_time_minutes": 0,
-                "estimated_completion_time": "No pending work"
+                "estimated_completion_time": "No pending work",
             },
             "system_stats": {
                 "cpu_usage_percent": 0,  # Would come from system monitoring
                 "memory_usage_percent": 0,
-                "ollama_model_loaded": False
-            }
+                "ollama_model_loaded": False,
+            },
         }
 
     except Exception as e:

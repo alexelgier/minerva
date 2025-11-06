@@ -2,15 +2,18 @@
 Neo4j Connection Management for Minerva
 Simplified database connection layer focused on connection pooling and health checks.
 Repository classes handle all CRUD operations.
+
+Async-only implementation for optimal performance.
 """
 
-from neo4j import GraphDatabase, Driver, Session
-from typing import Optional, Dict, Any
 import logging
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
+from typing import Any, Dict, Optional
+
+from neo4j import AsyncDriver, AsyncGraphDatabase
 
 from minerva_backend.config import settings
-from minerva_backend.graph.models.entities import EmotionType
+from minerva_models import EmotionType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,15 +24,19 @@ class Neo4jConnection:
     """
     Manages Neo4j database connection with pooling and health monitoring.
     Provides sessions to repository classes.
+
+    Supports both sync and async operations for gradual migration.
     """
 
-    def __init__(self,
-                 uri: str = settings.NEO4J_URI,
-                 user: str = settings.NEO4J_USER,
-                 password: str = settings.NEO4J_PASSWORD,
-                 max_pool_size: int = 50,
-                 max_connection_lifetime: int = 3600,
-                 database: str = None):
+    def __init__(
+        self,
+        uri: str = settings.NEO4J_URI,
+        user: str = settings.NEO4J_USER,
+        password: str = settings.NEO4J_PASSWORD,
+        max_pool_size: int = 50,
+        max_connection_lifetime: int = 3600,
+        database: str = None,
+    ):
         """
         Initialize Neo4j connection.
 
@@ -42,89 +49,93 @@ class Neo4jConnection:
         """
         self.uri = uri
         self.user = user
-        self.driver: Optional[Driver] = None
+        self.password = password
+        self.max_pool_size = max_pool_size
+        self.max_connection_lifetime = max_connection_lifetime
+        self.database = database
+
+        # Async driver
+        self.async_driver: Optional[AsyncDriver] = None
+        self._initialized = False
+
+    async def initialize(self):
+        """Initialize async driver - called during app startup"""
+        if self._initialized:
+            return
 
         try:
-            self.driver = GraphDatabase.driver(
-                uri,
-                auth=(user, password),
-                max_connection_pool_size=max_pool_size,
-                max_connection_lifetime=max_connection_lifetime,
-                database=database
+            self.async_driver = AsyncGraphDatabase.driver(
+                self.uri,
+                auth=(self.user, self.password),
+                max_connection_pool_size=self.max_pool_size,
+                max_connection_lifetime=self.max_connection_lifetime,
+                database=self.database,
             )
 
-            if not self.health_check():
-                raise ConnectionError("Failed to establish healthy connection to Neo4j")
+            # Health check
+            if not await self.health_check():
+                raise ConnectionError(
+                    "Failed to establish healthy async connection to Neo4j"
+                )
 
-            logger.info(f"Neo4j connection established successfully to {uri}")
+            # Set initialized flag BEFORE creating vector indexes to prevent recursion
+            self._initialized = True
+            
+            # Initialize vector indexes
+            await self._ensure_vector_indexes()
 
         except Exception as e:
-            logger.error(f"Failed to initialize Neo4j connection: {e}")
+            logger.error(f"Failed to initialize Neo4j async connection: {e}")
             raise
 
-    def health_check(self) -> bool:
+    async def health_check(self) -> bool:
         """
-        Verify database connection is healthy.
+        Verify database connection is healthy (async).
 
         Returns:
             bool: True if connection is healthy, False otherwise
         """
-        if not self.driver:
-            logger.error("Health check failed: No driver available")
+        if not self.async_driver:
+            logger.error("Async health check failed: No async driver available")
             return False
 
         try:
-            with self.driver.session() as session:
-                result = session.run("RETURN 1 as health_check")
-                record = result.single()
+            async with self.async_driver.session() as session:
+                result = await session.run("RETURN 1 as health_check")
+                record = await result.single()
 
                 if record and record["health_check"] == 1:
-                    logger.debug("Health check passed")
+                    logger.debug("Async health check passed")
                     return True
                 else:
-                    logger.error("Health check failed: Unexpected result")
+                    logger.error("Async health check failed: Unexpected result")
                     return False
 
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error(f"Async health check failed: {e}")
             return False
 
-    def get_session(self) -> Session:
+    @asynccontextmanager
+    async def session_async(self):
         """
-        Get a new database session.
-
-        Returns:
-            Session: Neo4j session for database operations
-
-        Raises:
-            ConnectionError: If no driver is available
-        """
-        if not self.driver:
-            raise ConnectionError("No database driver available")
-
-        return self.driver.session()
-
-    @contextmanager
-    def session(self):
-        """
-        Context manager for database sessions.
+        Async context manager for database sessions.
         Automatically handles session cleanup.
 
         Usage:
-            with db_connection.session() as session:
-                result = session.run("MATCH (n) RETURN n")
+            async with db_connection.session_async() as session:
+                result = await session.run("MATCH (n) RETURN n")
         """
-        session = None
-        try:
-            session = self.get_session()
-            yield session
-        finally:
-            if session:
-                session.close()
+        if not self._initialized:
+            await self.initialize()
 
-    def execute_query(self, query: str, parameters: Dict[str, Any] = None) -> list:
+        async with self.async_driver.session() as session:
+            yield session
+
+    async def execute_query(
+        self, query: str, parameters: Dict[str, Any] = None
+    ) -> list:
         """
-        Execute a single query and return results.
+        Execute a single query and return results (async).
         Convenience method for simple queries.
 
         Args:
@@ -136,69 +147,13 @@ class Neo4jConnection:
         """
         parameters = parameters or {}
 
-        with self.session() as session:
-            result = session.run(query, parameters)
-            return [record for record in result]
+        async with self.session_async() as session:
+            result = await session.run(query, parameters)
+            return [record async for record in result]
 
-    def get_database_stats(self) -> Dict[str, Any]:
+    async def init_emotion_types(self) -> Dict[str, str]:
         """
-        Get comprehensive database statistics.
-        Useful for monitoring and debugging.
-
-        Returns:
-            Dict containing node counts, relationship counts, etc.
-        """
-        with self.session() as session:
-            # Count nodes by label
-            node_query = """
-            CALL db.labels() YIELD label
-            CALL apoc.cypher.run('MATCH (n:`' + label + '`) RETURN count(n) as count', {}) 
-            YIELD value
-            RETURN label, value.count as count
-            """
-
-            # Fallback if APOC not available
-            simple_node_query = """
-            MATCH (n)
-            RETURN labels(n)[0] as label, count(n) as count
-            ORDER BY count DESC
-            """
-
-            # Count relationships by type
-            rel_query = """
-            MATCH ()-[r]->()
-            RETURN type(r) as rel_type, count(r) as count
-            ORDER BY count DESC
-            """
-
-            try:
-                # Try advanced query first
-                node_result = session.run(node_query)
-                node_counts = {record["label"]: record["count"] for record in node_result}
-            except:
-                # Fall back to simple query
-                node_result = session.run(simple_node_query)
-                node_counts = {record["label"]: record["count"] for record in node_result}
-
-            rel_result = session.run(rel_query)
-            rel_counts = {record["rel_type"]: record["count"] for record in rel_result}
-
-            # Total counts
-            total_nodes = sum(node_counts.values())
-            total_rels = sum(rel_counts.values())
-
-            return {
-                "total_nodes": total_nodes,
-                "total_relationships": total_rels,
-                "node_counts": node_counts,
-                "relationship_counts": rel_counts,
-                "connection_uri": self.uri,
-                "connection_healthy": self.health_check()
-            }
-
-    def init_emotion_types(self) -> Dict[str, str]:
-        """
-        Insert all EmotionType values as nodes into the database (idempotent).
+        Insert all EmotionType values as nodes into the database (idempotent - async).
         Ensures each node has a uuid. Returns a mapping of EmotionType to uuid.
         Requires APOC plugin for uuid generation.
         """
@@ -208,27 +163,110 @@ class Neo4jConnection:
         RETURN e.name AS name, e.uuid AS uuid
         """
         result: Dict[str, str] = {}
-        with self.session() as session:
+        async with self.session_async() as session:
             for emotion in EmotionType:
-                record = session.run(query, {"name": emotion}).single()
+                result_query = await session.run(query, {"name": emotion})
+                record = await result_query.single()
                 if record:
                     result[emotion] = str(record["uuid"])
         return result
 
+    async def close_async(self):
+        """Close the async database connection and cleanup resources."""
+        if self.async_driver:
+            await self.async_driver.close()
+            self.async_driver = None
+            self._initialized = False
+            logger.info("Neo4j async connection closed")
 
-def close(self):
-    """Close the database connection and cleanup resources."""
-    if self.driver:
-        self.driver.close()
-        self.driver = None
-        logger.info("Neo4j connection closed")
+    async def close_all(self):
+        """Close async connection."""
+        await self.close_async()
 
+    async def _ensure_vector_indexes(self):
+        """
+        Create vector indexes for all entity types and relations (async).
+        This method should be called during async initialization.
+        """
+        vector_indexes = [
+            # Entity indexes
+            ("Person", "person_embeddings_index"),
+            ("Feeling", "feeling_embeddings_index"),
+            ("Emotion", "emotion_embeddings_index"),
+            ("Event", "event_embeddings_index"),
+            ("Project", "project_embeddings_index"),
+            ("Concept", "concept_embeddings_index"),
+            ("Content", "content_embeddings_index"),
+            ("Consumable", "consumable_embeddings_index"),
+            ("Place", "place_embeddings_index"),
+            # Document indexes
+            ("Quote", "quote_embeddings_index"),
+            # Relation indexes
+            ("Relation", "relation_embeddings_index"),
+        ]
 
-def __enter__(self):
-    """Context manager entry."""
-    return self
+        for label, index_name in vector_indexes:
+            try:
+                await self._create_vector_index(label, index_name)
+            except Exception as e:
+                logger.warning(f"Failed to create vector index {index_name}: {e}")
 
+    async def _create_vector_index(self, label: str, index_name: str):
+        """
+        Create a vector index for a specific label (async).
 
-def __exit__(self, exc_type, exc_val, exc_tb):
-    """Context manager exit with cleanup."""
-    self.close()
+        Args:
+            label: Neo4j node label
+            index_name: Name of the vector index
+        """
+        query = f"""
+        CREATE VECTOR INDEX {index_name} IF NOT EXISTS
+        FOR (n:{label}) ON (n.embedding)
+        OPTIONS {{
+            indexConfig: {{
+                `vector.dimensions`: 1024,
+                `vector.similarity_function`: 'cosine'
+            }}
+        }}
+        """
+
+        async with self.session_async() as session:
+            await session.run(query)
+
+    async def vector_search(
+        self,
+        label: str,
+        query_embedding: list[float],
+        limit: int = 10,
+        threshold: float = 0.7,
+    ) -> list:
+        """
+        Perform vector similarity search on a specific label (async).
+
+        Args:
+            label: Neo4j node label to search
+            query_embedding: Query vector for similarity search
+            limit: Maximum number of results
+            threshold: Minimum similarity threshold (0.0-1.0)
+
+        Returns:
+            List of matching nodes with similarity scores
+        """
+        query = f"""
+        CALL db.index.vector.queryNodes('{label.lower()}_embeddings_index', $limit, $query_embedding)
+        YIELD node, score
+        WHERE score >= $threshold
+        RETURN node, score
+        ORDER BY score DESC
+        """
+
+        async with self.session_async() as session:
+            result = await session.run(
+                query,
+                {
+                    "query_embedding": query_embedding,
+                    "limit": limit,
+                    "threshold": threshold,
+                },
+            )
+            return [record async for record in result]

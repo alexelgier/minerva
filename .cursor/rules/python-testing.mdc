@@ -1,0 +1,30 @@
+---
+alwaysApply: true
+description: Python quick testing workflow to avoid Cursor inline runner issues
+---
+
+# Python Quick Testing Rule
+
+## Problem
+Cursor inline runner fails silently when running Python code that's 4+ lines long, causing wasted time and frustration.
+
+## Solution
+- **1-3 lines**: Use `poetry run python -c "code"` (works fine)
+- **4+ lines**: Use [backend/scratch.py](mdc:backend/scratch.py) workflow:
+  1. Edit [backend/scratch.py](mdc:backend/scratch.py) with your test code
+  2. Run `poetry run python backend/scratch.py`
+  3. Delete the file when done
+
+## Examples
+```bash
+# Short test (works)
+poetry run python -c "print('hello')"
+
+# Long test (use scratch.py)
+# Edit backend/scratch.py with your code, then:
+poetry run python backend/scratch.py
+# Then delete the file
+```
+
+## Rule
+**NEVER waste time with Cursor inline runner for multi-line Python code!** Always use the scratch file approach for 4+ line Python tests. This prevents silent failures and saves significant time.

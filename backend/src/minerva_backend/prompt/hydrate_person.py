@@ -1,6 +1,6 @@
 from typing import Type
 
-from minerva_backend.graph.models.entities import Person
+from minerva_models import Person
 from minerva_backend.prompt.base import Prompt
 
 

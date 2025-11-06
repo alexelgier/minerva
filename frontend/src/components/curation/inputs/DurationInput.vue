@@ -6,19 +6,60 @@
       class="styled-input"
       placeholder="e.g. 2:30 or 1h 15m"
       v-bind="$attrs"
-      :value="props.modelValue"
+      :value="displayValue"
       @input="onInput"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 const props = defineProps({
-  modelValue: Object,
+  modelValue: [Object, String, null],
   label: String
 });
 const emit = defineEmits(['update:modelValue']);
+
+// Convert timedelta object to human-readable string
+function formatDuration(duration) {
+  // Handle null, undefined, or empty values
+  if (duration === null || duration === undefined || duration === '') return '';
+  
+  // If it's already a string, return it
+  if (typeof duration === 'string') return duration;
+  
+  // If it's an object (timedelta), convert to readable format
+  if (typeof duration === 'object' && duration !== null) {
+    // Handle different possible formats
+    if (duration.days !== undefined) {
+      const days = duration.days || 0;
+      const hours = Math.floor(duration.seconds / 3600) || 0;
+      const minutes = Math.floor((duration.seconds % 3600) / 60) || 0;
+      const seconds = duration.seconds % 60 || 0;
+      
+      if (days > 0) {
+        return `${days}d ${hours}h ${minutes}m`;
+      } else if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
+      } else {
+        return `${seconds}s`;
+      }
+    }
+    
+    // If it has a string representation, use that
+    if (duration.toString) {
+      return duration.toString();
+    }
+  }
+  
+  return '';
+}
+
+const displayValue = computed(() => {
+  return formatDuration(props.modelValue);
+});
 
 function onInput(event) {
   emit('update:modelValue', event.target.value);

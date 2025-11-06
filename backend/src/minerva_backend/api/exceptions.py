@@ -1,24 +1,25 @@
 """Custom exceptions for the Minerva Backend API."""
+
 import logging
 from functools import wraps
-from typing import Any, Dict, Optional, Callable, TypeVar
+from typing import Any, Callable, Dict, Optional, TypeVar
 
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class MinervaHTTPException(HTTPException):
     """Enhanced HTTP exception with error codes and additional context."""
 
     def __init__(
-            self,
-            status_code: int,
-            detail: str,
-            error_code: Optional[str] = None,
-            context: Optional[Dict[str, Any]] = None
+        self,
+        status_code: int,
+        detail: str,
+        error_code: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(status_code, detail)
         self.error_code = error_code or f"HTTP_{status_code}"
@@ -60,7 +61,7 @@ class ProcessingError(MinervaHTTPException):
 def handle_errors(default_status_code: int = 500):
     """Decorator for comprehensive error handling with logging and structured responses."""
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:  # type: ignore[return-value]
         @wraps(func)
         async def wrapper(*args, **kwargs) -> T:
             try:
@@ -83,10 +84,10 @@ def handle_errors(default_status_code: int = 500):
                     default_status_code,
                     "An internal error occurred",
                     "INTERNAL_ERROR",
-                    {"function": func.__name__}
+                    {"function": func.__name__},
                 )
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -98,24 +99,24 @@ def minerva_exception_handler(request: Request, exc: Exception) -> Response:
         "error": {
             "code": exc.error_code,
             "message": exc.detail,
-            "status_code": exc.status_code
+            "status_code": exc.status_code,
         }
     }
 
     # Add context if available and not sensitive
-    if exc.context and not any(key in exc.context for key in ['password', 'token', 'secret']):
+    if exc.context and not any(
+        key in exc.context for key in ["password", "token", "secret"]
+    ):
         content["error"]["context"] = exc.context
 
     # Add request information for debugging (in development only)
     from minerva_backend.config import settings
+
     if settings.debug:
         content["error"]["request"] = {
             "method": request.method,
             "url": str(request.url),
-            "path": request.url.path
+            "path": request.url.path,
         }
 
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=content
-    )
+    return JSONResponse(status_code=exc.status_code, content=content)

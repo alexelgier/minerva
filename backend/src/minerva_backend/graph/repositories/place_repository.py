@@ -1,6 +1,6 @@
-from .base import BaseRepository
-from ..models.entities import Content, Consumable, Place
+from ..models.entities import Consumable, Content, Place
 from ..models.enums import EntityType
+from .base import BaseRepository
 
 
 class PlaceRepository(BaseRepository[Place]):

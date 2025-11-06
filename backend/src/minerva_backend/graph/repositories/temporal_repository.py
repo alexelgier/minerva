@@ -5,11 +5,11 @@ Handles time-based operations and the temporal hierarchy (Year -> Month -> Day).
 
 import logging
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from minerva_backend.graph.db import Neo4jConnection
-from minerva_backend.graph.models.documents import JournalEntry
+from minerva_models import JournalEntry
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class TemporalRepository:
         """Initialize repository with database connection."""
         self.connection = connection
 
-    def ensure_day_in_time_tree(self, target_date: date) -> str:
+    async def ensure_day_in_time_tree(self, target_date: date) -> str:
         """
         Ensure a day exists in the time tree hierarchy: Year -> Month -> Day.
         Creates Year, Month, and Day nodes if they don't exist and establishes relationships.
@@ -39,7 +39,7 @@ class TemporalRepository:
         year = target_date.year
         month = target_date.month
         day = target_date.day
-        month_name = target_date.strftime('%B')  # e.g., "September"
+        month_name = target_date.strftime("%B")  # e.g., "September"
 
         query = """
         // Create or get Year node
@@ -75,8 +75,8 @@ class TemporalRepository:
         RETURN d.uuid as day_uuid
         """
 
-        with self.connection.session() as session:
-            result = session.run(
+        async with self.connection.session_async() as session:
+            result = await session.run(
                 query,
                 year=year,
                 month=month,
@@ -85,16 +85,16 @@ class TemporalRepository:
                 date_str=target_date.isoformat(),
                 year_uuid=str(uuid4()),
                 month_uuid=str(uuid4()),
-                day_uuid=str(uuid4())
+                day_uuid=str(uuid4()),
             )
 
-            record = result.single()
+            record = await result.single()
             day_uuid = record["day_uuid"]
 
             logger.info(f"Ensured day in time tree: {target_date} (UUID: {day_uuid})")
             return day_uuid
 
-    def link_node_to_day(self, uuid: str, target_date: date) -> bool:
+    async def link_node_to_day(self, uuid: str, target_date: date) -> bool:
         """
         Link a node to day in the time tree.
         Args:
@@ -104,7 +104,7 @@ class TemporalRepository:
             bool: True if link was created successfully
         """
         # First ensure the day exists
-        day_uuid = self.ensure_day_in_time_tree(target_date)
+        day_uuid = await self.ensure_day_in_time_tree(target_date)
 
         # Then create the relationship
         query = """
@@ -113,10 +113,10 @@ class TemporalRepository:
         MERGE (j)-[:OCCURRED_ON]->(d)
         RETURN count(*) as linked
         """
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(query, uuid=uuid, day_uuid=day_uuid)
-                record = result.single()
+                result = await session.run(query, uuid=uuid, day_uuid=day_uuid)
+                record = await result.single()
                 success = record["linked"] > 0
                 if success:
                     logger.info(f"Linked node {uuid} to day {target_date}")
@@ -125,7 +125,7 @@ class TemporalRepository:
                 logger.error(f"Error linking node to day: {e}")
                 return False
 
-    def link_nodes_to_day_batch(self, uuids: List[str], target_date: date) -> int:
+    async def link_nodes_to_day_batch(self, uuids: List[str], target_date: date) -> int:
         """
         Link multiple nodes to a day in the time tree in batch.
 
@@ -140,7 +140,7 @@ class TemporalRepository:
             return 0
 
         # First ensure the day exists
-        day_uuid = self.ensure_day_in_time_tree(target_date)
+        day_uuid = await self.ensure_day_in_time_tree(target_date)
 
         # Then create all relationships in batch
         query = """
@@ -151,10 +151,10 @@ class TemporalRepository:
         RETURN count(*) as linked
         """
 
-        with self.connection.session() as session:
+        async with self.connection.session_async() as session:
             try:
-                result = session.run(query, uuids=uuids, day_uuid=day_uuid)
-                record = result.single()
+                result = await session.run(query, uuids=uuids, day_uuid=day_uuid)
+                record = await result.single()
                 linked_count = record["linked"]
 
                 if linked_count > 0:
@@ -166,7 +166,7 @@ class TemporalRepository:
                 logger.error(f"Error linking nodes to day: {e}")
                 return 0
 
-    def get_day_uuid(self, target_date: date) -> Optional[str]:
+    async def get_day_uuid(self, target_date: date) -> Optional[str]:
         """
         Get the UUID of a day node if it exists.
 
@@ -186,18 +186,18 @@ class TemporalRepository:
         RETURN d.uuid as day_uuid
         """
 
-        with self.connection.session() as session:
-            result = session.run(
+        async with self.connection.session_async() as session:
+            result = await session.run(
                 query,
                 year=target_date.year,
                 month=target_date.month,
-                day=target_date.day
+                day=target_date.day,
             )
 
-            record = result.single()
+            record = await result.single()
             return record["day_uuid"] if record else None
 
-    def get_month_uuid(self, year: int, month: int) -> Optional[str]:
+    async def get_month_uuid(self, year: int, month: int) -> Optional[str]:
         """
         Get the UUID of a month node if it exists.
 
@@ -216,16 +216,12 @@ class TemporalRepository:
         })
         RETURN m.uuid as month_uuid
         """
-        with self.connection.session() as session:
-            result = session.run(
-                query,
-                year=year,
-                month=month
-            )
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query, year=year, month=month)
+            record = await result.single()
             return record["month_uuid"] if record else None
 
-    def get_year_uuid(self, year: int) -> Optional[str]:
+    async def get_year_uuid(self, year: int) -> Optional[str]:
         """
         Get the UUID of a year node if it exists.
 
@@ -242,12 +238,14 @@ class TemporalRepository:
         })
         RETURN y.uuid as year_uuid
         """
-        with self.connection.session() as session:
-            result = session.run(query, year=year)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query, year=year)
+            record = await result.single()
             return record["year_uuid"] if record else None
 
-    def get_journal_entries_for_date(self, target_date: date) -> List[JournalEntry]:
+    async def get_journal_entries_for_date(
+        self, target_date: date
+    ) -> List[JournalEntry]:
         """
         Get all journal entries for a specific date.
 
@@ -267,22 +265,24 @@ class TemporalRepository:
         ORDER BY j.created_at ASC
         """
 
-        with self.connection.session() as session:
-            result = session.run(
+        async with self.connection.session_async() as session:
+            result = await session.run(
                 query,
                 year=target_date.year,
                 month=target_date.month,
-                day=target_date.day
+                day=target_date.day,
             )
 
             entries = []
-            for record in result:
+            async for record in result:
                 properties = dict(record["j"])
                 # Convert datetime strings back to datetime objects
                 for key, value in properties.items():
-                    if isinstance(value, str) and 'T' in value:
+                    if isinstance(value, str) and "T" in value:
                         try:
-                            properties[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                            properties[key] = datetime.fromisoformat(
+                                value.replace("Z", "+00:00")
+                            )
                         except ValueError:
                             pass
 
@@ -290,7 +290,9 @@ class TemporalRepository:
 
             return entries
 
-    def get_journal_entries_for_date_range(self, start_date: date, end_date: date) -> List[JournalEntry]:
+    async def get_journal_entries_for_date_range(
+        self, start_date: date, end_date: date
+    ) -> List[JournalEntry]:
         """
         Get all journal entries within a date range.
 
@@ -308,21 +310,21 @@ class TemporalRepository:
         ORDER BY d.date ASC, j.created_at ASC
         """
 
-        with self.connection.session() as session:
-            result = session.run(
-                query,
-                start_date=start_date.isoformat(),
-                end_date=end_date.isoformat()
+        async with self.connection.session_async() as session:
+            result = await session.run(
+                query, start_date=start_date.isoformat(), end_date=end_date.isoformat()
             )
 
             entries = []
-            for record in result:
+            async for record in result:
                 properties = dict(record["j"])
                 # Convert datetime strings back to datetime objects
                 for key, value in properties.items():
-                    if isinstance(value, str) and 'T' in value:
+                    if isinstance(value, str) and "T" in value:
                         try:
-                            properties[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                            properties[key] = datetime.fromisoformat(
+                                value.replace("Z", "+00:00")
+                            )
                         except ValueError:
                             pass
 
@@ -330,7 +332,7 @@ class TemporalRepository:
 
             return entries
 
-    def get_month_stats(self, year: int, month: int) -> Dict[str, Any]:
+    async def get_month_stats(self, year: int, month: int) -> Dict[str, Any]:
         """
         Get statistics for a specific month.
 
@@ -350,9 +352,9 @@ class TemporalRepository:
             collect(DISTINCT d.date) as dates_with_days
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, year=year, month=month)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query, year=year, month=month)
+            record = await result.single()
 
             if record:
                 return {
@@ -360,7 +362,7 @@ class TemporalRepository:
                     "month": month,
                     "days_created": record["days_in_month"],
                     "journal_entries": record["journal_entries"],
-                    "dates_with_days": record["dates_with_days"]
+                    "dates_with_days": record["dates_with_days"],
                 }
 
             return {
@@ -368,10 +370,10 @@ class TemporalRepository:
                 "month": month,
                 "days_created": 0,
                 "journal_entries": 0,
-                "dates_with_days": []
+                "dates_with_days": [],
             }
 
-    def get_year_stats(self, year: int) -> Dict[str, Any]:
+    async def get_year_stats(self, year: int) -> Dict[str, Any]:
         """
         Get statistics for a specific year.
 
@@ -392,9 +394,9 @@ class TemporalRepository:
             max(d.date) as latest_date
         """
 
-        with self.connection.session() as session:
-            result = session.run(query, year=year)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query, year=year)
+            record = await result.single()
 
             if record:
                 return {
@@ -403,7 +405,7 @@ class TemporalRepository:
                     "days_created": record["days_in_year"],
                     "journal_entries": record["journal_entries"],
                     "earliest_date": record["earliest_date"],
-                    "latest_date": record["latest_date"]
+                    "latest_date": record["latest_date"],
                 }
 
             return {
@@ -412,10 +414,10 @@ class TemporalRepository:
                 "days_created": 0,
                 "journal_entries": 0,
                 "earliest_date": None,
-                "latest_date": None
+                "latest_date": None,
             }
 
-    def get_temporal_overview(self) -> Dict[str, Any]:
+    async def get_temporal_overview(self) -> Dict[str, Any]:
         """
         Get overview of entire temporal structure.
 
@@ -436,9 +438,9 @@ class TemporalRepository:
             max(y.year) as latest_year
         """
 
-        with self.connection.session() as session:
-            result = session.run(query)
-            record = result.single()
+        async with self.connection.session_async() as session:
+            result = await session.run(query)
+            record = await result.single()
 
             if record:
                 return {
@@ -447,7 +449,7 @@ class TemporalRepository:
                     "total_days": record["total_days"],
                     "total_journal_entries": record["total_journal_entries"],
                     "earliest_year": record["earliest_year"],
-                    "latest_year": record["latest_year"]
+                    "latest_year": record["latest_year"],
                 }
 
             return {
@@ -456,5 +458,5 @@ class TemporalRepository:
                 "total_days": 0,
                 "total_journal_entries": 0,
                 "earliest_year": None,
-                "latest_year": None
+                "latest_year": None,
             }

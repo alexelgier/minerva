@@ -3,25 +3,41 @@ from typing import List, Type
 
 from pydantic import BaseModel, Field
 
-from minerva_backend.graph.models.entities import EmotionType
+from minerva_models import EmotionType
 from minerva_backend.prompt.base import Prompt
 
 
 class Feeling(BaseModel):
     """An occurrence of feeling an emotion in the text"""
+
     emotion: EmotionType = Field(..., description="Type of emotion felt")
     person_uuid: str = Field(..., description="UUID of person feeling the emotion")
-    spans: List[str] = Field(..., description="Exact text fragments where the feeling is mentioned", min_length=1)
+    spans: List[str] = Field(
+        ...,
+        description="Exact text fragments where the feeling is mentioned",
+        min_length=1,
+    )
     timestamp: datetime = Field(..., description="Cuándo ocurrió este sentimiento")
-    intensity: int | None = Field(default=None, description="Nivel de intensidad (1-10)", ge=1, le=10)
-    duration: timedelta | None = Field(default=None, description="Cuánto duró el sentimiento")
-    summary_short: str = Field(..., description="Resumen del sentimiento. Máximo 30 palabras")
-    summary: str = Field(..., description="Resumen del sentimiento. Máximo 100 palabras")
+    intensity: int | None = Field(
+        default=None, description="Nivel de intensidad (1-10)", ge=1, le=10
+    )
+    duration: timedelta | None = Field(
+        default=None, description="Cuánto duró el sentimiento"
+    )
+    summary_short: str = Field(
+        ..., description="Resumen del sentimiento. Máximo 30 palabras"
+    )
+    summary: str = Field(
+        ..., description="Resumen del sentimiento. Máximo 100 palabras"
+    )
 
 
 class Feelings(BaseModel):
     """A list of feelings extracted from a text."""
-    feelings: List[Feeling] = Field(..., description="List of feelings mentioned in the text")
+
+    feelings: List[Feeling] = Field(
+        ..., description="List of feelings mentioned in the text"
+    )
 
 
 class ExtractEmotionsPrompt(Prompt):

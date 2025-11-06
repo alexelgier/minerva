@@ -2,17 +2,23 @@
 Application Configuration
 Loads settings from environment variables.
 """
+
 from typing import List
 
-from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application configuration settings, loaded from environment variables."""
+
+    # Database Configuration
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: str = "Alxe342!"
     CURATION_DB_PATH: str = "curation.db"
+
+    # Temporal Configuration
     TEMPORAL_URI: str = "localhost:7233"
 
     # API Configuration
@@ -31,32 +37,22 @@ class Settings(BaseSettings):
     cors_allow_methods: List[str] = ["*"]
     cors_allow_headers: List[str] = ["*"]
 
-    # Database Configuration
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "password"
-
-    # Temporal Configuration
-    temporal_host: str = "localhost"
-    temporal_port: int = 7233
-
-    # Curation Database
-    curation_db_path: str = "curation.db"
-
     # Processing Configuration
     default_processing_start: str = "06:00"
     default_processing_end: str = "12:00"
-    max_status_poll_attempts: int = 10
-    status_poll_interval: float = 0.2
+    max_status_poll_attempts: int = 15
+    status_poll_interval: float = 0.5
 
     # Logging Configuration
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-    class Config:
-        env_file = ".env"
-        env_prefix = "MINERVA_"
-        case_sensitive = False
+    # Obsidian Configuration
+    OBSIDIAN_VAULT_PATH: str = "D:\\yo"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="MINERVA_", case_sensitive=False, extra='ignore'
+    )
 
 
 # Singleton instance of settings

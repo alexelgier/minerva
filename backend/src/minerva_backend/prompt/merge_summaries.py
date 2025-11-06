@@ -35,11 +35,11 @@ El resumen corto debe ser la versión más condensada del resumen largo, no info
 
     @staticmethod
     def user_prompt(data: dict) -> str:
-        existing_summary = data['existing_summary']
-        existing_short_summary = data['existing_short_summary']
-        new_summary = data['new_summary']
-        new_short_summary = data['new_short_summary']
-        entity_name = data['entity_name']
+        existing_summary = data["existing_summary"]
+        existing_short_summary = data["existing_short_summary"]
+        new_summary = data["new_summary"]
+        new_short_summary = data["new_short_summary"]
+        entity_name = data["entity_name"]
 
         return f"""Fusiona la información sobre: {entity_name}
 

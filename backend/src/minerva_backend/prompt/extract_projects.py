@@ -3,26 +3,46 @@ from typing import List, Type
 
 from pydantic import BaseModel, Field
 
-from minerva_backend.graph.models.entities import ProjectStatus
+from minerva_models import ProjectStatus
 from minerva_backend.prompt.base import Prompt
 
 
 class Project(BaseModel):
     """A project extracted from a text."""
+
     name: str = Field(..., description="Name of project")
-    spans: List[str] = Field(..., description="Exact text fragments where the project is mentioned", min_length=1)
-    status: ProjectStatus | None = Field(default=None, description="Estado actual del proyecto")
-    start_date: datetime | None = Field(default=None, description="Fecha de inicio del proyecto")
-    target_completion: datetime | None = Field(default=None, description="Fecha de finalización objetivo o esperada")
-    progress: float | None = Field(default=None, description="Porcentaje de finalización (0.0 a 100.0)", ge=0.0,
-                                   le=100.0)
-    summary_short: str = Field(..., description="Resumen del proyecto. Máximo 30 palabras")
+    spans: List[str] = Field(
+        ...,
+        description="Exact text fragments where the project is mentioned",
+        min_length=1,
+    )
+    status: ProjectStatus | None = Field(
+        default=None, description="Estado actual del proyecto"
+    )
+    start_date: datetime | None = Field(
+        default=None, description="Fecha de inicio del proyecto"
+    )
+    target_completion: datetime | None = Field(
+        default=None, description="Fecha de finalización objetivo o esperada"
+    )
+    progress: float | None = Field(
+        default=None,
+        description="Porcentaje de finalización (0.0 a 100.0)",
+        ge=0.0,
+        le=100.0,
+    )
+    summary_short: str = Field(
+        ..., description="Resumen del proyecto. Máximo 30 palabras"
+    )
     summary: str = Field(..., description="Resumen del proyecto. Máximo 100 palabras")
 
 
 class Projects(BaseModel):
     """A list of projects extracted from a text."""
-    projects: List[Project] = Field(..., description="List of projects mentioned in the text")
+
+    projects: List[Project] = Field(
+        ..., description="List of projects mentioned in the text"
+    )
 
 
 class ExtractProjectsPrompt(Prompt):
