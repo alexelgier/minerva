@@ -58,6 +58,8 @@ The knowledge graph consists of nodes and edges.
 
 ## 5. Current Status
 
+> **🎉 Version 0.2.0 Milestone**: Minerva is now usable for the first time! With minerva-desktop and minerva-agent working together, users can interact with their Obsidian vault through a native desktop application. While functionality is still limited, the core system is functional end-to-end.
+
 -   **Implemented:**
     -   The complete backend API for journal submission and curation.
     -   The full 6-stage Temporal pipeline is functional.
@@ -65,8 +67,9 @@ The knowledge graph consists of nodes and edges.
     -   Neo4j integration with a repository pattern for all major entity types.
     -   A working curation queue system.
     -   Basic Obsidian link resolution.
-    -   minerva-desktop: Native desktop application for agent interaction.
-    -   minerva_agent: Deep agent for Obsidian vault assistance.
+    -   **minerva-desktop: Native desktop application for agent interaction (NOW FUNCTIONAL)**.
+    -   **minerva_agent: Deep agent for Obsidian vault assistance (NOW FUNCTIONAL)**.
+    -   **End-to-end integration: Desktop app can connect to and interact with agents**.
     -   zettel: Quote parsing and concept extraction agents.
 -   **In Progress / Planned:**
     -   Enhanced graph visualization in desktop app.

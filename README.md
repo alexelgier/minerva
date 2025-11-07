@@ -2,6 +2,8 @@
 
 A personal knowledge management system that transforms unstructured text (journal entries, book notes) into a structured knowledge graph using AI-powered entity extraction, relationship discovery, and concept organization.
 
+> **🎉 Version 0.2.0 Milestone**: Minerva is now usable for the first time! With minerva-desktop and minerva-agent working together, you can interact with your Obsidian vault through a native desktop application. While still limited, the core system is functional end-to-end.
+
 ## Overview
 
 Minerva helps you build a "second brain" by:

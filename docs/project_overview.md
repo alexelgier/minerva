@@ -2,9 +2,13 @@
 
 This document provides a comprehensive analysis of the Minerva project, designed for an AI assistant to understand its architecture, components, and data flow.
 
+> **🎉 Version 0.2.0 Milestone**: Minerva is now usable for the first time! With minerva-desktop and minerva-agent working together, users can interact with their Obsidian vault through a native desktop application. While functionality is still limited, the core system is functional end-to-end.
+
 ## 1. Project Summary
 
 **Purpose**: Minerva is a personal knowledge management system designed to process journal entries, manage Obsidian vaults, and extract concepts from books. It extracts structured information (entities and relationships) from unstructured text and builds a personal knowledge graph.
+
+**Current Status**: As of version 0.2.0, Minerva is now usable end-to-end. The minerva-desktop application can connect to minerva-agent, allowing users to interact with their Obsidian vault through a native chat interface. While many features are still in development, the core workflow is functional.
 
 **Main Functionality**:
 - **Journal Submission**: Users can submit daily journal entries via a REST API.

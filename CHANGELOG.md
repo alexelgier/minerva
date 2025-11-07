@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - 2025-11-XX
 
+### 🎉 Milestone: Minerva is Now Usable!
+
+**For the first time, Minerva is fully functional and usable end-to-end!** With minerva-desktop and minerva-agent working together, users can now:
+- Launch the desktop application and connect to the agent
+- Interact with minerva-agent through a native chat interface
+- Perform Obsidian vault operations (read, write, edit files)
+- Execute complex tasks with agent assistance
+- Monitor agent activities and subagent delegation
+
+While functionality is still limited and many features are in development, this release marks the first time all core components work together to provide a usable knowledge management system.
+
 ### Added
 - **Enhanced Concept Extraction**: Three-section context system combining linked concepts, RAG results, and recent concepts for improved accuracy
 - **Concept Merging**: Automatic LLM-based merging of existing concepts with new information
