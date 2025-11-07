@@ -1,61 +1,239 @@
-# New LangGraph Project
+# Zettel Agent
 
-[![CI](https://github.com/langchain-ai/new-langgraph-project/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/langchain-ai/new-langgraph-project/actions/workflows/unit-tests.yml)
-[![Integration Tests](https://github.com/langchain-ai/new-langgraph-project/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/langchain-ai/new-langgraph-project/actions/workflows/integration-tests.yml)
+A LangGraph-based agent system for processing book quotes and extracting atomic concepts (Zettels) from them. The Zettel agent implements a Zettelkasten methodology for knowledge management, processing quotes from books and organizing them into atomic, interconnected concepts.
 
-This template demonstrates a simple application implemented using [LangGraph](https://github.com/langchain-ai/langgraph), designed for showing how to get started with [LangGraph Server](https://langchain-ai.github.io/langgraph/concepts/langgraph_server/#langgraph-server) and using [LangGraph Studio](https://langchain-ai.github.io/langgraph/concepts/langgraph_studio/), a visual debugging IDE.
+## Features
 
-<div align="center">
-  <img src="./static/studio_ui.png" alt="Graph view in LangGraph studio UI" width="75%" />
-</div>
+- **Quote Parsing**: Extract quotes from markdown book notes with section and page references
+- **Concept Extraction**: Generate atomic concepts (Zettels) from related quotes using vector search and LLM analysis
+- **Vector Search**: Semantic similarity search using Neo4j vector indexes
+- **Quote Attribution**: Automatically attribute quotes to existing concepts or propose new ones
+- **Neo4j Integration**: Store quotes, concepts, and relationships in Neo4j graph database
+- **Batch Processing**: Process quotes in batches for efficiency
 
-The core logic defined in `src/agent/graph.py`, showcases an single-step application that responds with a fixed string and the configuration provided.
+## Quick Start
 
-You can extend this graph to orchestrate more complex agentic workflows that can be visualized and debugged in LangGraph Studio.
+### Prerequisites
 
-## Getting Started
+- Python 3.12+
+- Poetry
+- Neo4j database (running locally)
+- Google API key (for Gemini)
+- Ollama (for embeddings)
 
-1. Install dependencies, along with the [LangGraph CLI](https://langchain-ai.github.io/langgraph/concepts/langgraph_cli/), which will be used to run the server.
+### Installation
 
+1. Install dependencies:
 ```bash
-cd path/to/your/app
-pip install -e . "langgraph-cli[inmem]"
+poetry install
 ```
 
-2. (Optional) Customize the code and project as needed. Create a `.env` file if you need to use secrets.
+2. Set up environment variables:
+   - Create a `.env` file in this directory
+   - Add your Google API key:
+     ```
+     GOOGLE_API_KEY=your-api-key-here
+     ```
+   - Ensure Neo4j is running (default: `bolt://localhost:7687`)
 
+3. Ensure Neo4j vector indexes exist (created automatically on first run)
+
+## Running the Agent
+
+### Development Server
+
+Start the development server:
 ```bash
-cp .env.example .env
+poetry run langgraph dev
 ```
 
-If you want to enable LangSmith tracing, add your LangSmith API key to the `.env` file.
+This exposes two graphs:
+- `quote_parse_graph`: Parse quotes from markdown files
+- `concept_extraction_graph`: Extract concepts from quotes
 
-```text
-# .env
-LANGSMITH_API_KEY=lsv2...
+### Production Deployment
+
+Build and deploy using LangGraph CLI:
+```bash
+poetry run langgraph up
 ```
 
-3. Start the LangGraph Server.
+## Agent Graphs
 
-```shell
-langgraph dev
+### Quote Parse Graph
+
+Processes markdown book notes and extracts quotes:
+
+**Input:**
+```python
+{
+    "file_path": "/path/to/book.md",
+    "author": "Author Name",
+    "title": "Book Title"
+}
 ```
 
-For more information on getting started with LangGraph Server, [see here](https://langchain-ai.github.io/langgraph/tutorials/langgraph-platform/local-server/).
+**Workflow:**
+1. Read markdown file
+2. Generate book summary (LLM)
+3. Parse quotes from "# Citas" section
+4. Ensure author exists as Person entity
+5. Store book, quotes, and relationships in Neo4j
 
-## How to customize
+### Concept Extraction Graph
 
-1. **Define runtime context**: Modify the `Context` class in the `graph.py` file to expose the arguments you want to configure per assistant. For example, in a chatbot application you may want to define a dynamic system prompt or LLM to use. For more information on runtime context in LangGraph, [see here](https://langchain-ai.github.io/langgraph/agents/context/?h=context#static-runtime-context).
+Extracts atomic concepts from quotes:
 
-2. **Extend the graph**: The core logic of the application is defined in [graph.py](./src/agent/graph.py). You can modify this file to add new nodes, edges, or change the flow of information.
+**Input:**
+```python
+{
+    "content_uuid": "uuid-of-content-node"
+}
+```
+
+**Workflow:**
+1. Ensure vector indexes exist
+2. Load content and quotes
+3. Attribute quotes to existing concepts (vector search + LLM)
+4. Form new concepts from unprocessed quotes (clustering + LLM)
+5. Iterate until all quotes are processed
+
+## Architecture
+
+- **LangGraph**: Stateful workflow orchestration
+- **Neo4j**: Graph database for quotes, concepts, and relationships
+- **Vector Search**: Semantic similarity using Ollama embeddings (mxbai-embed-large)
+- **Google Gemini**: LLM for concept extraction and analysis
+- **Two-Graph System**: Separate graphs for quote parsing and concept extraction
+
+## Configuration
+
+The agent is configured via `langgraph.json`:
+```json
+{
+  "graphs": {
+    "quote_parse_graph": "./src/zettel_agent/quote_parse_graph.py:graph",
+    "concept_extraction_graph": "./src/zettel_agent/concept_extraction_graph.py:graph"
+  },
+  "env": ".env"
+}
+```
+
+## Environment Variables
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `GOOGLE_API_KEY` | Google API key for Gemini | Yes | - |
+| Neo4j connection | Configured in `db.py` | Yes | `bolt://localhost:7687` |
+
+## Usage Examples
+
+### Parse Quotes from a Book
+
+```python
+result = await quote_parse_graph.ainvoke({
+    "file_path": "/path/to/book.md",
+    "author": "Vladimir Lenin",
+    "title": "Obras Completas Tomo IV"
+})
+```
+
+### Extract Concepts from Quotes
+
+```python
+result = await concept_extraction_graph.ainvoke({
+    "content_uuid": "43ecf73b-01c6-426d-978a-1b73e041370c"
+})
+```
+
+## Quote Format
+
+The quote parser expects markdown files with this structure:
+
+```markdown
+# Citas
+
+## Section Name
+
+Quote text here
+
+123
+
+Another quote in the same section
+
+124-125
+```
+
+- Quotes are separated by blank lines
+- Page references appear at the end of each quote
+- Section headers use `##`
+
+## Concept Extraction Process
+
+1. **Vector Search**: Find similar existing concepts using quote embeddings
+2. **LLM Analysis**: Determine if quote supports existing concept
+3. **Clustering**: Group unprocessed quotes by semantic similarity
+4. **Concept Proposal**: Generate atomic concept from quote cluster
+5. **Iteration**: Continue until all quotes are attributed or proposed
+
+## Database Schema
+
+- **Content**: Book nodes with metadata
+- **Quote**: Quote nodes with text, section, page reference, and embeddings
+- **Concept**: Atomic concept nodes (Zettels) with title, concept, analysis
+- **Person**: Author nodes
+- **Relationships**:
+  - `QUOTED_IN`: Quote → Content
+  - `AUTHORED_BY`: Person → Content
+  - Concept relationships (via concept_extraction_graph)
 
 ## Development
 
-While iterating on your graph in LangGraph Studio, you can edit past state and rerun your app from previous states to debug specific nodes. Local changes will be automatically applied via hot reload.
+### Project Structure
 
-Follow-up requests extend the same thread. You can create an entirely new thread, clearing previous history, using the `+` button in the top right.
+```
+zettel/
+├── src/
+│   └── zettel_agent/
+│       ├── quote_parse_graph.py      # Quote parsing workflow
+│       ├── concept_extraction_graph.py # Concept extraction workflow
+│       ├── db.py                      # Neo4j connection and queries
+│       └── __init__.py
+├── langgraph.json                    # LangGraph configuration
+├── pyproject.toml                    # Poetry dependencies
+└── .env                              # Environment variables
+```
 
-For more advanced features and examples, refer to the [LangGraph documentation](https://langchain-ai.github.io/langgraph/). These resources can help you adapt this template for your specific use case and build more sophisticated conversational agents.
+### Adding New Features
 
-LangGraph Studio also integrates with [LangSmith](https://smith.langchain.com/) for more in-depth tracing and collaboration with teammates, allowing you to analyze and optimize your chatbot's performance.
+- Modify graph workflows in respective graph files
+- Add database queries in `db.py`
+- Update vector search thresholds in graph files
 
+## Troubleshooting
+
+### Neo4j Connection Issues
+- Verify Neo4j is running: `neo4j status`
+- Check connection settings in `db.py`
+- Ensure database exists
+
+### Vector Index Issues
+- Indexes are created automatically on first run
+- Verify index creation in Neo4j browser
+- Check embedding model is available in Ollama
+
+### LLM Issues
+- Verify Google API key is set
+- Check API quota limits
+- Review error logs for specific failures
+
+## Documentation
+
+For detailed documentation, see:
+- [Architecture Documentation](../../docs/architecture/zettel.md)
+- [Setup Guide](../../docs/setup/zettel-setup.md)
+- [Usage Guide](../../docs/usage/zettel.md)
+
+## License
+
+See project root LICENSE file.

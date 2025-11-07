@@ -19,17 +19,27 @@
 -   **Curation Manager (`SQLite`):** A lightweight system that manages the queue for human-in-the-loop validation of entities and relationships, ensuring data quality.
 -   **LLM Service (`Ollama`):** Integrates with local language models via Ollama for all NLP tasks, ensuring privacy and control.
 -   **Obsidian Integration:** A service to resolve wiki-links within journal entries, connecting unstructured notes to the structured knowledge graph.
+-   **minerva-desktop (`Tauri + Next.js`):** A native desktop application for interacting with LangGraph agents, providing real-time chat, task management, and file operations.
+-   **minerva_agent (`LangGraph`):** A deep agent for Obsidian vault assistance, providing file operations, search capabilities, task planning, and subagent delegation.
+-   **zettel (`LangGraph`):** An agent system for processing book quotes and extracting atomic concepts (Zettels) using Zettelkasten methodology.
 
 ## 3. Architecture / Tech Stack
 
--   **Backend:** Python 3, FastAPI
+-   **Backend:** Python 3.12+, FastAPI
 -   **Orchestration:** Temporal.io
 -   **Databases:**
     -   **Primary:** Neo4j (Graph Database)
     -   **Curation Queue:** SQLite
--   **AI/ML:** Ollama for local LLM inference
+-   **AI/ML:** 
+    -   Ollama for local LLM inference (backend)
+    -   Google Gemini for agent reasoning (agents)
 -   **Infrastructure:** Docker, Docker Compose
--   **Frontend:** JavaScript-based Single Page Application (details in `frontend/`)
+-   **Frontend:** 
+    -   Vue.js SPA (legacy, in `frontend/`)
+    -   Next.js + Tauri desktop app (`minerva-desktop/`)
+-   **Agents:**
+    -   LangGraph for agent orchestration
+    -   deepagents for agent capabilities
 -   **Core Libraries:** Pydantic (data modeling), `dependency-injector` (DI)
 
 ## 4. Data Model / Entities
@@ -55,9 +65,13 @@ The knowledge graph consists of nodes and edges.
     -   Neo4j integration with a repository pattern for all major entity types.
     -   A working curation queue system.
     -   Basic Obsidian link resolution.
+    -   minerva-desktop: Native desktop application for agent interaction.
+    -   minerva_agent: Deep agent for Obsidian vault assistance.
+    -   zettel: Quote parsing and concept extraction agents.
 -   **In Progress / Planned:**
-    -   Development of the frontend interface for curation and graph visualization.
+    -   Enhanced graph visualization in desktop app.
     -   Refinement of LLM prompts for higher accuracy.
+    -   Advanced concept linking and relationship discovery.
 
 ## 6. Future Plans / Next Steps
 
