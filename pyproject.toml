@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "minerva-workspace"
-version = "0.1.0"
+version = "0.2.0"
 description = "Minerva workspace - managing backend and zettel projects"
 authors = ["aelgier <alexander.elgier@gmail.com>"]
 readme = "README.md"
