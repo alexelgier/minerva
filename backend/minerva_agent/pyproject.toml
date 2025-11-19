@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "minerva-agent"
-version = "0.0.1"
+version = "0.1.0"
 description = "Deep agent for Obsidian vault assistance"
 authors = ["Alex <alexander.elgier@gmail.com>"]
 readme = "README.md"
@@ -10,12 +10,12 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.14"
-langgraph = ">=1.0.0"
-langchain = ">=1.0.0"
-langchain-google-genai = "^3.0.0"
-deepagents = "*"
+langgraph = ">=1.0.3"
+langchain = ">=1.0.7"
+langchain-google-genai = ">=3.0.3"
+deepagents = ">=0.2.7"
 python-dotenv = ">=1.0.1"
-langgraph-api = ">=0.5.0"
+langgraph-api = ">=0.5.14"
 langgraph-cli = {version = "*", extras = ["inmem"]}
 
 [build-system]

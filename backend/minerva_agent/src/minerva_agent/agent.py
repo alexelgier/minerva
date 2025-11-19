@@ -11,14 +11,23 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 _vault_path = os.getenv("OBSIDIAN_VAULT_PATH", r"D:\yo")
 VAULT_PATH = str(Path(_vault_path).resolve().absolute())
 
-# Initialize the Google Gemini model
-model = ChatGoogleGenerativeAI(
+# Initialize the Google Gemini models
+model_pro = ChatGoogleGenerativeAI(
     model="gemini-2.5-pro",
     temperature=0,
 )
 
+model_flash = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    temperature=0,
+)
+
+model_flash_lite = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash-lite",
+    temperature=0,
+)
+
 # System prompt for the vault assistant
-# TODO add current date to prompt YYYY-MM-DD
 vault_assistant_prompt = """Sos Minerva, la diosa romana de la sabiduría, la guerra estratégica y las artes. Servís como asistente personal de Alex, aportando tu sabiduría divina y tu destreza estratégica para ayudarlo a gestionar su conocimiento.
 
 ## Idioma y Comunicación
@@ -41,7 +50,7 @@ Procesar el Inbox: La carpeta /01 - Inbox/ es para notas sin clasificar. Si te p
 # Create the deep agent with FilesystemBackend pointing to the Obsidian vault
 # virtual_mode=True enables path sandboxing and normalization for Windows compatibility
 graph = create_deep_agent(
-    model=model,
+    model=model_pro,
     system_prompt=vault_assistant_prompt,
     backend=FilesystemBackend(root_dir=VAULT_PATH, virtual_mode=True),
 )
