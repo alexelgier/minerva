@@ -36,7 +36,11 @@ LangGraph deep agent for Obsidian vault assistance with file operations, search,
 LangGraph agent system for processing book quotes and extracting atomic concepts using Zettelkasten methodology.
 
 **Location**: `backend/zettel/`  
-**Documentation**: [Zettel README](backend/zettel/README.md) | [Architecture](docs/architecture/zettel.md)
+**Documentation**: 
+- [Module README](backend/zettel/README.md) - Overview and quick start
+- [Module Documentation](backend/zettel/docs/) - Comprehensive API, architecture, developer guide, and workflows
+- [Architecture Overview](docs/architecture/zettel.md) - High-level architecture
+- [Usage Guide](docs/usage/zettel.md) - Usage examples
 
 ## Quick Start
 
@@ -98,6 +102,7 @@ See [Quick Start Guide](docs/setup/quick-start.md) for detailed instructions.
 - [Desktop Usage](docs/usage/minerva-desktop.md) - Using the desktop app
 - [Agent Usage](docs/usage/minerva-agent.md) - Working with agents
 - [Zettel Usage](docs/usage/zettel.md) - Processing quotes and concepts
+  - [Comprehensive Module Docs](backend/zettel/docs/) - Full API reference, architecture, developer guide, and workflows
 - [Integration Workflows](docs/usage/integration-workflows.md) - Multi-component workflows
 - [Common Use Cases](docs/usage/common-use-cases.md) - Real-world scenarios
 

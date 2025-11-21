@@ -1,417 +1,362 @@
 """
-Concept Analysis Graph - Extracts atomic Concepts (Zettels) from quotes.
+Concept Extraction Workflow - LangGraph Implementation
 
-This module implements a concept analysis system that:
-1. Loads existing Concepts from Neo4j
-2. Analyzes each quote to see if it fits existing Concepts
-3. Clusters unattributed quotes
-4. Proposes new atomic Concepts
+Implements the 3-phase concept extraction workflow:
+- Phase 1: LLM Self-Improvement Loop - Autonomous extraction and self-critique
+- Phase 2: Human Review Loop (HITL) - Human-guided refinement with feedback
+- Phase 3: Commit to Database and Obsidian - Persistence and file generation
 
-Follows LangGraph 1.0 patterns for state management and node functions.
+The workflow extracts atomic concepts (Zettels) from book quotes, performs
+duplicate detection, discovers relations, validates quality, and commits results
+to Neo4j and Obsidian.
+
+See Also:
+    - [API Reference](../docs/API.md) - Complete API documentation
+    - [Workflows Documentation](../docs/WORKFLOWS.md) - Detailed workflow documentation
+    - [Architecture Documentation](../docs/ARCHITECTURE.md) - Technical architecture
 """
 
 from __future__ import annotations
 
-import asyncio
+import operator
 from dataclasses import dataclass
-import math
-import os
-from typing import List, Dict, Optional, Any, Literal, Set
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_ollama import OllamaEmbeddings
-from langchain_neo4j import Neo4jVector
-from langchain_core.messages import SystemMessage, HumanMessage
-from pydantic import BaseModel, Field
-from minerva_models import Quote, Content
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional, Set
+from typing_extensions import TypedDict, Annotated
 
+from langchain.chat_models import init_chat_model
+from langchain_ollama import OllamaEmbeddings
+from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph
-from langgraph.runtime import Runtime
-from typing_extensions import TypedDict
+from langgraph.types import interrupt
+from pydantic import BaseModel, Field
+
+from minerva_models import Content, Concept, Quote
 
 from zettel_agent.db import (
     get_neo4j_connection_manager,
     find_content_by_uuid,
+    find_quotes_by_content,
     find_concept_by_uuid,
-    find_quote_by_uuid,
-    get_unprocessed_quotes,
     vector_search_concepts,
+    create_concept,
+    create_concept_relation,
+    create_supports_relation,
+    update_content_processed_date,
+    get_unprocessed_quotes_by_supports,
 )
+from zettel_agent.obsidian_utils import create_zettel_file
 
 
 # ============================================================================
-# Constants
+# State Schema
 # ============================================================================
 
-SIMILARITY_THRESHOLD = 0.7
-MAX_QUOTE_GROUP_SIZE = 10
-BATCH_SIZE = 50  # Process quotes in batches
+class ConceptExtractionState(TypedDict):
+    """State for concept extraction workflow."""
+    # Input
+    content_uuid: str
+    content: Optional[Content]
+    quotes: List[Quote]
+    user_suggestions: Optional[str]  # Freeform text suggestions for the extraction process
+    
+    # Processing state
+    phase: Literal["extraction", "human_review", "commit", "end"]
+    iteration_count: int
+    phase_1_iteration: int
+    phase_2_iteration: int
+    
+    # Extraction results (using Annotated with operator.add for accumulation)
+    candidate_concepts: Annotated[List[Dict], operator.add]
+    duplicate_detections: Annotated[List[Dict], operator.add]
+    novel_concepts: Annotated[List[Dict], operator.add]
+    existing_concepts_with_quotes: Annotated[List[Dict], operator.add]
+    relations: Annotated[List[Dict], operator.add]
+    
+    # Quality assessment
+    quality_assessment: Optional[Dict]
+    critique_log: Annotated[List[Dict], operator.add]
+    
+    # Human review
+    human_feedback: Optional[str]
+    human_approved: bool
+    
+    # Errors and warnings
+    errors: Annotated[List[str], operator.add]
+    warnings: Annotated[List[str], operator.add]
 
-# ============================================================================
-# Data Models
-# ============================================================================
-
-class QuoteAttribution(BaseModel):
-    """A quote attributed to an existing Concept."""
-    quote_uuid: str = Field(description="UUID of the quote")
-    concept_uuid: str = Field(description="UUID of the target Concept")
-    reasoning: str = Field(description="Why this quote supports this Concept")
-    confidence: float = Field(
-        description="Confidence score 0.0-1.0",
-        ge=0.0,
-        le=1.0
-    )
-
-
-class ConceptProposal(BaseModel):
-    """A proposed new Concept to be created."""
-    # Align with existing Concept model fields
-    name: str = Field(description="Concept name")
-    title: str = Field(description="Concise title for the atomic concept")
-    concept: str = Field(description="The atomic idea itself")
-    analysis: str = Field(description="Personal analysis and interpretation")
-    source: str = Field(description="Book title being processed")
-    summary_short: str = Field(description="Summary of the concept, max 30 words")
-    summary: str = Field(description="Detailed summary of the concept, max 100 words")
-    source_quote_uuids: List[str] = Field(description="UUIDs of supporting quotes")
-    reasoning: str = Field(description="Why these quotes form a coherent concept")
-
-
-class QuoteAnalysisResult(BaseModel):
-    """Result of analyzing a quote against existing Concepts."""
-    should_attribute: bool = Field(description="Should quote be attributed to existing Concept?")
-    concept_uuid: Optional[str] = Field(default=None, description="Target Concept UUID if attributing")
-    reasoning: str = Field(description="Reasoning for the decision")
-    confidence: float = Field(description="Confidence in decision", ge=0.0, le=1.0)
-
-
-# ============================================================================
-# LangGraph State Definition
-# ============================================================================
 
 @dataclass
 class InputState:
+    """Input state for the graph."""
     content_uuid: str
-
-class Context(TypedDict):
-    pass
-
-class State(TypedDict):
-    content_uuid: str
-    content: Content | None
-    processed_quote_uuids: Set[str]  # Track processed quotes by UUID
-    quote_attributions: List[QuoteAttribution]
-    concept_proposals: List[ConceptProposal]
-    analysis_complete: bool
-    iteration_count: int  # Add counter to prevent infinite loops
+    user_suggestions: Optional[str] = None  # Freeform text suggestions for the extraction process
 
 
 # ============================================================================
-# Utility Functions
+# Pydantic Models for LLM Structured Output
 # ============================================================================
 
-# Lazy initialization for vector stores
-_quote_vector = None
-_concept_vector = None
+class CandidateConcept(BaseModel):
+    """A candidate concept extracted from quotes."""
+    concept_id: str = Field(..., description="Temporary ID for tracking")
+    title: str = Field(..., description="Título del concepto en español")
+    concept: str = Field(..., description="Contenido del concepto")
+    analysis: str = Field(..., description="Análisis personal")
+    source_quote_ids: List[str] = Field(..., description="Quotes that formed this concept")
+    rationale: str = Field(..., description="Why this concept was extracted")
 
 
-async def _get_quote_vector():
-    """Get or initialize Neo4jVector for Quote search."""
-    global _quote_vector
-    print(f"[GET_QUOTE_VECTOR] Entry - _quote_vector is None: {_quote_vector is None}")
-    if _quote_vector is None:
-        print(f"[GET_QUOTE_VECTOR] Initializing quote vector store...")
-        connection_manager = get_neo4j_connection_manager()
-        print(f"[GET_QUOTE_VECTOR] Creating Neo4jVector for Quote with index: quote_embeddings_index")
-        _quote_vector = Neo4jVector.from_existing_index(
-            embedding=OllamaEmbeddings(model="mxbai-embed-large:latest"),
-            node_label="Quote",
-            index_name="quote_embeddings_index",
-            url=connection_manager.uri,
-            username=connection_manager.auth[0],
-            password=connection_manager.auth[1],
-            database="neo4j",
+class CandidateConceptsResponse(BaseModel):
+    """Response from Call 1.1a: Extract candidate concepts."""
+    candidate_concepts: List[CandidateConcept] = Field(..., description="List of candidate concepts")
+    unattributed_quotes: List[str] = Field(default_factory=list, description="Quotes that don't form any concept")
+    extraction_notes: str = Field(default="", description="Observations about the extraction process")
+
+
+class DuplicateDetection(BaseModel):
+    """Result of duplicate detection for a candidate concept."""
+    candidate_concept_id: str = Field(..., description="ID of the candidate concept")
+    is_duplicate: bool = Field(..., description="Is this a duplicate?")
+    existing_concept_uuid: Optional[str] = Field(None, description="UUID of existing concept if duplicate")
+    existing_concept_name: Optional[str] = Field(None, description="Name of existing concept if duplicate")
+    confidence: float = Field(..., description="Confidence in duplicate detection (0.0-1.0)", ge=0.0, le=1.0)
+    reasoning: str = Field(..., description="Explanation of why it's a duplicate or not")
+    quote_ids_to_transfer: List[str] = Field(..., description="Quotes to attribute to existing concept")
+
+
+class RelationQuery(BaseModel):
+    """A search query for finding relation candidates."""
+    query: str = Field(..., description="Search query text")
+
+
+class ConceptRelationQueries(BaseModel):
+    """Relation search queries for a concept."""
+    concept_id: str = Field(..., description="ID of the concept")
+    relation_queries: Dict[str, List[str]] = Field(..., description="Dict mapping relation types to query lists")
+
+
+class RelationQueriesResponse(BaseModel):
+    """Response from Call 1.1c: Generate relation search queries."""
+    concept_queries: List[ConceptRelationQueries] = Field(..., description="Queries for each concept")
+
+
+class ConceptRelation(BaseModel):
+    """A relation between concepts."""
+    target_concept_id: str = Field(..., description="Target concept ID (temp ID or UUID)")
+    target_is_novel: bool = Field(..., description="Is target a novel concept?")
+    relation_type: str = Field(..., description="Forward relation type")
+    explanation: str = Field(..., description="Why this relation exists")
+    confidence: float = Field(..., description="Confidence score (0.0-1.0)", ge=0.0, le=1.0)
+
+
+class ConceptRelationsResponse(BaseModel):
+    """Response from Call 1.1e: Create relations for a concept."""
+    target_concept_id: str = Field(..., description="ID of the concept for which relations are determined")
+    relations: List[ConceptRelation] = Field(..., description="List of relations")
+    relation_notes: str = Field(default="", description="Observations about relation creation")
+
+
+class QualityIssue(BaseModel):
+    """A quality issue identified in critique."""
+    concept_id: Optional[str] = Field(None, description="ID of concept with issue (if applicable)")
+    quote_id: Optional[str] = Field(None, description="ID of quote with issue (if applicable)")
+    issue: str = Field(..., description="Description of the issue")
+    severity: Literal["low", "medium", "high"] = Field(..., description="Severity of the issue")
+
+
+class QualityCriterion(BaseModel):
+    """Quality assessment for a single criterion."""
+    passes: bool = Field(..., description="Does this criterion pass?")
+    issues: List[QualityIssue] = Field(default_factory=list, description="List of issues")
+
+
+class QualityAssessment(BaseModel):
+    """Quality assessment from self-critique."""
+    atomicity: QualityCriterion = Field(..., description="Atomicity assessment")
+    distinctness: QualityCriterion = Field(..., description="Distinctness assessment")
+    quote_coverage: QualityCriterion = Field(..., description="Quote coverage assessment")
+    relation_accuracy: QualityCriterion = Field(..., description="Relation accuracy assessment")
+    language: QualityCriterion = Field(..., description="Language assessment")
+    edge_cases: QualityCriterion = Field(..., description="Edge cases assessment")
+
+
+class SelfCritiqueResponse(BaseModel):
+    """Response from Call 1.2: Self-critique."""
+    quality_assessment: QualityAssessment = Field(..., description="Quality assessment")
+    overall_passes: bool = Field(..., description="Does overall quality pass?")
+    critique_summary: str = Field(..., description="Overall assessment and key issues")
+    improvement_suggestions: List[str] = Field(..., description="Actionable improvement suggestions")
+
+
+class RefinedExtraction(BaseModel):
+    """Refined extraction from Call 1.3."""
+    novel_concepts: List[Dict] = Field(..., description="Refined novel concepts")
+    existing_concepts_with_quotes: List[Dict] = Field(..., description="Refined existing concepts with quotes")
+    relations: List[Dict] = Field(..., description="Refined relations")
+
+
+class RefinementResponse(BaseModel):
+    """Response from Call 1.3: Refinement."""
+    refined_extraction: RefinedExtraction = Field(..., description="Refined extraction")
+    refinement_notes: str = Field(..., description="Summary of refinement process and changes")
+
+
+class RevisedExtraction(BaseModel):
+    """Revised extraction from Call 2.3."""
+    novel_concepts: List[Dict] = Field(..., description="Revised novel concepts")
+    existing_concepts_with_quotes: List[Dict] = Field(..., description="Revised existing concepts with quotes")
+    relations: List[Dict] = Field(..., description="Revised relations")
+
+
+class FeedbackIncorporationResponse(BaseModel):
+    """Response from Call 2.3: Incorporate human feedback."""
+    revised_extraction: RevisedExtraction = Field(..., description="Revised extraction")
+    feedback_interpretation: str = Field(..., description="How the LLM interpreted the feedback")
+    unresolved_feedback: str = Field(default="", description="Any feedback that couldn't be addressed")
+    questions_for_human: str = Field(default="", description="Any clarifications needed")
+
+
+# ============================================================================
+# LLM Initialization
+# ============================================================================
+
+_llm_pro = None
+_llm_flash = None
+_embeddings = None
+
+
+async def _get_llm_pro():
+    """Get or initialize the Pro LLM for complicated calls."""
+    global _llm_pro
+    if _llm_pro is None:
+        _llm_pro = init_chat_model(
+            model="gemini-2.5-pro",
+            model_provider="google-genai",
+            temperature=0
         )
-        print(f"[GET_QUOTE_VECTOR] Quote vector store initialized successfully")
-    else:
-        print(f"[GET_QUOTE_VECTOR] Using existing quote vector store")
-    print(f"[GET_QUOTE_VECTOR] Exit - returning quote vector")
-    return _quote_vector
+    return _llm_pro
 
 
-async def _get_concept_vector():
-    """Get or initialize Neo4jVector for Concept search."""
-    global _concept_vector
-    print(f"[GET_CONCEPT_VECTOR] Entry - _concept_vector is None: {_concept_vector is None}")
-    if _concept_vector is None:
-        print(f"[GET_CONCEPT_VECTOR] Initializing concept vector store...")
-        connection_manager = get_neo4j_connection_manager()
-        print(f"[GET_CONCEPT_VECTOR] Creating Neo4jVector for Concept with index: concept_embeddings_index")
-        _concept_vector = Neo4jVector.from_existing_index(
-            embedding=OllamaEmbeddings(model="mxbai-embed-large:latest"),
-            node_label="Concept",
-            index_name="concept_embeddings_index",
-            url=connection_manager.uri,
-            username=connection_manager.auth[0],
-            password=connection_manager.auth[1],
-            database="neo4j",
+async def _get_llm_flash():
+    """Get or initialize the Flash LLM for simpler calls."""
+    global _llm_flash
+    if _llm_flash is None:
+        _llm_flash = init_chat_model(
+            model="gemini-2.5-flash",
+            model_provider="google-genai",
+            temperature=0
         )
-        print(f"[GET_CONCEPT_VECTOR] Concept vector store initialized successfully")
-    else:
-        print(f"[GET_CONCEPT_VECTOR] Using existing concept vector store")
-    print(f"[GET_CONCEPT_VECTOR] Exit - returning concept vector")
-    return _concept_vector
+    return _llm_flash
 
 
-async def get_quote_embedding(quote_uuid: str) -> List[float] | None:
-    """Get the embedding for a quote from Neo4j by UUID."""
-    print(f"[GET_QUOTE_EMBEDDING] Entry - quote_uuid: {quote_uuid}")
-    connection_manager = get_neo4j_connection_manager()
-    async with connection_manager.session() as session:
-        query = "MATCH (q:Quote {uuid: $uuid}) RETURN q.embedding as embedding"
-        print(f"[GET_QUOTE_EMBEDDING] Executing query for quote: {quote_uuid}")
-        result = await session.run(query, uuid=quote_uuid)
-        record = await result.single()
-        if record:
-            embedding = record.get("embedding")
-            embedding_len = len(embedding) if embedding else 0
-            print(f"[GET_QUOTE_EMBEDDING] Found embedding with {embedding_len} dimensions")
-            return embedding
-        else:
-            print(f"[GET_QUOTE_EMBEDDING] No embedding found for quote: {quote_uuid}")
-    print(f"[GET_QUOTE_EMBEDDING] Exit - returning None")
-    return None
-
-
-async def get_similar_quotes_for_seed(
-    seed_text: str,
-    content_uuid: str,
-    processed_uuids: Set[str],
-    limit: int = MAX_QUOTE_GROUP_SIZE,
-    threshold: float = SIMILARITY_THRESHOLD
-) -> List[Quote]:
-    """Get quotes similar to seed text using vector search, excluding processed ones."""
-    print(f"[GET_SIMILAR_QUOTES] Entry - seed_text preview: {seed_text[:50]}..., content_uuid: {content_uuid}, processed_count: {len(processed_uuids)}, limit: {limit}, threshold: {threshold}")
-    quote_vector = await _get_quote_vector()
-    connection_manager = get_neo4j_connection_manager()
-    
-    # Use similarity search - get more results than needed for filtering
-    print(f"[GET_SIMILAR_QUOTES] Performing vector similarity search with k={limit * 3}")
-    results = await quote_vector.asimilarity_search_with_relevance_scores(
-        seed_text,
-        k=limit * 3  # Get more, then filter
-    )
-    print(f"[GET_SIMILAR_QUOTES] Vector search returned {len(results)} results")
-    
-    # Filter by content_uuid, exclude processed, and apply threshold
-    similar_quotes = []
-    filtered_out_by_score = 0
-    filtered_out_by_processed = 0
-    filtered_out_by_content = 0
-    async with connection_manager.session() as session:
-        for idx, (doc, score) in enumerate(results):
-            print(f"[GET_SIMILAR_QUOTES] Processing result {idx+1}/{len(results)} - score: {score:.4f}")
-            
-            if score < threshold:
-                filtered_out_by_score += 1
-                print(f"[GET_SIMILAR_QUOTES]  -> Filtered out: score {score:.4f} < threshold {threshold}")
-                continue
-            
-            quote_uuid = doc.metadata.get('uuid')
-            if not quote_uuid or quote_uuid in processed_uuids:
-                filtered_out_by_processed += 1
-                print(f"[GET_SIMILAR_QUOTES]  -> Filtered out: already processed or no UUID (uuid: {quote_uuid})")
-                continue
-            
-            # Verify it's for this content
-            doc_content_uuid = doc.metadata.get('content_uuid')
-            if doc_content_uuid != content_uuid:
-                filtered_out_by_content += 1
-                print(f"[GET_SIMILAR_QUOTES]  -> Filtered out: content mismatch (doc: {doc_content_uuid} != expected: {content_uuid})")
-                continue
-            
-            # Get full quote object
-            print(f"[GET_SIMILAR_QUOTES]  -> Fetching quote object for UUID: {quote_uuid}")
-            quote = await find_quote_by_uuid(session, quote_uuid)
-            if quote:
-                similar_quotes.append(quote)
-                print(f"[GET_SIMILAR_QUOTES]  -> Added quote: {quote.text[:50]}... (similarity: {score:.4f})")
-            else:
-                print(f"[GET_SIMILAR_QUOTES]  -> Warning: Quote not found in DB for UUID: {quote_uuid}")
-            
-            if len(similar_quotes) >= limit:
-                print(f"[GET_SIMILAR_QUOTES] Reached limit of {limit} quotes, stopping")
-                break
-    
-    print(f"[GET_SIMILAR_QUOTES] Exit - Found {len(similar_quotes)} similar quotes (filtered: {filtered_out_by_score} by score, {filtered_out_by_processed} by processed, {filtered_out_by_content} by content)")
-    return similar_quotes
+async def _get_embeddings():
+    """Get or initialize embeddings."""
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = OllamaEmbeddings(model="mxbai-embed-large:latest")
+    return _embeddings
 
 
 # ============================================================================
-# LLM and Analysis Functions
+# Phase 1: LLM Self-Improvement Loop - Node Functions
 # ============================================================================
 
-# Lazy initialization for LLM
-_llm = None
-
-async def _get_llm():
-    """Get or initialize LLM for concept analysis."""
-    global _llm
-    print(f"[GET_LLM] Entry - _llm is None: {_llm is None}")
-    if _llm is None:
-        print(f"[GET_LLM] Initializing LLM with model: gemini-2.5-flash-lite, temperature: 0.3")
-        _llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-lite",
-            temperature=0.3  # Some creativity for analysis
-        )
-        print(f"[GET_LLM] LLM initialized successfully")
-    else:
-        print(f"[GET_LLM] Using existing LLM instance")
-    print(f"[GET_LLM] Exit - returning LLM")
-    return _llm
-
-
-def _format_concepts_for_prompt(concepts: List) -> str:
-    """Format Concepts for LLM prompt."""
-    lines = []
-    for i, concept in enumerate(concepts, 1):
-        lines.append(f"{i}. UUID: {concept.uuid}")
-        lines.append(f"   Title: {concept.title}")
-        lines.append(f"   Concept: {concept.concept}")
-        lines.append("")
-    return "\n".join(lines)
-
-
-async def analyze_quote_against_concepts(
-    quote: Quote,
-    threshold: float = 0.7
-) -> Optional[QuoteAnalysisResult]:
-    """
-    Analyze if a quote fits any existing Concept using vector search.
-    
-    Uses Neo4jVector to search for similar Concepts using the quote's existing
-    embedding from Neo4j, avoiding wasteful re-embedding.
-    """
-    print(f"[ANALYZE_QUOTE] Entry - quote_uuid: {quote.uuid}, quote preview: {quote.text[:50]}..., threshold: {threshold}")
-    
-    # Get quote embedding from Neo4j (already stored, don't regenerate)
-    print(f"[ANALYZE_QUOTE] Fetching quote embedding from Neo4j...")
-    quote_embedding = await get_quote_embedding(quote.uuid)
-    
-    # Use direct Cypher vector search for Concepts (most efficient)
-    # This leverages existing embeddings without re-embedding
+async def check_content_processed(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Check if content is already processed and exit early if so."""
+    content_uuid = state["content_uuid"]
     connection_manager = get_neo4j_connection_manager()
     
-    if not quote_embedding:
-        # Edge case: no embedding found, fall back to text-based search
-        print(f"[ANALYZE_QUOTE] Warning: No embedding found for quote {quote.uuid}, falling back to text search")
-        concept_vector = await _get_concept_vector()
-        print(f"[ANALYZE_QUOTE] Performing text-based similarity search for concepts...")
-        concept_docs = await concept_vector.asimilarity_search_with_relevance_scores(
-            quote.text,
-            k=5
-        )
-        print(f"[ANALYZE_QUOTE] Text search returned {len(concept_docs)} concept candidates")
-        # Convert to Concept objects
-        similar_concepts = []
-        async with connection_manager.session() as session:
-            for doc_idx, (doc, score) in enumerate(concept_docs):
-                print(f"[ANALYZE_QUOTE] Processing concept doc {doc_idx+1} - score: {score:.4f}")
-                if score < threshold:
-                    print(f"[ANALYZE_QUOTE]  -> Filtered out: score {score:.4f} < threshold {threshold}")
-                    continue
-                concept_uuid = doc.metadata.get('uuid')
-                print(f"[ANALYZE_QUOTE]  -> Fetching concept with UUID: {concept_uuid}")
-                if concept_uuid:
-                    concept = await find_concept_by_uuid(session, concept_uuid)
-                    if concept:
-                        similar_concepts.append(concept)
-                        print(f"[ANALYZE_QUOTE]  -> Added concept: {concept.title} (similarity: {score:.4f})")
-                    else:
-                        print(f"[ANALYZE_QUOTE]  -> Warning: Concept not found for UUID: {concept_uuid}")
-    else:
-        # Use existing embedding with direct Cypher query (most efficient)
-        print(f"[ANALYZE_QUOTE] Using existing embedding for vector search (embedding dim: {len(quote_embedding)})")
-        async with connection_manager.session() as session:
-            similar_concepts = await vector_search_concepts(
-                session=session,
-                query_embedding=quote_embedding,
-                limit=5,
-                threshold=threshold
-            )
-            print(f"[ANALYZE_QUOTE] Vector search returned {len(similar_concepts)} concepts above threshold")
-    
-    if not similar_concepts:
-        print(f"[ANALYZE_QUOTE] No similar concepts found - returning should_attribute=False")
-        return QuoteAnalysisResult(
-            should_attribute=False,
-            reasoning="No existing Concepts found",
-            confidence=1.0
-        )
-    
-    # Ask LLM if quote fits any of these Concepts using structured output
-    print(f"[ANALYZE_QUOTE] Found {len(similar_concepts)} similar concepts, invoking LLM...")
-    print(f"[ANALYZE_QUOTE] Similar concepts: {[c.title for c in similar_concepts]}")
-    llm = await _get_llm()
-    llm_with_output = llm.with_structured_output(QuoteAnalysisResult, method="json_schema")
-    
-    system_prompt = """You are a Zettelkasten expert analyzing whether a quote supports an existing atomic concept.
-
-An atomic concept (Zettel) should contain ONE clear idea. A quote supports a concept if it:
-- Provides evidence for the concept
-- Clarifies or elaborates the concept
-- Offers a complementary perspective
-- Contains an example of the concept
-
-A quote does NOT support a concept if it:
-- Introduces a completely different idea
-- Contradicts the concept
-- Is only tangentially related"""
-
-    user_prompt = f"""Quote to analyze:
-"{quote.text}"
-Section: {quote.section or 'N/A'}
-
-Existing Concepts (sorted by similarity):
-{_format_concepts_for_prompt(similar_concepts)}
-
-Does this quote support any of these existing Concepts?"""
-
     try:
-        print(f"[ANALYZE_QUOTE] Invoking LLM with structured output...")
-        print(f"[ANALYZE_QUOTE] Quote text length: {len(quote.text)} chars, concepts count: {len(similar_concepts)}")
-        result = await llm_with_output.ainvoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ])
-        print(f"[ANALYZE_QUOTE] LLM returned - should_attribute: {result.should_attribute}, confidence: {result.confidence:.4f}")
-        if result.should_attribute:
-            print(f"[ANALYZE_QUOTE]  -> Concept UUID: {result.concept_uuid}")
-            print(f"[ANALYZE_QUOTE]  -> Reasoning: {result.reasoning[:100]}...")
-        print(f"[ANALYZE_QUOTE] Exit - returning result")
-        return result
+        async with connection_manager.session() as session:
+            content = await find_content_by_uuid(session, content_uuid)
+            if not content:
+                return {
+                    "errors": [f"Content not found: {content_uuid}"],
+                    "phase": "end"
+                }
+            
+            # Check if processed_date is set (check for the field in the content object)
+            # Also check in the dict representation if it's a dict
+            processed_date = None
+            if hasattr(content, 'processed_date'):
+                processed_date = getattr(content, 'processed_date', None)
+            elif isinstance(content, dict):
+                processed_date = content.get('processed_date')
+            
+            if processed_date is not None:
+                return {
+                    "warnings": [f"Content already processed on {processed_date}"],
+                    "phase": "end"
+                }
+            
+            return {"content": content}
     except Exception as e:
-        print(f"[ANALYZE_QUOTE] [ERROR] Failed to get structured output: {e}")
-        print(f"[ANALYZE_QUOTE] [ERROR] Exception type: {type(e).__name__}")
-        import traceback
-        print(f"[ANALYZE_QUOTE] [ERROR] Traceback: {traceback.format_exc()}")
-        return QuoteAnalysisResult(
-            should_attribute=False,
-            reasoning=f"LLM error: {e}",
-            confidence=0.0
-        )
+        return {
+            "errors": [f"Error checking content: {str(e)}"],
+            "phase": "end"
+        }
 
 
-async def propose_concept_from_quotes(
-    quotes: List[Quote],
-    book_title: str
-) -> Optional[ConceptProposal]:
-    """Generate a Concept proposal from a cluster of quotes."""
-    print(f"[PROPOSAL] Entry - quotes count: {len(quotes)}, book_title: {book_title}")
-    print(f"[PROPOSAL] Quote UUIDs: {[q.uuid for q in quotes]}")
+async def load_content_quotes(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Load quotes for the content."""
+    content = state.get("content")
+    if not content:
+        return {"quotes": [], "errors": ["No content loaded"], "phase": "end"}
     
-    # Use structured output for better reliability
-    llm = await _get_llm()
-    llm_with_output = llm.with_structured_output(ConceptProposal, method="json_schema")
+    try:
+        connection_manager = get_neo4j_connection_manager()
+        async with connection_manager.session() as session:
+            quotes = await find_quotes_by_content(session, content.uuid)
+            
+            if not quotes:
+                return {
+                    "quotes": [],
+                    "warnings": ["No quotes found for content"],
+                    "phase": "end"
+                }
+            
+            return {
+                "quotes": quotes,
+                "phase": "extraction"
+            }
+    except Exception as e:
+        return {
+            "quotes": [],
+            "errors": [f"Error loading quotes: {str(e)}"],
+            "phase": "end"
+        }
+
+
+async def extract_candidate_concepts(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Call 1.1a: Extract candidate concepts with source quotes."""
+    quotes = state.get("quotes", [])
+    content = state.get("content")
+    
+    if not quotes:
+        return {
+            "candidate_concepts": [],
+            "warnings": ["No quotes to process"]
+        }
+    
+    llm = await _get_llm_pro()  # Complicated: requires understanding and synthesis
+    llm_structured = llm.with_structured_output(CandidateConceptsResponse, method="json_schema")
+    
+    # Format quotes for prompt
+    quotes_text = "\n\n".join([
+        f"Quote {i+1} (ID: {q.uuid}):\n\"{q.text}\""
+        for i, q in enumerate(quotes)
+    ])
+    
+    content_info = f"Title: {content.title if content else 'Unknown'}\n"
+    if content and hasattr(content, 'author') and content.author:
+        content_info += f"Author: {content.author}\n"
+    
+    # Get user suggestions if provided
+    user_suggestions = state.get("user_suggestions")
+    suggestions_text = ""
+    if user_suggestions:
+        suggestions_text = f"\n\nUser Suggestions for Extraction:\n{user_suggestions}\n\nPlease consider these suggestions when extracting concepts."
     
     system_prompt = """You are a Zettelkasten expert extracting atomic concepts from quotes.
 
@@ -424,642 +369,886 @@ An atomic concept (Zettel) should:
 - Include personal analysis and interpretation
 
 Guidelines:
-- Name: 3-8 words, captures the essence
 - Title: 3-8 words, captures the essence
 - Concept: 2-4 sentences explaining the core idea
 - Analysis: Your interpretation, significance, and connections to other ideas
-- Summary: Generated from concept + quotes context
-- Summary_short: Generated from concept + quotes context"""
+- Each concept should be linked to the quotes that formed it
 
-    quotes_text = "\n\n".join([
-        f"Quote {i+1} (uuid: {q.uuid}) (from {q.section or 'unknown section'}):\n\"{q.text}\""
-        for i, q in enumerate(quotes)
-    ])
+Extract all meaningful atomic concepts from the quotes provided."""
     
-    total_text_length = sum(len(q.text) for q in quotes)
-    print(f"[PROPOSAL] Total quotes text length: {total_text_length} chars")
+    user_prompt = f"""Content Information:
+{content_info}
     
-    user_prompt = f"""Extract an atomic concept from these related quotes:
+Quotes:
+{quotes_text}{suggestions_text}
 
-{quotes_text}
-
-Create a Concept that synthesizes the core idea across these quotes.
-Source should be: {book_title}"""
+Extract all meaningful atomic concepts from these quotes. Link each concept to the quote IDs that formed it."""
 
     try:
-        print(f"[PROPOSAL] Invoking LLM with structured output...")
-        print(f"[PROPOSAL] User prompt length: {len(user_prompt)} chars")
-        proposal = await llm_with_output.ainvoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ])
-        print(f"[PROPOSAL] LLM returned proposal successfully")
-        print(f"[PROPOSAL] Proposal name: {proposal.name}")
-        print(f"[PROPOSAL] Proposal title: {proposal.title}")
-        print(f"[PROPOSAL] Concept length: {len(proposal.concept)} chars")
-        print(f"[PROPOSAL] Analysis length: {len(proposal.analysis)} chars")
-        
-        # Add source UUIDs
-        proposal.source_quote_uuids = [q.uuid for q in quotes]
-        print(f"[PROPOSAL] Added {len(proposal.source_quote_uuids)} source quote UUIDs")
-        print(f"[PROPOSAL] Exit - returning proposal")
-        return proposal
-    except Exception as e:
-        print(f"[PROPOSAL] [ERROR] Failed to create proposal: {e}")
-        print(f"[PROPOSAL] [ERROR] Exception type: {type(e).__name__}")
-        import traceback
-        print(f"[PROPOSAL] [ERROR] Traceback: {traceback.format_exc()}")
-        return None
-
-
-async def find_best_proposal_match(
-    quote: Quote, 
-    concept_proposals: List[Dict[str, Any]]
-) -> Optional[Dict[str, Any]]:
-    """Find the best matching concept proposal for a quote using vector search first."""
-    print(f"[PROPOSAL_MATCH] Entry - quote_uuid: {quote.uuid}, proposals count: {len(concept_proposals)}")
-    
-    if not concept_proposals:
-        print(f"[PROPOSAL_MATCH] No proposals provided - returning None")
-        return None
-    
-    # Convert dict proposals to ConceptProposal objects for easier handling
-    proposal_objects = []
-    print(f"[PROPOSAL_MATCH] Converting {len(concept_proposals)} proposal dicts to objects...")
-    for prop_idx, prop_dict in enumerate(concept_proposals):
-        try:
-            proposal_objects.append(ConceptProposal(**prop_dict))
-            print(f"[PROPOSAL_MATCH]  -> Converted proposal {prop_idx+1}: {prop_dict.get('name', 'unknown')}")
-        except Exception as e:
-            print(f"[PROPOSAL_MATCH] Error converting proposal dict {prop_idx} to object: {e}")
-            continue
-    
-    if not proposal_objects:
-        print(f"[PROPOSAL_MATCH] No valid proposal objects after conversion - returning None")
-        return None
-    
-    print(f"[PROPOSAL_MATCH] Successfully converted {len(proposal_objects)} proposals")
-    
-    # Use vector similarity to find similar proposals first
-    # Get quote embedding from Neo4j (don't regenerate)
-    print(f"[PROPOSAL_MATCH] Fetching quote embedding...")
-    quote_embedding = await get_quote_embedding(quote.uuid)
-    if quote_embedding is None:
-        # Fallback: generate embedding if not found (edge case)
-        print(f"[PROPOSAL_MATCH] No quote embedding found, generating new embedding...")
-        embeddings = OllamaEmbeddings(model="mxbai-embed-large:latest")
-        quote_embedding = await embeddings.aembed_query(quote.text)
-        print(f"[PROPOSAL_MATCH] Generated embedding with {len(quote_embedding)} dimensions")
-    else:
-        print(f"[PROPOSAL_MATCH] Using existing embedding with {len(quote_embedding)} dimensions")
-        
-    similar_proposals = []
-    embeddings = OllamaEmbeddings(model="mxbai-embed-large:latest")
-    print(f"[PROPOSAL_MATCH] Computing similarity between quote and {len(proposal_objects)} proposals...")
-    for i, proposal in enumerate(proposal_objects):
-        print(f"[PROPOSAL_MATCH] Processing proposal {i+1}/{len(proposal_objects)}: {proposal.name}")
-        # Create embedding for proposal concept text
-        print(f"[PROPOSAL_MATCH]  -> Generating embedding for proposal concept (length: {len(proposal.concept)} chars)")
-        proposal_embedding = await embeddings.aembed_query(proposal.concept)
-            
-        # Calculate cosine similarity (pure Python)
-        dot_product = sum(x * y for x, y in zip(quote_embedding, proposal_embedding))
-        norm_quote = math.sqrt(sum(x * x for x in quote_embedding))
-        norm_proposal = math.sqrt(sum(x * x for x in proposal_embedding))
-        similarity = dot_product / (norm_quote * norm_proposal) if (norm_quote * norm_proposal) > 0 else 0.0
-        
-        print(f"[PROPOSAL_MATCH]  -> Similarity: {similarity:.4f} (threshold: 0.7)")
-        if similarity >= 0.7:  # Same threshold as existing concepts
-            similar_proposals.append((proposal, similarity, i))
-            print(f"[PROPOSAL_MATCH]  -> Added to similar proposals list")
-        else:
-            print(f"[PROPOSAL_MATCH]  -> Below threshold, skipping")
-    
-    # Sort by similarity
-    similar_proposals.sort(key=lambda x: x[1], reverse=True)
-    print(f"[PROPOSAL_MATCH] Found {len(similar_proposals)} proposals above similarity threshold")
-    
-    if not similar_proposals:
-        print(f"[PROPOSAL_MATCH] No similar proposals found - returning None")
-        return None
-    
-    # Only call LLM if we found similar proposals above threshold
-    print(f"[PROPOSAL_MATCH] Invoking LLM to validate best match...")
-    llm = await _get_llm()
-    llm_with_output = llm.with_structured_output(QuoteAnalysisResult, method="json_schema")
-    
-    system_prompt = """You are a Zettelkasten expert analyzing whether a quote supports a proposed atomic concept.
-
-A quote supports a proposed concept if it:
-- Provides evidence for the concept
-- Clarifies or elaborates the concept  
-- Offers a complementary perspective
-- Contains an example of the concept
-
-A quote does NOT support a proposed concept if it:
-- Introduces a completely different idea
-- Contradicts the concept
-- Is only tangentially related"""
-
-    proposals_text = "\n\n".join([
-        f"Proposal {i+1}: {proposal.name}\nConcept: {proposal.concept}\nQuotes: {len(proposal.source_quote_uuids)} quotes\nSimilarity: {similarity:.3f}"
-        for proposal, similarity, i in similar_proposals
-    ])
-
-    user_prompt = f"""Quote to analyze:
-"{quote.text}"
-Section: {quote.section or 'N/A'}
-
-Proposed Concepts (sorted by similarity):
-{proposals_text}
-
-Does this quote support any of these proposed Concepts? If yes, which one is the best match?"""
-
-    try:
-        print(f"[PROPOSAL_MATCH] Calling LLM with {len(similar_proposals)} proposals...")
-        result = await llm_with_output.ainvoke([
+        response = await llm_structured.ainvoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt)
         ])
         
-        print(f"[PROPOSAL_MATCH] LLM returned - should_attribute: {result.should_attribute}, confidence: {result.confidence:.4f}")
+        candidate_concepts_dicts = [c.model_dump() for c in response.candidate_concepts]
         
-        if result.should_attribute and result.confidence > 0.7:
-            # Return the best matching proposal (highest similarity)
-            best_proposal, best_similarity, best_idx = similar_proposals[0]
-            match_result = {
-                "proposal_idx": best_idx,
-                "confidence": result.confidence,
-                "reasoning": result.reasoning,
-                "similarity": best_similarity
-            }
-            print(f"[PROPOSAL_MATCH] Match found! Proposal idx: {best_idx}, name: {best_proposal.name}, similarity: {best_similarity:.4f}")
-            print(f"[PROPOSAL_MATCH] Exit - returning match result")
-            return match_result
-        else:
-            print(f"[PROPOSAL_MATCH] LLM rejected match (should_attribute: {result.should_attribute}, confidence: {result.confidence:.4f} <= 0.7)")
-        
-        print(f"[PROPOSAL_MATCH] Exit - returning None")
-        return None
+        return {
+            "candidate_concepts": candidate_concepts_dicts,
+            "warnings": response.unattributed_quotes if response.unattributed_quotes else []
+        }
     except Exception as e:
-        print(f"[PROPOSAL_MATCH] [ERROR] Error finding proposal match: {e}")
-        print(f"[PROPOSAL_MATCH] [ERROR] Exception type: {type(e).__name__}")
-        import traceback
-        print(f"[PROPOSAL_MATCH] [ERROR] Traceback: {traceback.format_exc()}")
-        return None
+        return {
+            "errors": [f"Failed to extract candidate concepts: {str(e)}"],
+            "candidate_concepts": []
+        }
 
 
-# ============================================================================
-# LangGraph Node Functions
-# ============================================================================
-
-async def ensure_indices(state: State, runtime: Runtime[Context]) -> Dict[str, Any]:
-    """Ensure indices are created for the concept analysis graph."""
-    print(f"[ENSURE_INDICES] Entry - node function called")
-    print(f"[ENSURE_INDICES] State keys: {list(state.keys())}")
-    print(f"[ENSURE_INDICES] content_uuid: {state.get('content_uuid')}")
+async def detect_duplicate_single(
+    candidate_concept: Dict[str, Any],
+    state: ConceptExtractionState
+) -> Dict[str, Any]:
+    """Call 1.1b: Detect duplicate for a single candidate concept (for parallel execution)."""
+    llm = await _get_llm_pro()  # Complicated: requires semantic understanding
+    llm_structured = llm.with_structured_output(DuplicateDetection, method="json_schema")
+    embeddings = await _get_embeddings()
     
+    # Generate embedding for candidate concept (use title + concept text)
+    concept_text = f"{candidate_concept.get('title', '')} {candidate_concept.get('concept', '')}"
+    concept_embedding = await embeddings.aembed_query(concept_text)
+    
+    # Search for similar concepts
     connection_manager = get_neo4j_connection_manager()
-    print(f"[ENSURE_INDICES] Got connection manager")
+    async with connection_manager.session() as session:
+        similar_concepts = await vector_search_concepts(
+            session, concept_embedding, limit=50, threshold=0.7
+        )
     
-    # Create vector indexes for Concept and Quote nodes
-    indexes_to_create = [
-        ("Concept", "concept_embeddings_index"),
-        ("Quote", "quote_embeddings_index"),
-    ]
+    if not similar_concepts:
+        return {
+            "duplicate_detections": [{
+                "candidate_concept_id": candidate_concept.get("concept_id"),
+                "is_duplicate": False,
+                "confidence": 1.0,
+                "reasoning": "No similar concepts found",
+                "quote_ids_to_transfer": candidate_concept.get("source_quote_ids", [])
+            }]
+        }
     
-    print(f"[ENSURE_INDICES] Creating {len(indexes_to_create)} vector indexes...")
+    # Format similar concepts for LLM
+    similar_concepts_text = "\n\n".join([
+        f"Concept {i+1} (UUID: {c.uuid}):\nTitle: {c.title}\nSummary: {c.summary_short}"
+        for i, c in enumerate(similar_concepts)
+    ])
+    
+    system_prompt = """You are a Zettelkasten expert determining if a candidate concept is a duplicate of an existing concept.
+
+A concept is a duplicate if it represents the SAME semantic idea as an existing concept, even if expressed differently.
+A concept is NOT a duplicate if it represents a distinct idea, even if related.
+
+Consider semantic equivalence, not just textual similarity."""
+    
+    user_prompt = f"""Candidate Concept:
+Title: {candidate_concept.get('title')}
+Concept: {candidate_concept.get('concept')}
+Analysis: {candidate_concept.get('analysis', '')}
+
+Similar Existing Concepts:
+{similar_concepts_text}
+
+Is the candidate concept a duplicate of any existing concept? If yes, which one?"""
+    
+    try:
+        response = await llm_structured.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
+        
+        result = response.model_dump()
+        result["candidate_concept_id"] = candidate_concept.get("concept_id")
+        result["quote_ids_to_transfer"] = candidate_concept.get("source_quote_ids", [])
+        
+        return {"duplicate_detections": [result]}
+    except Exception as e:
+        return {
+            "errors": [f"Failed to detect duplicate for {candidate_concept.get('concept_id')}: {str(e)}"],
+            "duplicate_detections": [{
+                "candidate_concept_id": candidate_concept.get("concept_id"),
+                "is_duplicate": False,
+                "confidence": 0.0,
+                "reasoning": f"Error: {str(e)}",
+                "quote_ids_to_transfer": candidate_concept.get("source_quote_ids", [])
+            }]
+        }
+
+
+async def detect_duplicates_all(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Detect duplicates for all candidate concepts (sequential for now, can be parallelized)."""
+    candidate_concepts = state.get("candidate_concepts", [])
+    
+    if not candidate_concepts:
+        return {
+            "novel_concepts": [],
+            "existing_concepts_with_quotes": []
+        }
+    
+    # Detect duplicates for each candidate (sequential for now)
+    all_detections = []
+    for candidate in candidate_concepts:
+        result = await detect_duplicate_single(candidate, state)
+        detections = result.get("duplicate_detections", [])
+        all_detections.extend(detections)
+    
+    # Separate novel concepts from duplicates
+    candidate_map = {c.get("concept_id"): c for c in candidate_concepts}
+    novel_concepts = []
+    existing_concepts_with_quotes = []
+    
+    for detection in all_detections:
+        candidate_id = detection.get("candidate_concept_id")
+        candidate = candidate_map.get(candidate_id)
+        
+        if not candidate:
+            continue
+        
+        if detection.get("is_duplicate", False):
+            # Add to existing concepts with quotes
+            existing_concepts_with_quotes.append({
+                "concept_uuid": detection.get("existing_concept_uuid"),
+                "concept_name": detection.get("existing_concept_name"),
+                "quote_ids": detection.get("quote_ids_to_transfer", [])
+            })
+        else:
+            # Add to novel concepts
+            novel_concepts.append(candidate)
+    
+    return {
+        "novel_concepts": novel_concepts,
+        "existing_concepts_with_quotes": existing_concepts_with_quotes,
+        "duplicate_detections": all_detections
+    }
+
+
+async def generate_relation_queries(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Call 1.1c: Generate relation search queries for novel concepts."""
+    novel_concepts = state.get("novel_concepts", [])
+    
+    if not novel_concepts:
+        return {"relation_queries": []}
+    
+    llm = await _get_llm_flash()  # Simple: just generating search queries
+    llm_structured = llm.with_structured_output(RelationQueriesResponse, method="json_schema")
+    
+    # Format novel concepts
+    concepts_text = "\n\n".join([
+        f"Concept {i+1} (ID: {c.get('concept_id')}):\nTitle: {c.get('title')}\nConcept: {c.get('concept')}"
+        for i, c in enumerate(novel_concepts)
+    ])
+    
+    relation_types_desc = """
+- GENERALIZES: General concept that encompasses specific instances
+- SPECIFIC_OF: Specific instance of a general concept
+- PART_OF: Component that belongs to a larger system
+- HAS_PART: System that contains components
+- OPPOSES: Concepts in direct opposition
+- SIMILAR_TO: Concepts that are related but distinct
+- RELATES_TO: General relationship (catchall)
+- SUPPORTS: Usually not used for concept-to-concept
+- SUPPORTED_BY: Usually not used for concept-to-concept
+"""
+    
+    system_prompt = """You are a Zettelkasten expert generating semantic search queries to find related concepts.
+
+Generate 2 search queries per relation type for each concept. Queries should be in Spanish and designed to find concepts that might have the specified relation type."""
+    
+    user_prompt = f"""Novel Concepts:
+{concepts_text}
+
+Relation Types:
+{relation_types_desc}
+
+Generate 2 search queries per relation type for each novel concept. Focus on finding concepts that might relate to each novel concept."""
+    
+    try:
+        response = await llm_structured.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
+        
+        return {"relation_queries": [q.model_dump() for q in response.concept_queries]}
+    except Exception as e:
+        return {
+            "errors": [f"Failed to generate relation queries: {str(e)}"],
+            "relation_queries": []
+        }
+
+
+async def search_relation_candidates(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Call 1.1d: Semantic search for relation candidates (vector search, not LLM)."""
+    relation_queries = state.get("relation_queries", [])
+    
+    if not relation_queries:
+        return {"relation_candidates": []}
+    
+    embeddings = await _get_embeddings()
+    connection_manager = get_neo4j_connection_manager()
+    
+    all_candidates = {}  # UUID -> concept dict
     
     async with connection_manager.session() as session:
-        for idx, (label, index_name) in enumerate(indexes_to_create):
-            print(f"[ENSURE_INDICES] Processing index {idx+1}/{len(indexes_to_create)}: {index_name} for label {label}")
-            try:
-                # Create vector index with 1024 dimensions and cosine similarity
-                query = f"""
-                CREATE VECTOR INDEX {index_name} IF NOT EXISTS
-                FOR (n:{label}) ON (n.embedding)
-                OPTIONS {{
-                    indexConfig: {{
-                        `vector.dimensions`: 1024,
-                        `vector.similarity_function`: 'cosine'
-                    }}
-                }}
-                """
-                print(f"[ENSURE_INDICES] Executing CREATE INDEX query for {index_name}...")
-                result = await session.run(query)
-                await result.consume()  # Ensure query completes
-                print(f"[ENSURE_INDICES] Created/verified index: {index_name} for label: {label}")
-            except Exception as e:
-                print(f"[ENSURE_INDICES] Warning: Failed to create index {index_name}: {e}")
-                print(f"[ENSURE_INDICES] Exception type: {type(e).__name__}")
-                import traceback
-                print(f"[ENSURE_INDICES] Traceback: {traceback.format_exc()}")
+        for concept_queries in relation_queries:
+            relation_queries_dict = concept_queries.get("relation_queries", {})
+            for relation_type, queries in relation_queries_dict.items():
+                for query_text in queries:
+                    # Generate embedding for query
+                    query_embedding = await embeddings.aembed_query(query_text)
+                    
+                    # Search for concepts
+                    similar_concepts = await vector_search_concepts(
+                        session, query_embedding, limit=10, threshold=0.7
+                    )
+                    
+                    # Add to candidates pool
+                    for concept in similar_concepts:
+                        if concept.uuid not in all_candidates:
+                            all_candidates[concept.uuid] = {
+                                "concept_uuid": concept.uuid,
+                                "title": concept.title,
+                                "summary_short": concept.summary_short
+                            }
     
-    print(f"[ENSURE_INDICES] Index creation complete")
-    print(f"[ENSURE_INDICES] Exit - returning empty dict")
+    return {"relation_candidates": list(all_candidates.values())}
+
+
+async def create_relations_all(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Create relations for all novel concepts (sequential for now, can be parallelized)."""
+    novel_concepts = state.get("novel_concepts", [])
+    relation_candidates = state.get("relation_candidates", [])
+    
+    if not novel_concepts:
+        return {"relations": []}
+    
+    all_relations = []
+    
+    for novel_concept in novel_concepts:
+        # Get other novel concepts (exclude current)
+        other_novels = [c for c in novel_concepts if c.get("concept_id") != novel_concept.get("concept_id")]
+        
+        # Create relations for this concept
+        result = await create_relations_single(
+            novel_concept, other_novels, relation_candidates, state
+        )
+        relations = result.get("relations", [])
+        all_relations.extend(relations)
+    
+    return {"relations": all_relations}
+
+
+async def create_relations_single(
+    novel_concept: Dict[str, Any],
+    other_novel_concepts: List[Dict[str, Any]],
+    relation_candidates: List[Dict[str, Any]],
+    state: ConceptExtractionState
+) -> Dict[str, Any]:
+    """Call 1.1e: Create relations for a single novel concept (for parallel execution)."""
+    llm = await _get_llm_pro()  # Complicated: requires understanding relationships
+    llm_structured = llm.with_structured_output(ConceptRelationsResponse, method="json_schema")
+    
+    # Format other novel concepts
+    other_novels_text = "\n\n".join([
+        f"Novel Concept {i+1} (ID: {c.get('concept_id')}):\nTitle: {c.get('title')}\nConcept: {c.get('concept')}"
+        for i, c in enumerate(other_novel_concepts)
+    ]) if other_novel_concepts else "None"
+    
+    # Format relation candidates
+    candidates_text = "\n\n".join([
+        f"Candidate {i+1} (UUID: {c.get('concept_uuid')}):\nTitle: {c.get('title')}\nSummary: {c.get('summary_short')}"
+        for i, c in enumerate(relation_candidates)
+    ]) if relation_candidates else "None"
+    
+    relation_types_desc = """
+- GENERALIZES: General concept that encompasses specific instances
+- SPECIFIC_OF: Specific instance of a general concept
+- PART_OF: Component that belongs to a larger system
+- HAS_PART: System that contains components
+- OPPOSES: Concepts in direct opposition
+- SIMILAR_TO: Concepts that are related but distinct
+- RELATES_TO: General relationship (catchall)
+"""
+    
+    system_prompt = """You are a Zettelkasten expert determining relations between concepts.
+
+Determine which relations should exist for the target concept, considering both other novel concepts and existing concept candidates."""
+    
+    user_prompt = f"""Target Novel Concept:
+ID: {novel_concept.get('concept_id')}
+Title: {novel_concept.get('title')}
+Concept: {novel_concept.get('concept')}
+Analysis: {novel_concept.get('analysis', '')}
+
+Other Novel Concepts:
+{other_novels_text}
+
+Existing Concept Candidates:
+{candidates_text}
+
+Relation Types:
+{relation_types_desc}
+
+Determine which relations should exist for the target concept."""
+    
+    try:
+        response = await llm_structured.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
+        
+        result = response.model_dump()
+        result["target_concept_id"] = novel_concept.get("concept_id")
+        
+        return {"relations": [result]}
+    except Exception as e:
+                return {
+            "errors": [f"Failed to create relations for {novel_concept.get('concept_id')}: {str(e)}"],
+            "relations": []
+        }
+
+
+async def self_critique(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Call 1.2: Self-critique against quality checklist."""
+    novel_concepts = state.get("novel_concepts", [])
+    existing_concepts_with_quotes = state.get("existing_concepts_with_quotes", [])
+    relations = state.get("relations", [])
+    quotes = state.get("quotes", [])
+    phase_1_iteration = state.get("phase_1_iteration", 0)
+    
+    llm = await _get_llm_pro()  # Complicated: requires deep analysis
+    llm_structured = llm.with_structured_output(SelfCritiqueResponse, method="json_schema")
+    
+    # Format extraction results
+    novel_concepts_text = "\n\n".join([
+        f"Concept {i+1} (ID: {c.get('concept_id')}):\nTitle: {c.get('title')}\nConcept: {c.get('concept')}\nAnalysis: {c.get('analysis', '')}"
+        for i, c in enumerate(novel_concepts)
+    ]) if novel_concepts else "None"
+    
+    # Get user suggestions if provided
+    user_suggestions = state.get("user_suggestions")
+    suggestions_text = ""
+    if user_suggestions:
+        suggestions_text = f"\n\nUser Suggestions:\n{user_suggestions}\n\nConsider these suggestions when evaluating the extraction quality."
+    
+    system_prompt = """You are a Zettelkasten expert critiquing concept extraction quality.
+
+Evaluate the extraction against these criteria:
+1. Atomicity: Each concept contains ONE clear, standalone idea
+2. Distinctness: New concepts are semantically distinct from existing concepts
+3. Quote Coverage: All meaningful quotes are attributed to at least one concept
+4. Relation Accuracy: Relations are semantically correct and meaningful
+5. Language: All concepts are in Spanish
+6. Edge Cases: Unattributed quotes, disconnected concepts are properly noted"""
+    
+    user_prompt = f"""Novel Concepts:
+{novel_concepts_text}
+
+Existing Concepts with Quotes:
+{len(existing_concepts_with_quotes)} existing concepts have new quote attributions
+
+Relations:
+{len(relations)} relations created
+
+Total Quotes: {len(quotes)}{suggestions_text}
+
+Critique the extraction against the quality checklist."""
+    
+    try:
+        response = await llm_structured.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
+        
+        critique_dict = response.model_dump()
+        
+        return {
+            "quality_assessment": critique_dict,
+            "critique_log": [critique_dict],
+            "phase_1_iteration": phase_1_iteration + 1
+        }
+    except Exception as e:
+        return {
+            "errors": [f"Failed to perform self-critique: {str(e)}"],
+            "quality_assessment": None,
+            "phase_1_iteration": phase_1_iteration + 1
+        }
+
+
+async def refine_extraction(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Call 1.3: Refine extraction based on self-critique."""
+    novel_concepts = state.get("novel_concepts", [])
+    existing_concepts_with_quotes = state.get("existing_concepts_with_quotes", [])
+    relations = state.get("relations", [])
+    quality_assessment = state.get("quality_assessment")
+    critique_log = state.get("critique_log", [])
+    phase_1_iteration = state.get("phase_1_iteration", 0)
+    
+    if not quality_assessment:
+        return {
+            "phase_1_iteration": phase_1_iteration + 1
+        }  # No refinement needed if no critique
+    
+    llm = await _get_llm_pro()  # Complicated: requires synthesis and improvement
+    llm_structured = llm.with_structured_output(RefinementResponse, method="json_schema")
+    
+    # Get user suggestions if provided
+    user_suggestions = state.get("user_suggestions")
+    suggestions_text = ""
+    if user_suggestions:
+        suggestions_text = f"\n\nUser Suggestions:\n{user_suggestions}\n\nPlease incorporate these suggestions when refining the extraction."
+    
+    # Format current extraction
+    extraction_text = f"""Current Novel Concepts: {len(novel_concepts)}
+Current Relations: {len(relations)}
+Current Existing Concepts with Quotes: {len(existing_concepts_with_quotes)}
+
+Quality Assessment:
+{quality_assessment.get('critique_summary', '') if isinstance(quality_assessment, dict) else str(quality_assessment)}"""
+    
+    system_prompt = """You are a Zettelkasten expert refining concept extraction based on critique.
+
+Address all issues from the critique comprehensively. Update concepts, relations, and quote attributions as needed."""
+    
+    user_prompt = f"""Current Extraction:
+{extraction_text}{suggestions_text}
+
+Refine the extraction to address all issues from the critique."""
+    
+    try:
+        response = await llm_structured.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
+        
+        refined = response.refined_extraction
+        
+        return {
+            "novel_concepts": refined.novel_concepts,
+            "existing_concepts_with_quotes": refined.existing_concepts_with_quotes,
+            "relations": refined.relations,
+            "phase_1_iteration": phase_1_iteration + 1
+        }
+    except Exception as e:
+        return {
+            "errors": [f"Failed to refine extraction: {str(e)}"],
+            "phase_1_iteration": phase_1_iteration + 1
+        }
+
+
+# ============================================================================
+# Phase 2: Human Review Loop - Node Functions
+# ============================================================================
+
+async def present_for_review(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Step 2.1: Present comprehensive report and interrupt for human review."""
+    novel_concepts = state.get("novel_concepts", [])
+    existing_concepts_with_quotes = state.get("existing_concepts_with_quotes", [])
+    relations = state.get("relations", [])
+    critique_log = state.get("critique_log", [])
+    
+    # Generate comprehensive report
+    report = {
+        "new_concepts": novel_concepts,
+        "relations": relations,
+        "existing_concepts_with_quotes": existing_concepts_with_quotes,
+        "critique_log": critique_log
+    }
+    
+    # Interrupt for human review
+    interrupt({
+        "action": "human_review",
+        "report": report,
+        "extraction_summary": f"{len(novel_concepts)} novel concepts, {len(relations)} relations"
+    })
+    
     return {}
 
 
-async def load_content_and_quotes(state: State, runtime: Runtime[Context]) -> Dict[str, Any]:
-    """Load content and initialize quote tracking."""
-    print(f"[LOAD_DATA] Entry - node function called")
-    print(f"[LOAD_DATA] State keys: {list(state.keys())}")
-    print(f"[LOAD_DATA] Starting to load content")
-    content_uuid = state["content_uuid"]
-    print(f"[LOAD_DATA] Content UUID: {content_uuid}")
+async def incorporate_feedback(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Call 2.3: Incorporate human feedback."""
+    human_feedback = state.get("human_feedback")
+    novel_concepts = state.get("novel_concepts", [])
+    existing_concepts_with_quotes = state.get("existing_concepts_with_quotes", [])
+    relations = state.get("relations", [])
+    phase_2_iteration = state.get("phase_2_iteration", 0)
     
-    connection_manager = get_neo4j_connection_manager()
-    print(f"[LOAD_DATA] Got connection manager")
+    if not human_feedback:
+        return {
+            "phase_2_iteration": phase_2_iteration + 1
+        }  # No feedback to incorporate
+    
+    llm = await _get_llm_pro()  # Complicated: requires understanding and applying feedback
+    llm_structured = llm.with_structured_output(FeedbackIncorporationResponse, method="json_schema")
+    
+    extraction_text = f"""Novel Concepts: {len(novel_concepts)}
+Relations: {len(relations)}
+Existing Concepts with Quotes: {len(existing_concepts_with_quotes)}"""
+    
+    system_prompt = """You are a Zettelkasten expert incorporating human feedback into concept extraction.
+
+Update the extraction based on human feedback. Human intent takes precedence over quality checklist."""
+    
+    user_prompt = f"""Current Extraction:
+{extraction_text}
+
+Human Feedback:
+{human_feedback}
+
+Incorporate the feedback into the extraction."""
     
     try:
-        async with connection_manager.session() as session:
-            # Fetch content
-            print(f"[LOAD_DATA] Opening database session...")
-            print(f"[LOAD_DATA] Fetching content from database...")
-            content = await find_content_by_uuid(session, content_uuid)
-            if not content:
-                print(f"[LOAD_DATA] Content not found for UUID: {content_uuid}")
-                print(f"[LOAD_DATA] Exit - returning with analysis_complete=True")
-                return {
-                    "content": None,
-                    "analysis_complete": True
-                }
-            
-            print(f"[LOAD_DATA] Found content: {content.title}")
-            print(f"[LOAD_DATA] Content UUID: {content.uuid}")
-            print(f"[LOAD_DATA] Content type: {type(content).__name__}")
-            print(f"[LOAD_DATA] Initializing processed_quote_uuids as empty set")
-            
-            result = {
-                "content": content,
-                "processed_quote_uuids": set()  # Start with empty set
-            }
-            print(f"[LOAD_DATA] Exit - returning result with content and empty processed set")
-            return result
+        response = await llm_structured.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
         
+        revised = response.revised_extraction
+        
+        return {
+            "novel_concepts": revised.novel_concepts,
+            "existing_concepts_with_quotes": revised.existing_concepts_with_quotes,
+            "relations": revised.relations,
+            "phase_2_iteration": phase_2_iteration + 1
+        }
     except Exception as e:
-        print(f"[LOAD_DATA] [ERROR] Error fetching data from database: {e}")
-        print(f"[LOAD_DATA] [ERROR] Exception type: {type(e).__name__}")
-        import traceback
-        print(f"[LOAD_DATA] [ERROR] Traceback: {traceback.format_exc()}")
-        print(f"[LOAD_DATA] Exit - returning error result")
         return {
-            "content": None,
-            "analysis_complete": True
+            "errors": [f"Failed to incorporate feedback: {str(e)}"],
+            "phase_2_iteration": phase_2_iteration + 1
         }
 
-async def attribute_quotes_to_existing_concepts(state: State, runtime: Runtime[Context]) -> Dict[str, Any]:
-    """Attribute unprocessed quotes to existing concepts and proposed concepts."""
-    print(f"[ATTRIBUTE] Entry - node function called")
-    print(f"[ATTRIBUTE] State keys: {list(state.keys())}")
-    
+
+# ============================================================================
+# Phase 3: Commit to Database - Node Functions
+# ============================================================================
+
+async def create_concepts_db(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Step 3.1: Create Concept nodes in database."""
+    novel_concepts = state.get("novel_concepts", [])
     content = state.get("content")
-    existing_attributions = state.get("quote_attributions", [])
-    concept_proposals = state.get("concept_proposals", [])
-    processed_uuids = state.get("processed_quote_uuids", set())
-    iteration_count = state.get("iteration_count", 0)
     
-    print(f"[ATTRIBUTE] Current state:")
-    print(f"[ATTRIBUTE]  - content: {content.title if content else None}")
-    print(f"[ATTRIBUTE]  - existing_attributions count: {len(existing_attributions)}")
-    print(f"[ATTRIBUTE]  - concept_proposals count: {len(concept_proposals)}")
-    print(f"[ATTRIBUTE]  - processed_uuids count: {len(processed_uuids)}")
-    print(f"[ATTRIBUTE]  - iteration_count: {iteration_count}")
+    if not novel_concepts:
+        return {"created_concept_uuids": []}
     
-    if not content:
-        print(f"[ATTRIBUTE] No content found - marking analysis as complete")
-        return {
-            "quote_attributions": existing_attributions,
-            "analysis_complete": True
-        }
-    
-    # Get batch of unprocessed quotes
-    print(f"[ATTRIBUTE] Fetching unprocessed quotes (batch size: {BATCH_SIZE}, excluding {len(processed_uuids)} processed)")
     connection_manager = get_neo4j_connection_manager()
+    created_uuids = []
+    
     async with connection_manager.session() as session:
-        unprocessed_quotes = await get_unprocessed_quotes(
-            session,
-            content.uuid,
-            list(processed_uuids),
-            limit=BATCH_SIZE
-        )
-    
-    print(f"[ATTRIBUTE] Retrieved {len(unprocessed_quotes)} unprocessed quotes")
-    
-    if not unprocessed_quotes:
-        print(f"[ATTRIBUTE] No unprocessed quotes remaining - marking analysis as complete")
-        return {
-            "quote_attributions": existing_attributions,
-            "analysis_complete": True
-        }
-    
-    print(f"[ATTRIBUTE] Processing {len(unprocessed_quotes)} quotes...")
-    print(f"[ATTRIBUTE] Quote UUIDs to process: {[q.uuid for q in unprocessed_quotes]}")
-    
-    # Analyze each quote
-    new_attributions = []
-    newly_processed_uuids = set()
-    matched_existing = 0
-    matched_proposal = 0
-    unmatched = 0
-    
-    for quote_idx, quote in enumerate(unprocessed_quotes):
-        print(f"[ATTRIBUTE] Processing quote {quote_idx+1}/{len(unprocessed_quotes)}: {quote.uuid}")
-        print(f"[ATTRIBUTE]  -> Quote preview: {quote.text[:80]}...")
-        
-        # First try existing concepts
-        print(f"[ATTRIBUTE]  -> Step 1: Checking against existing concepts...")
-        attribution = await analyze_quote_against_concepts(quote)
-        
-        if attribution and attribution.should_attribute:
-            # Found match with existing concept
-            print(f"[ATTRIBUTE]  -> ✓ Matched existing concept: {attribution.concept_uuid}")
-            print(f"[ATTRIBUTE]  ->   Confidence: {attribution.confidence:.4f}")
-            print(f"[ATTRIBUTE]  ->   Reasoning: {attribution.reasoning[:80]}...")
-            new_attributions.append(QuoteAttribution(
-                quote_uuid=quote.uuid,
-                concept_uuid=attribution.concept_uuid,
-                reasoning=attribution.reasoning,
-                confidence=attribution.confidence
-            ))
-            newly_processed_uuids.add(quote.uuid)
-            matched_existing += 1
-        else:
-            # Try proposed concepts
-            print(f"[ATTRIBUTE]  -> Step 2: Checking against {len(concept_proposals)} proposed concepts...")
-            best_proposal_match = await find_best_proposal_match(quote, concept_proposals)
+        for concept_dict in novel_concepts:
+            # Create Concept object
+            from minerva_models import EntityType, PartitionType
             
-            if best_proposal_match:
-                # Add quote to existing proposal
-                proposal_idx = best_proposal_match["proposal_idx"]
-                proposal_name = concept_proposals[proposal_idx].get("name", "unknown")
-                print(f"[ATTRIBUTE]  -> ✓ Matched proposal {proposal_idx}: {proposal_name}")
-                print(f"[ATTRIBUTE]  ->   Confidence: {best_proposal_match['confidence']:.4f}")
-                print(f"[ATTRIBUTE]  ->   Similarity: {best_proposal_match['similarity']:.4f}")
-                concept_proposals[proposal_idx]["source_quote_uuids"].append(quote.uuid)
-                newly_processed_uuids.add(quote.uuid)
-                matched_proposal += 1
-            else:
-                print(f"[ATTRIBUTE]  -> ✗ No match found - quote remains unprocessed")
-                unmatched += 1
-            # If no match, quote remains unprocessed (not added to processed_uuids)
+            concept = Concept(
+                partition=PartitionType.DOMAIN,
+                name=concept_dict.get("title", ""),
+                title=concept_dict.get("title", ""),
+                concept=concept_dict.get("concept", ""),
+                analysis=concept_dict.get("analysis", ""),
+                source=content.title if content else "",
+                summary_short=concept_dict.get("title", "")[:100],  # Simplified
+                summary=concept_dict.get("concept", "")[:500]  # Simplified
+            )
+            
+            # Create in database
+            concept_uuid = await create_concept(session, concept)
+            created_uuids.append({
+                "temp_id": concept_dict.get("concept_id"),
+                "uuid": concept_uuid
+            })
     
-    print(f"[ATTRIBUTE] Processing summary:")
-    print(f"[ATTRIBUTE]  - Matched existing concepts: {matched_existing}")
-    print(f"[ATTRIBUTE]  - Matched proposals: {matched_proposal}")
-    print(f"[ATTRIBUTE]  - Unmatched: {unmatched}")
-    
-    # Combine existing and new attributions
-    all_attributions = existing_attributions + [attr.model_dump() for attr in new_attributions]
-    print(f"[ATTRIBUTE] Total attributions: {len(all_attributions)} (was {len(existing_attributions)}, added {len(new_attributions)})")
-    
-    # Update processed UUIDs
-    updated_processed = processed_uuids | newly_processed_uuids
-    print(f"[ATTRIBUTE] Updated processed UUIDs: {len(updated_processed)} (was {len(processed_uuids)}, added {len(newly_processed_uuids)})")
-    
-    # Also add quotes that are in proposals to processed set
-    proposal_uuids = {uuid for prop in concept_proposals for uuid in prop.get("source_quote_uuids", [])}
-    print(f"[ATTRIBUTE] Proposal quote UUIDs: {len(proposal_uuids)}")
-    updated_processed = updated_processed | proposal_uuids
-    print(f"[ATTRIBUTE] Final processed UUIDs count: {len(updated_processed)}")
-    
-    new_iteration_count = iteration_count + 1
-    print(f"[ATTRIBUTE] Incrementing iteration count: {iteration_count} -> {new_iteration_count}")
-    
-    print(f"[ATTRIBUTE] Complete: {len(new_attributions)} attributed, {len(updated_processed) - len(processed_uuids)} processed total")
-    print(f"[ATTRIBUTE] Exit - returning updated state")
-    
-    return {
-        "quote_attributions": all_attributions,
-        "concept_proposals": concept_proposals,
-        "processed_quote_uuids": updated_processed,
-        "iteration_count": new_iteration_count
-    }
+    return {"created_concept_uuids": created_uuids}
 
-async def form_concept_from_seed(state: State, runtime: Runtime[Context]) -> Dict[str, Any]:
-    """Pick seed quote, find similar quotes using vector search, form concept."""
-    print(f"[SEED_CONCEPT] Entry - node function called")
-    print(f"[SEED_CONCEPT] State keys: {list(state.keys())}")
+
+async def create_relations_db(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Step 3.2: Create bidirectional concept relations."""
+    relations = state.get("relations", [])
+    created_uuids = state.get("created_concept_uuids", [])
     
+    # Create mapping from temp_id to UUID
+    temp_to_uuid = {item["temp_id"]: item["uuid"] for item in created_uuids}
+    
+    connection_manager = get_neo4j_connection_manager()
+    
+    async with connection_manager.session() as session:
+        for relation_dict in relations:
+            target_concept_id = relation_dict.get("target_concept_id")
+            target_relations = relation_dict.get("relations", [])
+            
+            # Get source UUID
+            source_uuid = temp_to_uuid.get(target_concept_id)
+            if not source_uuid:
+                continue
+            
+            for rel in target_relations:
+                target_id = rel.get("target_concept_id")
+                relation_type = rel.get("relation_type")
+                
+                # Get target UUID
+                if rel.get("target_is_novel", False):
+                    target_uuid = temp_to_uuid.get(target_id)
+                else:
+                    target_uuid = target_id  # Already a UUID
+                
+                if not target_uuid:
+                    continue
+                
+                # Create bidirectional relation
+                try:
+                    await create_concept_relation(session, source_uuid, target_uuid, relation_type)
+                except Exception as e:
+                    # Log error but continue
+                    pass
+    
+    return {}
+
+
+async def create_supports_relations(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Step 3.3: Create SUPPORTS relations from quotes to concepts."""
+    novel_concepts = state.get("novel_concepts", [])
+    existing_concepts_with_quotes = state.get("existing_concepts_with_quotes", [])
+    created_uuids = state.get("created_concept_uuids", [])
+    
+    # Create mapping from temp_id to UUID
+    temp_to_uuid = {item["temp_id"]: item["uuid"] for item in created_uuids}
+    
+    connection_manager = get_neo4j_connection_manager()
+    
+    async with connection_manager.session() as session:
+        # Create SUPPORTS for novel concepts
+        for concept_dict in novel_concepts:
+            concept_uuid = temp_to_uuid.get(concept_dict.get("concept_id"))
+            if not concept_uuid:
+                continue
+            
+            quote_ids = concept_dict.get("source_quote_ids", [])
+            for quote_id in quote_ids:
+                try:
+                    await create_supports_relation(session, quote_id, concept_uuid)
+                except Exception as e:
+                    pass
+        
+        # Create SUPPORTS for existing concepts
+        for existing_dict in existing_concepts_with_quotes:
+            concept_uuid = existing_dict.get("concept_uuid")
+            quote_ids = existing_dict.get("quote_ids", [])
+            
+            for quote_id in quote_ids:
+                try:
+                    await create_supports_relation(session, quote_id, concept_uuid)
+                except Exception as e:
+                    pass
+    
+    return {}
+
+
+async def create_obsidian_files(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Step 3.4: Create Obsidian zettel files."""
+    novel_concepts = state.get("novel_concepts", [])
+    relations = state.get("relations", [])
+    created_uuids = state.get("created_concept_uuids", [])
     content = state.get("content")
-    existing_proposals = state.get("concept_proposals", [])
-    processed_uuids = state.get("processed_quote_uuids", set())
-    iteration_count = state.get("iteration_count", 0)
     
-    print(f"[SEED_CONCEPT] Current state:")
-    print(f"[SEED_CONCEPT]  - content: {content.title if content else None}")
-    print(f"[SEED_CONCEPT]  - existing_proposals count: {len(existing_proposals)}")
-    print(f"[SEED_CONCEPT]  - processed_uuids count: {len(processed_uuids)}")
-    print(f"[SEED_CONCEPT]  - iteration_count: {iteration_count}")
+    # Create mapping from temp_id to UUID
+    temp_to_uuid = {item["temp_id"]: item["uuid"] for item in created_uuids}
     
+    # Build relation map for each concept
+    concept_relations_map = {}
+    for relation_dict in relations:
+        target_concept_id = relation_dict.get("target_concept_id")
+        target_relations = relation_dict.get("relations", [])
+        
+        if target_concept_id not in concept_relations_map:
+            concept_relations_map[target_concept_id] = {
+                "GENERALIZES": [], "SPECIFIC_OF": [], "PART_OF": [], "HAS_PART": [],
+                "SUPPORTS": [], "SUPPORTED_BY": [], "OPPOSES": [], "SIMILAR_TO": [], "RELATES_TO": []
+            }
+        
+        for rel in target_relations:
+            relation_type = rel.get("relation_type")
+            target_id = rel.get("target_concept_id")
+            
+            if rel.get("target_is_novel", False):
+                target_uuid = temp_to_uuid.get(target_id)
+            else:
+                target_uuid = target_id
+            
+            if target_uuid and relation_type in concept_relations_map[target_concept_id]:
+                concept_relations_map[target_concept_id][relation_type].append(target_uuid)
+    
+    created_files = []
+    
+    for concept_dict in novel_concepts:
+        concept_id = concept_dict.get("concept_id")
+        concept_uuid = temp_to_uuid.get(concept_id)
+        
+        if not concept_uuid:
+            continue
+        
+        concept_relations = concept_relations_map.get(concept_id, {
+            "GENERALIZES": [], "SPECIFIC_OF": [], "PART_OF": [], "HAS_PART": [],
+            "SUPPORTS": [], "SUPPORTED_BY": [], "OPPOSES": [], "SIMILAR_TO": [], "RELATES_TO": []
+        })
+        
+        try:
+            file_path = await create_zettel_file(
+                concept_uuid=concept_uuid,
+                title=concept_dict.get("title", ""),
+                concept=concept_dict.get("concept", ""),
+                analysis=concept_dict.get("analysis", ""),
+                summary_short=concept_dict.get("title", "")[:100],
+                summary=concept_dict.get("concept", "")[:500],
+                concept_relations=concept_relations,
+                source=content.title if content else None
+            )
+            created_files.append(file_path)
+        except Exception as e:
+            pass
+    
+    return {"created_files": created_files}
+
+
+async def update_processed_date(state: ConceptExtractionState) -> Dict[str, Any]:
+    """Step 3.5: Update Content processed_date."""
+    content = state.get("content")
     if not content:
-        print(f"[SEED_CONCEPT] No content found - marking analysis as complete")
-        return {
-            "concept_proposals": existing_proposals,
-            "analysis_complete": True
-        }
+        return {}
     
-    # Get one unprocessed quote as seed
-    print(f"[SEED_CONCEPT] Fetching seed quote candidate (excluding {len(processed_uuids)} processed)...")
     connection_manager = get_neo4j_connection_manager()
     async with connection_manager.session() as session:
-        seed_candidates = await get_unprocessed_quotes(
-            session,
-            content.uuid,
-            list(processed_uuids),
-            limit=1
-        )
+        await update_content_processed_date(session, content.uuid)
     
-    print(f"[SEED_CONCEPT] Retrieved {len(seed_candidates)} seed candidate(s)")
-    
-    if not seed_candidates:
-        print(f"[SEED_CONCEPT] No unprocessed quotes remaining - marking analysis as complete")
-        return {
-            "concept_proposals": existing_proposals,
-            "analysis_complete": True
-        }
-    
-    seed_quote = seed_candidates[0]
-    print(f"[SEED_CONCEPT] Using seed quote: {seed_quote.uuid}")
-    print(f"[SEED_CONCEPT] Seed quote preview: {seed_quote.text[:80]}...")
-    print(f"[SEED_CONCEPT] Seed quote section: {seed_quote.section or 'N/A'}")
-    
-    # Find similar quotes using vector search
-    print(f"[SEED_CONCEPT] Searching for similar quotes (limit: {MAX_QUOTE_GROUP_SIZE})...")
-    similar_quotes = await get_similar_quotes_for_seed(
-        seed_quote.text,
-        content.uuid,
-        processed_uuids,
-        limit=MAX_QUOTE_GROUP_SIZE
-    )
-    
-    print(f"[SEED_CONCEPT] Vector search returned {len(similar_quotes)} similar quotes")
-    
-    # If no similar quotes found, just use seed
-    if not similar_quotes:
-        print(f"[SEED_CONCEPT] No similar quotes found - using seed quote only")
-        similar_quotes = [seed_quote]
-    else:
-        # Ensure seed is included
-        seed_in_list = seed_quote.uuid in {q.uuid for q in similar_quotes}
-        print(f"[SEED_CONCEPT] Seed quote in similar list: {seed_in_list}")
-        if not seed_in_list:
-            print(f"[SEED_CONCEPT] Adding seed quote to front of similar quotes list")
-            similar_quotes.insert(0, seed_quote)
-        else:
-            print(f"[SEED_CONCEPT] Seed quote already in similar quotes list")
-    
-    print(f"[SEED_CONCEPT] Final quote group size: {len(similar_quotes)}")
-    print(f"[SEED_CONCEPT] Quote UUIDs in group: {[q.uuid for q in similar_quotes]}")
-    
-    # Form concept proposal
-    print(f"[SEED_CONCEPT] Generating concept proposal from {len(similar_quotes)} quotes...")
-    proposal = await propose_concept_from_quotes(similar_quotes, content.title)
-    
-    if proposal:
-        # Add to existing proposals
-        new_proposals = existing_proposals + [proposal.model_dump()]
-        print(f"[SEED_CONCEPT] ✓ Created concept: '{proposal.name}' from {len(similar_quotes)} quotes")
-        print(f"[SEED_CONCEPT] Proposal details:")
-        print(f"[SEED_CONCEPT]  - Title: {proposal.title}")
-        print(f"[SEED_CONCEPT]  - Concept length: {len(proposal.concept)} chars")
-        print(f"[SEED_CONCEPT]  - Source quote UUIDs: {len(proposal.source_quote_uuids)}")
-    else:
-        new_proposals = existing_proposals
-        print(f"[SEED_CONCEPT] ✗ Failed to create concept from {len(similar_quotes)} quotes")
-    
-    # Update processed UUIDs
-    processed_quote_uuids = {q.uuid for q in similar_quotes}
-    print(f"[SEED_CONCEPT] Marking {len(processed_quote_uuids)} quotes as processed")
-    updated_processed = processed_uuids | processed_quote_uuids
-    print(f"[SEED_CONCEPT] Updated processed UUIDs: {len(updated_processed)} (was {len(processed_uuids)}, added {len(processed_quote_uuids)})")
-    
-    # Count remaining unprocessed quotes
-    print(f"[SEED_CONCEPT] Checking remaining unprocessed quotes...")
-    async with connection_manager.session() as session:
-        remaining = await get_unprocessed_quotes(
-            session,
-            content.uuid,
-            list(updated_processed),
-            limit=1
-        )
-        remaining_count = len(remaining)
-    
-    print(f"[SEED_CONCEPT] Remaining unprocessed quotes: {remaining_count}")
-    
-    new_iteration_count = iteration_count + 1
-    print(f"[SEED_CONCEPT] Incrementing iteration count: {iteration_count} -> {new_iteration_count}")
-    print(f"[SEED_CONCEPT] Exit - returning updated state")
-    
-    return {
-        "concept_proposals": new_proposals,
-        "processed_quote_uuids": updated_processed,
-        "iteration_count": new_iteration_count
-    }
+    return {"phase": "end"}
 
 
 # ============================================================================
-# Conditional Edge Functions
+# Conditional Routing Functions
 # ============================================================================
 
-def should_continue(state: State) -> Literal["attribute", "end"]:
-    """Decide whether to continue with attribution or end."""
-    print(f"[CONDITIONAL] Entry - evaluating whether to continue")
-    print(f"[CONDITIONAL] State keys: {list(state.keys())}")
+def should_continue_phase1(state: ConceptExtractionState) -> Literal["refine", "human_review", "end"]:
+    """Decide whether to continue Phase 1 loop or move to Phase 2."""
+    phase_1_iteration = state.get("phase_1_iteration", 0)
+    quality_assessment = state.get("quality_assessment")
+    errors = state.get("errors", [])
     
-    content = state.get("content")
-    processed_uuids = state.get("processed_quote_uuids", set())
-    iteration_count = state.get("iteration_count", 0)
-    analysis_complete = state.get("analysis_complete", False)
-    
-    print(f"[CONDITIONAL] Current values:")
-    print(f"[CONDITIONAL]  - content: {content.title if content else None}")
-    print(f"[CONDITIONAL]  - processed_uuids count: {len(processed_uuids)}")
-    print(f"[CONDITIONAL]  - iteration_count: {iteration_count}")
-    print(f"[CONDITIONAL]  - analysis_complete: {analysis_complete}")
-    
-    # Prevent infinite loops - max 100 iterations
-    if iteration_count >= 100:
-        print(f"[CONDITIONAL] Max iterations reached ({iteration_count}) - ending analysis")
-        print(f"[CONDITIONAL] Exit - returning 'end'")
+    # Check for critical errors
+    if errors:
         return "end"
     
-    if analysis_complete:
-        print(f"[CONDITIONAL] Analysis marked as complete - ending")
-        print(f"[CONDITIONAL] Exit - returning 'end'")
+    # Max 10 iterations
+    if phase_1_iteration >= 10:
+        return "human_review"
+    
+    # Check if quality passes
+    if quality_assessment and isinstance(quality_assessment, dict):
+        overall_passes = quality_assessment.get("overall_passes", False)
+        if overall_passes:
+            return "human_review"
+    
+    # Continue refinement
+    return "refine"
+
+
+def should_continue_phase2(state: ConceptExtractionState) -> Literal["incorporate", "commit", "end"]:
+    """Decide whether to continue Phase 2 loop or move to Phase 3."""
+    human_approved = state.get("human_approved", False)
+    phase_2_iteration = state.get("phase_2_iteration", 0)
+    errors = state.get("errors", [])
+    
+    # Check for critical errors
+    if errors:
         return "end"
     
-    if not content:
-        print(f"[CONDITIONAL] No content - ending")
-        print(f"[CONDITIONAL] Exit - returning 'end'")
+    # Max 20 iterations
+    if phase_2_iteration >= 20:
         return "end"
     
-    # Check if there are unprocessed quotes by attempting a quick query
-    # (We'll use a simpler check - if we have quotes, assume there might be more)
-    print(f"[CONDITIONAL] Conditions passed - continuing")
-    print(f"[CONDITIONAL] {len(processed_uuids)} quotes processed - continuing (iteration {iteration_count + 1})")
-    print(f"[CONDITIONAL] Exit - returning 'attribute'")
-    return "attribute"
+    # If approved, commit
+    if human_approved:
+        return "commit"
+    
+    # Continue incorporating feedback
+    return "incorporate"
 
 
 # ============================================================================
-# Graph Definition
+# Graph Assembly
 # ============================================================================
 
-# Define the graph
-graph = (
-    StateGraph(State, input_schema=InputState, context_schema=Context)
-    .add_node("ensure_indices", ensure_indices)
-    .add_node("load_content_and_quotes", load_content_and_quotes)
-    .add_node("attribute_quotes_to_existing_concepts", attribute_quotes_to_existing_concepts)
-    .add_node("form_concept_from_seed", form_concept_from_seed)
-    
-    # Sequential edges
-    .add_edge("__start__", "ensure_indices")
-    .add_edge("ensure_indices", "load_content_and_quotes")
-    .add_edge("load_content_and_quotes", "attribute_quotes_to_existing_concepts")
-    
-    # Conditional edge after attribution
-    .add_conditional_edges(
-        "attribute_quotes_to_existing_concepts",
-        should_continue,
-        {
-            "attribute": "form_concept_from_seed",
+# Build graph
+# Note: Checkpointer is handled automatically by LangGraph API
+# For local development, you can add: checkpointer = MemorySaver()
+builder = StateGraph(ConceptExtractionState)
+
+# Phase 1 nodes
+builder.add_node("check_content_processed", check_content_processed)
+builder.add_node("load_content_quotes", load_content_quotes)
+builder.add_node("extract_candidate_concepts", extract_candidate_concepts)
+builder.add_node("detect_duplicates_all", detect_duplicates_all)
+builder.add_node("generate_relation_queries", generate_relation_queries)
+builder.add_node("search_relation_candidates", search_relation_candidates)
+builder.add_node("create_relations_all", create_relations_all)
+builder.add_node("self_critique", self_critique)
+builder.add_node("refine_extraction", refine_extraction)
+
+# Phase 2 nodes
+builder.add_node("present_for_review", present_for_review)
+builder.add_node("incorporate_feedback", incorporate_feedback)
+
+# Phase 3 nodes
+builder.add_node("create_concepts_db", create_concepts_db)
+builder.add_node("create_relations_db", create_relations_db)
+builder.add_node("create_supports_relations", create_supports_relations)
+builder.add_node("create_obsidian_files", create_obsidian_files)
+builder.add_node("update_processed_date", update_processed_date)
+
+# Edges
+builder.set_entry_point("check_content_processed")
+builder.add_edge("check_content_processed", "load_content_quotes")
+builder.add_edge("load_content_quotes", "extract_candidate_concepts")
+
+# After extract_candidate_concepts, detect duplicates (sequential for now, can be parallelized)
+builder.add_edge("extract_candidate_concepts", "detect_duplicates_all")
+builder.add_edge("detect_duplicates_all", "generate_relation_queries")
+builder.add_edge("generate_relation_queries", "search_relation_candidates")
+# After search_relation_candidates, create relations (sequential for now, can be parallelized)
+builder.add_edge("search_relation_candidates", "create_relations_all")
+builder.add_edge("create_relations_all", "self_critique")
+builder.add_conditional_edges(
+    "self_critique",
+    should_continue_phase1,
+    {
+        "refine": "refine_extraction",
+        "human_review": "present_for_review",
             "end": "__end__"
         }
     )
-    
-    # Conditional edge after concept formation
-    .add_conditional_edges(
-        "form_concept_from_seed", 
-        should_continue,
-        {
-            "attribute": "attribute_quotes_to_existing_concepts",
+builder.add_edge("refine_extraction", "self_critique")  # Loop back
+
+# Phase 2
+builder.add_conditional_edges(
+    "present_for_review",
+    should_continue_phase2,
+    {
+        "incorporate": "incorporate_feedback",
+        "commit": "create_concepts_db",
             "end": "__end__"
         }
     )
-    
-    .compile(name="Concept Analysis")
-)
+builder.add_edge("incorporate_feedback", "present_for_review")  # Loop back
 
-if __name__ == "__main__":
-    import asyncio
-    
-    async def main():
-        print("[main] Starting Concept Analysis Graph execution")
-        
-        # Example usage - replace with actual content UUID
-        result = await graph.ainvoke({
-            "content_uuid": "43ecf73b-01c6-426d-978a-1b73e041370c"
-        }, {"recursion_limit": 100})
-        
-        print("[main] Graph execution completed")
-        print(f"[main] Final result: {result}")
-        return result
-        
-    if "GOOGLE_API_KEY" not in os.environ:
-        print("[main] Setting GOOGLE_API_KEY environment variable")
-        os.environ["GOOGLE_API_KEY"] = "AIzaSyCw3FzCBecZscg1bh5auhEtkMWLzg3wDTs"
-    
-    print("[main] Starting asyncio execution")
-    result = asyncio.run(main())
+# Phase 3
+builder.add_edge("create_concepts_db", "create_relations_db")
+builder.add_edge("create_relations_db", "create_supports_relations")
+builder.add_edge("create_supports_relations", "create_obsidian_files")
+builder.add_edge("create_obsidian_files", "update_processed_date")
+builder.add_edge("update_processed_date", "__end__")
+
+# Compile graph
+# LangGraph API handles checkpointing automatically, so we don't pass a checkpointer here
+graph = builder.compile(name="Concept Extraction")
+

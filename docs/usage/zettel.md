@@ -100,7 +100,8 @@ result = await client.runs.create(
 2. Input:
    ```json
    {
-     "content_uuid": "uuid-from-quote-parsing"
+     "content_uuid": "uuid-from-quote-parsing",
+     "user_suggestions": "Optional: Provide guidance for the extraction process"
    }
    ```
 
@@ -109,9 +110,16 @@ result = await client.runs.create(
 result = await client.runs.create(
     assistant_id="concept_extraction_graph",
     input={
-        "content_uuid": "your-content-uuid"
+        "content_uuid": "your-content-uuid",
+        "user_suggestions": "Focus on extracting concepts related to machine learning. Pay special attention to any mentions of neural networks."
     }
 )
+```
+
+**User Suggestions**: Optional freeform text that guides the extraction process. Suggestions are considered during:
+- Concept extraction (Call 1.1a)
+- Self-critique (Call 1.2)
+- Refinement (Call 1.3)
 ```
 
 ### What Happens
@@ -146,12 +154,13 @@ content_uuid = quote_result["content_uuid"]
 **Step 2: Extract Concepts**
 ```python
 concept_result = await concept_extraction_graph.ainvoke({
-    "content_uuid": content_uuid
+    "content_uuid": content_uuid,
+    "user_suggestions": "Optional: Provide guidance for the extraction process"
 })
 
 # Review concept proposals
-proposals = concept_result["concept_proposals"]
-attributions = concept_result["quote_attributions"]
+proposals = concept_result.get("novel_concepts", [])
+attributions = concept_result.get("existing_concepts_with_quotes", [])
 ```
 
 ### Batch Processing
@@ -225,26 +234,33 @@ More quotes here with different page numbers.
 
 ## Concept Extraction Process
 
-### Phase 1: Attribution
+The concept extraction process uses a sophisticated 3-phase workflow:
 
-1. Get unprocessed quotes
-2. Vector search for similar concepts
-3. LLM analyzes if quote supports concept
-4. Attribute if confidence > 0.7
+### Phase 1: LLM Self-Improvement Loop
+1. Extract candidate concepts from quotes
+2. Detect duplicates via semantic search and LLM validation
+3. Generate relation search queries
+4. Find relation candidates via vector search
+5. Create relations between concepts
+6. Self-critique against quality checklist
+7. Refine extraction iteratively until quality passes (max 10 iterations)
 
-### Phase 2: Concept Formation
+**User Suggestions**: If provided, suggestions guide concept extraction, critique, and refinement.
 
-1. Pick seed quote (unprocessed)
-2. Vector search for similar quotes
-3. Cluster quotes (max 10 per cluster)
-4. LLM generates concept proposal
-5. Store proposal
+### Phase 2: Human Review Loop
+1. Present comprehensive extraction report
+2. Wait for human feedback or approval
+3. Incorporate feedback into extraction
+4. Iterate until approval or max iterations (max 20)
 
-### Phase 3: Iteration
+### Phase 3: Commit to Database
+1. Create Concept nodes in Neo4j
+2. Create bidirectional concept relations
+3. Create SUPPORTS relations from quotes to concepts
+4. Generate Obsidian zettel files
+5. Mark content as processed
 
-- Continues until all quotes processed
-- Max 100 iterations
-- Tracks processed quotes
+**Note**: For detailed workflow documentation, see [Module Workflows Documentation](../../backend/zettel/docs/WORKFLOWS.md).
 
 ## Reviewing Results
 
@@ -344,7 +360,19 @@ Concepts stored in Neo4j:
 
 ## Related Documentation
 
-- [Architecture](../architecture/zettel.md)
+### Comprehensive Module Documentation
+
+The zettel module has comprehensive documentation in `backend/zettel/docs/`:
+
+- **[API Reference](../../backend/zettel/docs/API.md)** - Complete API reference
+- **[Architecture Documentation](../../backend/zettel/docs/ARCHITECTURE.md)** - Deep technical architecture
+- **[Developer Guide](../../backend/zettel/docs/DEVELOPER.md)** - Extension and modification guide
+- **[Workflows Documentation](../../backend/zettel/docs/WORKFLOWS.md)** - Detailed workflow documentation
+
+### Project-Level Documentation
+
+- [Architecture Overview](../architecture/zettel.md)
 - [Setup Guide](../setup/zettel-setup.md)
 - [Integration Workflows](integration-workflows.md)
+- [Module README](../../backend/zettel/README.md)
 

@@ -1,4 +1,16 @@
-"""LangGraph pipeline for parsing book quotes from markdown files and storing them in Neo4j."""
+"""LangGraph pipeline for parsing book quotes from markdown files and storing them in Neo4j.
+
+This module provides a workflow for processing markdown book notes:
+1. Reading markdown files
+2. Generating book summaries using LLM
+3. Parsing quotes from "# Citas" section
+4. Creating author entities
+5. Storing quotes and relationships in Neo4j with embeddings
+
+See Also:
+    - [API Reference](../docs/API.md) - Complete API documentation
+    - [Workflows Documentation](../docs/WORKFLOWS.md) - Detailed workflow documentation
+"""
 
 from __future__ import annotations
 
@@ -22,8 +34,14 @@ from zettel_agent.db import (
     get_neo4j_connection_manager,
     search_person_by_name,
     create_person,
+    update_person,
     create_content,
+    update_content,
     create_authored_by_relationship,
+)
+from zettel_agent.web_search_utils import (
+    enrich_author_with_web_search,
+    enrich_summary_with_web_search,
 )
 
 # Lazy initialization to avoid blocking on module import
@@ -137,7 +155,7 @@ def _parse_quotes_from_content(content: str) -> List[Quote]:
     return quotes
 
 async def make_summary(state: State) -> Dict[str, Any]:
-    """Generate summary and short summary for the book."""
+    """Generate summary and short summary for the book, with optional web search enrichment."""
     llm = await _get_llm()
     llm_structured = llm.with_structured_output(SummaryResponse, method="json_schema")
     
@@ -151,10 +169,27 @@ Generate a summary and a short summary of the book."""
     
     response = await llm_structured.ainvoke(prompt)
     
+    # Try to enrich with web search
+    enrichment = await enrich_summary_with_web_search(
+        book_title=state.title,
+        author_name=state.author,
+        existing_summary=response.summary,
+        existing_summary_short=response.summary_short
+    )
+    
+    # Use enriched summaries if available, otherwise use original
+    if enrichment:
+        return {
+            "summary": enrichment.summary,
+            "summary_short": enrichment.summary_short
+        }
+    
     return {
         "summary": response.summary,
         "summary_short": response.summary_short
     }
+
+
 
 
 async def parse_quotes(state: State) -> Dict[str, Any]:
@@ -178,8 +213,8 @@ async def parse_quotes(state: State) -> Dict[str, Any]:
         "sections": sections
     }
 
-async def ensure_author_exists(state: State) -> Dict[str, Any]:
-    """Ensure the author exists as a Person entity, creating if necessary."""
+async def get_or_create_author(state: State) -> Dict[str, Any]:
+    """Get existing author or create new one with web search enrichment."""
     connection_manager = get_neo4j_connection_manager()
     
     async with connection_manager.session() as session:
@@ -191,18 +226,41 @@ async def ensure_author_exists(state: State) -> Dict[str, Any]:
             None
         )
         
-        # Create if not found
-        if author_person is None:
-            author_person = Person(
-                name=state.author,
-                summary=f"Author of {state.title}",
-                summary_short=f"Author of {state.title}",
-                occupation="Author"
-            )
-            author_person.uuid = await create_person(session, author_person)
+        # If author exists, return it (assume it's already well-formed)
+        if author_person is not None:
+            return {"parsed_author": author_person}
+    
+    # Author doesn't exist - enrich first, then create with enriched data
+    basic_summary = f"Author of {state.title}"
+    enrichment = await enrich_author_with_web_search(
+        author_name=state.author,
+        existing_summary=basic_summary,
+        existing_occupation="Author"
+    )
+    
+    # Create author with enriched data if available, otherwise use basic data
+    if enrichment:
+        author_person = Person(
+            name=state.author,
+            summary=enrichment.summary,
+            summary_short=enrichment.summary_short,
+            occupation=enrichment.occupation
+        )
+    else:
+        author_person = Person(
+            name=state.author,
+            summary=basic_summary,
+            summary_short=basic_summary,
+            occupation="Author"
+        )
+    
+    # Create in database
+    async with connection_manager.session() as session:
+        author_person.uuid = await create_person(session, author_person)
     
     return {"parsed_author": author_person}
-    
+
+
 async def write_to_db(state: State) -> Dict[str, Any]:
     """Write book, author relationship, and quotes to database."""
     connection_manager = get_neo4j_connection_manager()
@@ -257,13 +315,13 @@ graph = (
     .add_node("read_file", read_file)
     .add_node("make_summary", make_summary)
     .add_node("parse_quotes", parse_quotes)
-    .add_node("ensure_author_exists", ensure_author_exists)
+    .add_node("get_or_create_author", get_or_create_author)
     .add_node("write_to_db", write_to_db)
     .add_edge("__start__", "read_file")
     .add_edge("read_file", "make_summary")
     .add_edge("make_summary", "parse_quotes")
-    .add_edge("parse_quotes", "ensure_author_exists")
-    .add_edge("ensure_author_exists", "write_to_db")
+    .add_edge("parse_quotes", "get_or_create_author")
+    .add_edge("get_or_create_author", "write_to_db")
     .add_edge("write_to_db", "__end__")
     .compile(name="Quote Parser")
 )

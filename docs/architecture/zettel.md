@@ -71,28 +71,30 @@ read_file → make_summary → parse_quotes → ensure_author_exists → write_t
 
 ### Concept Extraction Graph
 
-**Purpose**: Extract atomic concepts from quotes using vector search and LLM analysis
+**Purpose**: Extract atomic concepts from quotes using a sophisticated 3-phase workflow with LLM self-improvement and human review.
 
-**Workflow**:
-```
-ensure_indices → load_content_and_quotes → [attribute_quotes | form_concept_from_seed] → end
-```
-
-**Nodes**:
-1. **ensure_indices**: Creates vector indexes if needed
-2. **load_content_and_quotes**: Loads content and initializes state
-3. **attribute_quotes_to_existing_concepts**: Attributes quotes to existing concepts
-4. **form_concept_from_seed**: Creates new concepts from quote clusters
-5. **Conditional Loop**: Continues until all quotes processed
+**Workflow Overview**:
+The graph implements a 3-phase workflow:
+- **Phase 1**: LLM Self-Improvement Loop - Autonomous extraction, duplicate detection, relation discovery, and quality validation
+- **Phase 2**: Human Review Loop (HITL) - Human-guided refinement with feedback incorporation
+- **Phase 3**: Commit to Database - Persistence to Neo4j and Obsidian file generation
 
 **Input**:
 ```python
 {
-    "content_uuid": str
+    "content_uuid": str,
+    "user_suggestions": Optional[str]  # Optional freeform text to guide extraction
 }
 ```
 
-**Output**: Quote attributions and concept proposals
+**Output**: 
+- New Concept nodes created
+- Relations between concepts created
+- Quote-to-concept SUPPORTS relations created
+- Obsidian zettel files generated
+- Content marked as processed
+
+**Note**: For detailed workflow documentation, see [Module Workflows Documentation](../../backend/zettel/docs/WORKFLOWS.md).
 
 ## Vector Search Architecture
 
@@ -113,23 +115,33 @@ ensure_indices → load_content_and_quotes → [attribute_quotes | form_concept_
 
 ## Concept Extraction Process
 
-### Phase 1: Attribution to Existing Concepts
-1. Get unprocessed quotes
-2. Vector search for similar concepts
-3. LLM analyzes if quote supports concept
-4. Attribute if confidence > threshold
+The concept extraction process uses a sophisticated 3-phase workflow:
 
-### Phase 2: New Concept Formation
-1. Pick seed quote (unprocessed)
-2. Vector search for similar quotes
-3. Cluster quotes by similarity
-4. LLM generates concept proposal
-5. Store proposal for later validation
+### Phase 1: LLM Self-Improvement Loop
+1. Extract candidate concepts from quotes
+2. Detect duplicates via semantic search and LLM validation
+3. Generate relation search queries
+4. Find relation candidates via vector search
+5. Create relations between concepts
+6. Self-critique against quality checklist
+7. Refine extraction iteratively until quality passes (max 10 iterations)
 
-### Phase 3: Iteration
-- Continues until all quotes processed
-- Max 100 iterations to prevent infinite loops
-- Tracks processed quotes by UUID
+### Phase 2: Human Review Loop
+1. Present comprehensive extraction report
+2. Wait for human feedback or approval
+3. Incorporate feedback into extraction
+4. Iterate until approval or max iterations (max 20)
+
+### Phase 3: Commit to Database
+1. Create Concept nodes in Neo4j
+2. Create bidirectional concept relations
+3. Create SUPPORTS relations from quotes to concepts
+4. Generate Obsidian zettel files
+5. Mark content as processed
+
+**User Suggestions**: Optional freeform text input can be provided to guide the extraction process. Suggestions are considered during concept extraction, self-critique, and refinement phases.
+
+**Note**: For detailed step-by-step workflow documentation, see [Module Workflows Documentation](../../backend/zettel/docs/WORKFLOWS.md).
 
 ## Database Schema
 
@@ -151,17 +163,24 @@ ensure_indices → load_content_and_quotes → [attribute_quotes | form_concept_
 ## LLM Integration
 
 ### Models Used
-- **Google Gemini 2.5 Flash Lite**: Concept extraction and analysis
-- **Temperature**: 0.3 (some creativity for analysis)
+- **Google Gemini 2.5 Pro**: Complex reasoning tasks (concept extraction, duplicate detection, relation creation, self-critique, feedback incorporation)
+- **Google Gemini 2.5 Flash**: Simpler tasks (relation query generation, summary generation)
+- **Google Gemini 2.5 Flash Lite**: Quote parsing (summary generation)
+- **Temperature**: 0 (deterministic outputs)
 
 ### Structured Outputs
-- **QuoteAnalysisResult**: Should attribute, concept UUID, reasoning, confidence
-- **ConceptProposal**: Name, title, concept, analysis, source quotes
+- **CandidateConceptsResponse**: Candidate concepts with source quotes
+- **DuplicateDetection**: Duplicate detection results
+- **ConceptRelationsResponse**: Relations between concepts
+- **SelfCritiqueResponse**: Quality assessment and critique
+- **RefinementResponse**: Refined extraction
+- **FeedbackIncorporationResponse**: Revised extraction with feedback
 
 ### Prompts
 - **Zettelkasten Expert**: Specialized prompts for atomic concept extraction
 - **Spanish Output**: All concept outputs in Spanish
 - **Atomic Principle**: One clear idea per concept
+- **User Suggestions**: Optional guidance incorporated into extraction, critique, and refinement prompts
 
 ## State Management
 
@@ -186,13 +205,25 @@ ensure_indices → load_content_and_quotes → [attribute_quotes | form_concept_
 {
     "content_uuid": str,
     "content": Content,
-    "processed_quote_uuids": Set[str],
-    "quote_attributions": List[QuoteAttribution],
-    "concept_proposals": List[ConceptProposal],
-    "analysis_complete": bool,
-    "iteration_count": int
+    "quotes": List[Quote],
+    "user_suggestions": Optional[str],  # Optional freeform text to guide extraction
+    "phase": Literal["extraction", "human_review", "commit", "end"],
+    "iteration_count": int,
+    "phase_1_iteration": int,
+    "phase_2_iteration": int,
+    "candidate_concepts": List[Dict],
+    "novel_concepts": List[Dict],
+    "existing_concepts_with_quotes": List[Dict],
+    "relations": List[Dict],
+    "quality_assessment": Optional[Dict],
+    "human_feedback": Optional[str],
+    "human_approved": bool,
+    "errors": List[str],
+    "warnings": List[str]
 }
 ```
+
+**Note**: For complete state schema documentation, see [Module API Reference](../../backend/zettel/docs/API.md).
 
 ## Performance Optimizations
 
@@ -232,7 +263,15 @@ zettel/
 │       ├── quote_parse_graph.py      # Quote parsing
 │       ├── concept_extraction_graph.py # Concept extraction
 │       ├── db.py                      # Neo4j operations
+│       ├── obsidian_utils.py         # Obsidian file generation
+│       ├── CONCEPT_EXTRACTION_DESIGN.md # Design document
 │       └── __init__.py
+├── docs/                              # Comprehensive module documentation
+│   ├── README.md                      # Documentation index
+│   ├── API.md                         # API reference
+│   ├── ARCHITECTURE.md                # Technical architecture
+│   ├── DEVELOPER.md                   # Developer guide
+│   └── WORKFLOWS.md                   # Workflow documentation
 ├── langgraph.json                    # Graph configuration
 └── pyproject.toml                    # Dependencies
 ```
@@ -244,8 +283,19 @@ poetry run langgraph dev
 
 ## Related Documentation
 
+### Comprehensive Module Documentation
+
+The zettel module has comprehensive documentation in `backend/zettel/docs/`:
+
+- **[API Reference](../../backend/zettel/docs/API.md)** - Complete API reference
+- **[Architecture Documentation](../../backend/zettel/docs/ARCHITECTURE.md)** - Deep technical architecture
+- **[Developer Guide](../../backend/zettel/docs/DEVELOPER.md)** - Extension and modification guide
+- **[Workflows Documentation](../../backend/zettel/docs/WORKFLOWS.md)** - Detailed workflow documentation
+
+### Project-Level Documentation
+
 - [Components Overview](components.md)
 - [Setup Guide](../setup/zettel-setup.md)
 - [Usage Guide](../usage/zettel.md)
-- [zettel README](../../backend/zettel/README.md)
+- [Module README](../../backend/zettel/README.md)
 
