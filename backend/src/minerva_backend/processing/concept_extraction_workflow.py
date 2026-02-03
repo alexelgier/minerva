@@ -4,7 +4,7 @@ import asyncio
 import os
 import time
 from datetime import timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from temporalio import activity, workflow

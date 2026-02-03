@@ -6,15 +6,18 @@ Complete reference of all environment variables used across Minerva components.
 
 Location: `backend/.env`
 
+The backend uses pydantic-settings with `MINERVA_` prefix: set `MINERVA_<FIELD>` for each config field (e.g. `MINERVA_NEO4J_URI`).
+
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `NEO4J_URI` | Neo4j connection URI | Yes | `bolt://localhost:7687` |
-| `NEO4J_USER` | Neo4j username | Yes | `neo4j` |
-| `NEO4J_PASSWORD` | Neo4j password | Yes | - |
-| `TEMPORAL_HOST` | Temporal server host | No | `localhost` |
-| `TEMPORAL_PORT` | Temporal server port | No | `7233` |
-| `OLLAMA_BASE_URL` | Ollama server URL | No | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Ollama model name | No | `qwen2.5:7b` |
+| `MINERVA_NEO4J_URI` | Neo4j connection URI | Yes | `bolt://localhost:7687` |
+| `MINERVA_NEO4J_USER` | Neo4j username | Yes | `neo4j` |
+| `MINERVA_NEO4J_PASSWORD` | Neo4j password | Yes | - |
+| `MINERVA_TEMPORAL_URI` | Temporal server address | Yes | `localhost:7233` |
+| `MINERVA_CURATION_DB_PATH` | SQLite curation DB path | No | `curation.db` |
+| `MINERVA_OBSIDIAN_VAULT_PATH` | Obsidian vault path (workflows) | No | (platform-dependent) |
+
+Ollama URL and model are currently hardcoded in the backend LLM service (defaults: `http://localhost:11434`, model `hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:latest`). They are not read from env yet.
 
 ## minerva_agent
 
@@ -25,7 +28,15 @@ Location: `backend/minerva_agent/.env`
 | `GOOGLE_API_KEY` | Google API key for Gemini | Yes | - |
 | `OBSIDIAN_VAULT_PATH` | Path to Obsidian vault | No | `D:\yo` |
 
-## zettel
+## Curation UI (frontend)
+
+Location: `frontend/.env`
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `VITE_API_BASE_URL` | Backend API base URL | No | `http://localhost:8000` |
+
+## zettel *(deprecated)*
 
 Location: `backend/zettel/.env`
 
@@ -42,7 +53,7 @@ Location: `minerva-desktop/.env.local`
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `NEXT_PUBLIC_DEPLOYMENT_URL` | LangGraph server URL | Yes | `http://127.0.0.1:2024` |
-| `NEXT_PUBLIC_AGENT_ID` | Agent ID from langgraph.json | Yes | `deepagent` |
+| `NEXT_PUBLIC_AGENT_ID` | Agent ID from langgraph.json | Yes | `minerva_agent` |
 | `NEXT_PUBLIC_LANGSMITH_API_KEY` | LangSmith API key | No | - |
 
 Note: `NEXT_PUBLIC_*` variables are exposed to the browser client.
@@ -52,13 +63,12 @@ Note: `NEXT_PUBLIC_*` variables are exposed to the browser client.
 ### Backend API (.env)
 
 ```env
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your-secure-password
-TEMPORAL_HOST=localhost
-TEMPORAL_PORT=7233
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:7b
+MINERVA_NEO4J_URI=bolt://localhost:7687
+MINERVA_NEO4J_USER=neo4j
+MINERVA_NEO4J_PASSWORD=your-secure-password
+MINERVA_TEMPORAL_URI=localhost:7233
+# MINERVA_CURATION_DB_PATH=curation.db
+# MINERVA_OBSIDIAN_VAULT_PATH=D:\path\to\vault
 ```
 
 ### minerva_agent (.env)
