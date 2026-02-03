@@ -10,36 +10,73 @@ A Next.js app that connects to any LangGraph deployment. Run locally or integrat
 
 ---
 
+## Current state
+
+**Status:** Migration complete. `minerva-desktop/` now uses **Agent Chat UI** (langchain-ai/agent-chat-ui) via **git subtree**.
+
+**What changed:**
+- Replaced the old deepagent-ui copy with Agent Chat UI
+- Added `agent-chat-ui` as a git remote
+- Minerva styling (header, background, colors) applied on top
+- Tied to upstream via subtree for easy updates
+
+**Key files customized:**
+- `src/app/page.tsx` - Minerva header wrapper
+- `src/app/globals.css` - Minerva color variables and container styles
+- `public/assets/` - `MinervaLogo.png`, `relief.png`
+
+---
+
 ## Overview
 
 A chat interface for interacting with LangGraph agents via a `messages` key. Features:
 - Real-time streaming chat
 - Artifact rendering (side panel for generated content)
 - Message visibility control (`langsmith:nostream`, `do-not-render-` prefix)
-- Production-ready with API passthrough or custom auth
+- Production-ready with API passthrough
+
+---
+
+## Minerva styling
+
+Minerva customizations applied on top of Agent Chat UI:
+
+1. **Header** – Fixed header above the chat in `page.tsx`:
+   - Logo: `/assets/MinervaLogo.png`
+   - Styles: dark bar (`#222325`), `box-shadow: 0 4px 6px rgba(0,0,0,0.5)`, 60px height
+
+2. **Page background** – Container in `page.tsx` with:
+   - `background-color: #4c4f52`
+   - `background-image: url('/assets/relief.png')`
+   - `background-size: cover`
+
+3. **Colors** – Added to `globals.css`:
+   - Minerva color variables (`--minerva-color-*`)
+   - Light and dark mode support
+
+4. **Assets** – In `public/assets/`:
+   - `MinervaLogo.png`
+   - `relief.png`
+
+When running `git subtree pull`, resolve conflicts in `page.tsx` and `globals.css` if upstream changed them.
 
 ---
 
 ## Local Development Setup
 
+The UI lives under `minerva-desktop/` in the Minerva repo. Install and run from there:
+
 ```bash
-# Clone and install
-git clone https://github.com/langchain-ai/agent-chat-ui.git
-cd agent-chat-ui
-pnpm install
+cd minerva-desktop
+npm install  # or pnpm install
 
 # Configure (copy .env.example to .env)
 NEXT_PUBLIC_API_URL=http://localhost:2024
-NEXT_PUBLIC_ASSISTANT_ID=agent
+NEXT_PUBLIC_ASSISTANT_ID=minerva_agent
 
 # Run
-pnpm dev
+npm run dev
 # Available at http://localhost:3000
-```
-
-Or use npx:
-```bash
-npx create-agent-chat-app
 ```
 
 ---
@@ -75,9 +112,11 @@ return {"messages": [result]}
 
 ## Production Deployment
 
-### Option 1: API Passthrough (recommended)
+**We use API Passthrough.** The browser talks to your Next.js server (e.g. `your-site.com/api`); the server holds the LangSmith API key and forwards requests to LangGraph Cloud. LangGraph sees one identity (your app). The key never goes to the browser.
 
-Uses a server-side proxy to inject the LangSmith API key:
+### API Passthrough (our setup)
+
+Your Next.js app includes a **server-side proxy** (e.g. [langgraph-nextjs-api-passthrough](https://github.com/bracesproul/langgraph-nextjs-api-passthrough)). The frontend calls your own API; the Next.js server forwards to LangGraph Cloud and **injects** `LANGSMITH_API_KEY` on the server.
 
 ```env
 NEXT_PUBLIC_ASSISTANT_ID=minerva_agent
@@ -86,87 +125,38 @@ NEXT_PUBLIC_API_URL=https://my-website.com/api
 LANGSMITH_API_KEY=lsv2_...  # Server-side only, no NEXT_PUBLIC_ prefix
 ```
 
-### Option 2: Custom Authentication
-
-Configure [LangGraph custom auth](https://langchain-ai.github.io/langgraph/concepts/auth/) on your deployment, then pass tokens in `defaultHeaders`:
-
-```typescript
-const streamValue = useTypedStream({
-  apiUrl: process.env.NEXT_PUBLIC_API_URL,
-  assistantId: process.env.NEXT_PUBLIC_ASSISTANT_ID,
-  defaultHeaders: {
-    Authentication: `Bearer ${yourToken}`,
-  },
-});
-```
+If you later need per-user identity (e.g. "user A only sees their threads"), you can switch to [Custom Auth](https://langchain-ai.github.io/langgraph/how-tos/auth/custom_auth/) on the deployment and pass a user token in `defaultHeaders`.
 
 ---
 
-## Upstream Management
+## Upstream Management (subtree)
 
-Choose how to track upstream changes:
+We use **subtree** so the UI lives in one Minerva repo and we can pull updates from the original agent-chat-ui.
 
-### Option A: Fork + Submodule (recommended)
+### What "upstream" means
 
-Best for maintaining Minerva-specific customizations while pulling upstream updates.
+- **origin** = the Minerva repo (where you push).
+- **upstream** = the original `langchain-ai/agent-chat-ui`; you only **pull** from it.
+
+You add their repo as a remote and run `git subtree pull` to merge their `main` into `minerva-desktop/`. You never push to upstream.
+
+### Pulling upstream updates
+
+When you want the latest from agent-chat-ui:
 
 ```bash
-# 1. Fork the repo on GitHub (e.g., to alexelgier/agent-chat-ui)
-
-# 2. In your fork, add upstream remote
-cd agent-chat-ui-fork
-git remote add upstream https://github.com/langchain-ai/agent-chat-ui.git
-
-# 3. Add fork as submodule in Minerva
-cd /path/to/Minerva
-git submodule add https://github.com/alexelgier/agent-chat-ui.git minerva-chat-ui
-
-# 4. To update from upstream later
-cd minerva-chat-ui
-git fetch upstream && git merge upstream/main
-# Resolve conflicts, push to fork
-cd ..
-git add minerva-chat-ui && git commit -m "Update agent-chat-ui from upstream"
+# From Minerva repo root
+git subtree pull --prefix=minerva-desktop agent-chat-ui main
 ```
 
-**Pros:** Real git tie; easy upstream pulls; customizations in fork.  
-**Cons:** Submodule workflow; clones need `git submodule update --init --recursive`.
+Resolve any merge conflicts (usually in your customized files: `page.tsx`, `globals.css`). Keep customizations to a few files so pulls stay manageable.
 
-### Option B: Subtree (single repo)
+### Trade-offs
 
-Keep everything in one repo with subtree merging:
-
-```bash
-# Add remote
-git remote add agent-chat-ui https://github.com/langchain-ai/agent-chat-ui.git
-
-# Add as subtree
-git subtree add --prefix=minerva-chat-ui agent-chat-ui main
-
-# Update from upstream
-git subtree pull --prefix=minerva-chat-ui agent-chat-ui main
-```
-
-**Pros:** Single repo; no submodule complexity.  
-**Cons:** Potential merge conflicts on customized files.
-
----
-
-## Comparison
-
-| Approach | Location | Customizable? | Maintenance |
-|----------|----------|---------------|-------------|
-| Fork + submodule | Submodule in Minerva | Yes | Low |
-| Subtree | Directory in Minerva | Yes | Low |
-| Deploy your own | Your Vercel/server | Yes | Medium |
-
----
-
-## Recommendation
-
-1. **Fork + submodule** when you need Minerva branding, custom defaults, or additional features.
-2. **Subtree** if you prefer a single repo and one clone.
-3. **Deploy your own** (Vercel, etc.) when you want hosted convenience with your customizations baked in.
+| Pros | Cons |
+|------|------|
+| One repo, one clone; no submodules. | Conflicts when both you and upstream change the same file; resolve in Minerva. |
+| No submodule pointer or nested-repo workflow. | Run `git subtree pull` manually when you want updates. |
 
 ---
 

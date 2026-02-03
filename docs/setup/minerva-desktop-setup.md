@@ -2,11 +2,13 @@
 
 Detailed setup instructions for the Minerva Desktop application.
 
+**Note:** `minerva-desktop/` now uses [Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) via git subtree. See [minerva-desktop-upstream.md](minerva-desktop-upstream.md) for upstream management.
+
 ## Prerequisites
 
-- Node.js 18+ and npm
-- Rust and Cargo
-- Tauri prerequisites (platform-specific)
+- Node.js 18+ and npm (or pnpm)
+- Rust and Cargo (for Tauri desktop builds)
+- Tauri prerequisites (platform-specific, optional for web-only dev)
 
 ## Installation
 
@@ -54,22 +56,20 @@ If not installed, see [Rust Installation Guide](https://www.rust-lang.org/tools/
 
 ### Environment Variables
 
-Create `.env.local` in `minerva-desktop/`:
+Create `.env` in `minerva-desktop/` (copy from `.env.example`):
 
 ```env
 # Required: LangGraph server URL
-NEXT_PUBLIC_DEPLOYMENT_URL="http://127.0.0.1:2024"
+NEXT_PUBLIC_API_URL=http://localhost:2024
 
-# Required: Agent ID from langgraph.json
-NEXT_PUBLIC_AGENT_ID="minerva_agent"
+# Required: Graph/assistant ID from langgraph.json
+NEXT_PUBLIC_ASSISTANT_ID=minerva_agent
 
-# Optional: LangSmith API key (for production deployments)
-NEXT_PUBLIC_LANGSMITH_API_KEY="your-langsmith-key"
+# Optional: LangSmith API key (for production, server-side only)
+LANGSMITH_API_KEY=
 ```
 
-### Deployment Configuration
-
-Edit `src/lib/environment/deployments.ts` for custom deployment settings.
+See [minerva-desktop-upstream.md](minerva-desktop-upstream.md) for production deployment with API passthrough.
 
 ## Development
 
@@ -180,16 +180,16 @@ Download from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview
 
 **Connection refused**:
 - Verify LangGraph server is running
-- Check `NEXT_PUBLIC_DEPLOYMENT_URL` matches server URL
+- Check `NEXT_PUBLIC_API_URL` matches server URL
 - Verify firewall settings
 
 **Agent not found**:
-- Check `NEXT_PUBLIC_AGENT_ID` matches agent ID in langgraph.json
+- Check `NEXT_PUBLIC_ASSISTANT_ID` matches graph name in langgraph.json
 - Verify agent server is running
 
 **Authentication errors**:
-- For production: Set `NEXT_PUBLIC_LANGSMITH_API_KEY`
-- For local: May not be required
+- For production: Set `LANGSMITH_API_KEY` (server-side) and use API passthrough
+- For local: Usually not required
 
 ### Performance Issues
 

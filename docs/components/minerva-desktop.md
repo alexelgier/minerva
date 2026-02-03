@@ -6,20 +6,20 @@ This document provides comprehensive information about the Minerva Desktop appli
 
 ## Overview
 
-Minerva Desktop is a native desktop application built with Tauri and Next.js that provides a modern UI for interacting with LangGraph deep agents.
+Minerva Desktop is a Next.js application (optionally wrapped with Tauri for native desktop) that provides a modern UI for interacting with LangGraph agents. It uses [Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) as the base, with Minerva-specific styling.
 
 ## Key Features
 
 - Real-time chat interface with streaming responses
-- Task tracking and management
-- File viewer with syntax highlighting
 - Thread history management
-- Subagent activity monitoring
-- System tray integration
+- Artifact rendering (side panel for generated content)
+- Minerva branding (custom header and background)
+- Tied to upstream via git subtree for easy updates
 
 ## Quick Links
 
 - [Setup Guide](../setup/minerva-desktop-setup.md)
+- [Upstream Management](../setup/minerva-desktop-upstream.md)
 - [Usage Guide](../usage/minerva-desktop.md)
 - [Architecture](../architecture/minerva-desktop.md)
 - [README](../../minerva-desktop/README.md)

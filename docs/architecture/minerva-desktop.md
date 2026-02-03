@@ -1,6 +1,6 @@
 # Minerva Desktop Architecture
 
-Minerva Desktop is a native desktop application built with Tauri and Next.js, providing a modern UI for interacting with LangGraph deep agents.
+Minerva Desktop is a Next.js application (optionally wrapped with Tauri for native desktop) providing a modern UI for interacting with LangGraph agents. It uses [Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) as the base, with Minerva-specific styling applied on top. See [upstream management](../setup/minerva-desktop-upstream.md) for how we track upstream updates.
 
 ## Architecture Overview
 
@@ -55,21 +55,28 @@ Minerva Desktop is a native desktop application built with Tauri and Next.js, pr
 
 ### App Directory (`src/app/`)
 
+Based on Agent Chat UI with Minerva customizations:
+
 ```
 app/
-├── components/
-│   ├── ChatInterface/      # Main chat UI
-│   ├── ChatMessage/        # Message rendering
-│   ├── FileViewDialog/      # File viewer modal
-│   ├── SubAgentIndicator/  # Subagent status
-│   ├── SubAgentPanel/      # Subagent details
-│   ├── TasksFilesSidebar/  # Tasks and files list
-│   └── ThreadHistorySidebar/ # Thread management
-├── hooks/
-│   └── useChat.ts          # Chat state management
-├── types/
-│   └── types.ts             # TypeScript definitions
-└── page.tsx                 # Main page component
+├── api/
+│   └── [..._path]/         # API passthrough routes
+├── globals.css             # Global styles + Minerva customizations
+├── layout.tsx              # Root layout
+└── page.tsx                # Main page (Minerva header wrapper)
+```
+
+### Components (`src/components/`)
+
+```
+components/
+├── thread/                 # Chat thread components
+│   ├── artifact.tsx        # Artifact side panel
+│   ├── history/            # Thread history
+│   ├── messages/           # Message rendering (AI, human, tools)
+│   └── index.tsx           # Main Thread component
+├── ui/                     # Shared UI components (button, input, etc.)
+└── icons/                  # Icon components
 ```
 
 ### Shared Components (`src/components/ui/`)
@@ -124,7 +131,7 @@ Agent State → SDK Stream → handleUpdateEvent → Component State → UI
 
 ### Real-Time Streaming
 - WebSocket connection to LangGraph server
-- Optimistic UI updates
+- Streaming message updates
 - Automatic reconnection
 
 ### Thread Management
@@ -132,20 +139,14 @@ Agent State → SDK Stream → handleUpdateEvent → Component State → UI
 - Thread history sidebar
 - New thread creation
 
-### Task Tracking
-- Tasks extracted from agent state
-- Sidebar display
-- Real-time updates
+### Artifact Rendering
+- Side panel for generated content
+- Supports custom artifact components
 
-### File Operations
-- Files tracked from agent state
-- File viewer dialog
-- Content display with syntax highlighting
-
-### Subagent Monitoring
-- Subagent activity tracking
-- Dedicated panel for subagent details
-- Visual indicators
+### Minerva Branding
+- Custom header with logo
+- Background styling
+- Color theme customization
 
 ## Tauri Integration
 
@@ -168,17 +169,19 @@ Agent State → SDK Stream → handleUpdateEvent → Component State → UI
 
 ### Development
 ```env
-NEXT_PUBLIC_DEPLOYMENT_URL="http://127.0.0.1:2024"
-NEXT_PUBLIC_AGENT_ID="minerva_agent"
-NEXT_PUBLIC_LANGSMITH_API_KEY="optional-for-local"
+NEXT_PUBLIC_API_URL=http://localhost:2024
+NEXT_PUBLIC_ASSISTANT_ID=minerva_agent
 ```
 
-### Production
+### Production (API Passthrough)
 ```env
-NEXT_PUBLIC_DEPLOYMENT_URL="https://your-deployment-url"
-NEXT_PUBLIC_AGENT_ID="your-agent-id"
-NEXT_PUBLIC_LANGSMITH_API_KEY="required-for-production"
+NEXT_PUBLIC_API_URL=https://your-site.com/api
+NEXT_PUBLIC_ASSISTANT_ID=minerva_agent
+LANGGRAPH_API_URL=https://my-agent.default.us.langgraph.app
+LANGSMITH_API_KEY=lsv2_...  # Server-side only
 ```
+
+See [upstream management](../setup/minerva-desktop-upstream.md) for production deployment details.
 
 ## Development Workflow
 

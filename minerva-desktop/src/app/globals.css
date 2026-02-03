@@ -149,3 +149,86 @@
     box-shadow: inset 9px 0 6px -1px rgb(0 0 0 / 0.02);
   }
 }
+
+/* =================================
+   Minerva Custom Styling
+   ================================= */
+
+/* Minerva color variables */
+:root {
+  --minerva-color-primary: #1c3c3c;
+  --minerva-color-user-message: #076699;
+  --minerva-color-avatar-bg: #ebe8fe;
+  --minerva-color-success: #10b981;
+  --minerva-color-warning: #f59e0b;
+  --minerva-color-error: #ef4444;
+  --minerva-color-surface: #f9fafb;
+  --minerva-color-border: #e5e7eb;
+  --minerva-color-text-primary: #111827;
+  --minerva-color-text-secondary: #6b7280;
+  --minerva-header-bg: #222325;
+  --minerva-page-bg: #4c4f52;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --minerva-color-primary: #2dd4bf;
+    --minerva-color-user-message: #0ea5e9;
+    --minerva-color-avatar-bg: #4c1d95;
+    --minerva-color-success: #34d399;
+    --minerva-color-warning: #fbbf24;
+    --minerva-color-error: #f87171;
+    --minerva-color-surface: #1a1a1a;
+    --minerva-color-border: #2d2d2d;
+    --minerva-color-text-primary: #f3f4f6;
+    --minerva-color-text-secondary: #9ca3af;
+  }
+}
+
+/* Minerva container with background */
+.minerva-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--minerva-page-bg);
+  background-image: url('/assets/relief.png');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
+/* Minerva header */
+.minerva-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 2rem;
+  height: 60px;
+  background-color: var(--minerva-header-bg);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.minerva-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.minerva-logo {
+  height: 49px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Minerva main content area */
+.minerva-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
