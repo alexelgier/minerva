@@ -14,6 +14,7 @@ Minerva Desktop is a Next.js application (optionally wrapped with Tauri for nati
 - Thread history management
 - Artifact rendering (side panel for generated content)
 - Minerva branding (custom header and background)
+- System tray integration (minimize to tray, quick access menu)
 - Tied to upstream via git subtree for easy updates
 
 ## Quick Links

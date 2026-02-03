@@ -19,11 +19,13 @@ A Next.js app that connects to any LangGraph deployment. Run locally or integrat
 - Added `agent-chat-ui` as a git remote
 - Minerva styling (header, background, colors) applied on top
 - Tied to upstream via subtree for easy updates
+- Tauri integration added for native desktop app
 
 **Key files customized:**
 - `src/app/page.tsx` - Minerva header wrapper
 - `src/app/globals.css` - Minerva color variables and container styles
 - `public/assets/` - `MinervaLogo.png`, `relief.png`
+- `src-tauri/` - Tauri desktop wrapper (not from upstream)
 
 ---
 
@@ -74,10 +76,49 @@ npm install  # or pnpm install
 NEXT_PUBLIC_API_URL=http://localhost:2024
 NEXT_PUBLIC_ASSISTANT_ID=minerva_agent
 
-# Run
+# Run (web only)
 npm run dev
 # Available at http://localhost:3000
 ```
+
+---
+
+## Tauri Desktop App
+
+Tauri wraps the Next.js app in a native desktop window.
+
+### Prerequisites
+
+- Rust and Cargo installed ([rustup.rs](https://rustup.rs))
+- Platform-specific requirements:
+  - **Windows**: Microsoft Visual C++ Build Tools, WebView2 Runtime
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+  - **Linux**: See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+
+### Development
+
+```bash
+cd minerva-desktop
+npm run tauri:dev
+```
+
+This starts the Next.js dev server and opens a native window with hot reload.
+
+### Production Build
+
+```bash
+npm run tauri:build
+```
+
+Creates distributable installers in `src-tauri/target/release/bundle/`.
+
+**Note:** Production builds require static export. See `next.config.mjs` comments for instructions (remove API routes, enable `output: "export"`). For desktop use, set `NEXT_PUBLIC_API_URL` directly to your LangGraph server.
+
+### Tauri Configuration
+
+- `src-tauri/tauri.conf.json` - Window settings, app name, bundle config
+- `src-tauri/Cargo.toml` - Rust dependencies
+- `src-tauri/src/lib.rs` - System tray implementation (minimize to tray, menu)
 
 ---
 

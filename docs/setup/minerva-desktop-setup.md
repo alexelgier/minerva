@@ -205,10 +205,10 @@ Download from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview
 ## System Tray
 
 The app includes system tray functionality:
-- Minimize to tray
-- Right-click menu
-- Show/hide window
-- Quit option
+- **Minimize to tray**: Closing the window hides it to tray instead of quitting
+- **Left-click tray icon**: Shows and focuses the window
+- **Right-click menu**: Show/Hide toggle and Quit option
+- **Tooltip**: Shows "Minerva" on hover
 
 Configure in `src-tauri/src/lib.rs`.
 
