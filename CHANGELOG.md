@@ -7,15 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Dependencies**: Updated all project libraries to latest versions
-  - **Python (Poetry)**: Ran `poetry update` at repo root; 88 packages updated (e.g. pydantic, langchain, langgraph, temporalio, jupyterlab, pytest-asyncio, neo4j). Root `poetry.lock` and backend path dependency on minerva-models resolved.
-  - **Backend path fix**: Corrected minerva-models path in `backend/pyproject.toml` from `../../minerva-models` to `../minerva-models` so Poetry resolves it correctly from the project root.
-  - **npm**: Refreshed lockfiles for root, frontend, and minerva-desktop. Frontend already on newer Vue 3.5, Vite 7, and related deps.
-  - **Rust (Cargo)**: Ran `cargo update` in `minerva-desktop/src-tauri`; ~100 crates updated including Tauri 2.9.2 → 2.9.5 and transitive deps. `Cargo.lock` updated.
+## [0.3.0] - 2026-02-02
 
 ### Added
-- **Frontend**: Added `vue-eslint-parser@^10.0.0` as devDependency to satisfy eslint-plugin-vue@10 peer dependency and resolve npm install conflicts.
+- **minerva-desktop**: Migrated from deepagent-ui to [Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) via git subtree; minerva-desktop updatable with `git subtree pull --prefix=minerva-desktop agent-chat-ui main`.
+- **minerva-desktop**: Re-initialized Tauri; system tray (minimize to tray, Show/Hide, Quit, tooltip). Run with `npm run tauri:dev` or `npm run tauri:build`.
+- **Documentation**: [docs/setup/minerva-desktop-upstream.md](docs/setup/minerva-desktop-upstream.md) for subtree, styling, Tauri, production; setup/architecture/components/usage docs aligned.
+
+### Changed
+- **minerva-desktop**: Preserved Minerva styling (header, background, colors) on Agent Chat UI base; key files: `src/app/page.tsx`, `src/app/globals.css`, `public/assets/`.
+- **Backend**: Graph repositories and journal-entry repository now import entities from `minerva_models` instead of removed `minerva_backend.graph.models.entities` (fixes startup `ModuleNotFoundError`).
+- **Backend**: Clearer error when Temporal Server is not running: actionable message suggesting `temporal server start-dev` or `start-minerva.ps1`.
+- **Backend**: Ollama Python client updated from 0.1.9 to 0.6.1 (`backend/pyproject.toml`).
 
 ## [0.2.0] - 2025-11-XX
 
@@ -85,6 +88,7 @@ While functionality is still limited and many features are in development, this 
 
 ---
 
+[0.3.0]: https://github.com/yourusername/Minerva/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yourusername/Minerva/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/yourusername/Minerva/releases/tag/v0.1.0
 
