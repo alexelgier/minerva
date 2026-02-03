@@ -6,8 +6,7 @@ Handles all JournalEntry document database operations.
 from datetime import date
 from typing import List, Optional
 
-from ..models.base import LexicalType
-from ..models.documents import JournalEntry
+from minerva_models import JournalEntry, LexicalType
 from .base import BaseRepository
 
 

@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
-from ..models.entities import Concept
+from minerva_models import Concept
 from ..models.enums import EntityType
 from .base import BaseRepository
 

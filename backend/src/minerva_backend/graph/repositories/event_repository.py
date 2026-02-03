@@ -6,7 +6,7 @@ Handles all Event entity database operations.
 from datetime import datetime
 from typing import List
 
-from ..models.entities import Event
+from minerva_models import Event
 from ..models.enums import EntityType
 from .base import BaseRepository
 

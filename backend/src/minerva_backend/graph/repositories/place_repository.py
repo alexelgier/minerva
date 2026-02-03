@@ -1,4 +1,4 @@
-from ..models.entities import Consumable, Content, Place
+from minerva_models import Consumable, Content, Place
 from ..models.enums import EntityType
 from .base import BaseRepository
 

@@ -6,7 +6,7 @@ Handles all Project entity database operations.
 from datetime import datetime
 from typing import List
 
-from ..models.entities import Project, ProjectStatus
+from minerva_models import Project, ProjectStatus
 from ..models.enums import EntityType
 from .base import BaseRepository
 

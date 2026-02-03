@@ -6,7 +6,7 @@ Handles all Feeling entity database operations.
 from datetime import datetime
 from typing import Any, Dict, List
 
-from ..models.entities import FeelingConcept, FeelingEmotion
+from minerva_models import FeelingConcept, FeelingEmotion
 from ..models.enums import EntityType
 from .base import BaseRepository
 

@@ -1,0 +1,106 @@
+# Transient Changelog
+
+Detailed log of changes for later distillation into [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## 2026-02-01 — Document keeping minerva-desktop tied to upstream (deep-agents-ui)
+
+**Context:** minerva-desktop is a one-time copy of [langchain-ai/deep-agents-ui](https://github.com/langchain-ai/deep-agents-ui) with no git link; upstream has newer commits we don't have.
+
+**Change:** Added [docs/setup/minerva-desktop-upstream.md](docs/setup/minerva-desktop-upstream.md) describing:
+
+- The stale relationship (no fork, no submodule, no remote).
+- How projects usually handle this: fork + upstream remote, submodule, subtree, or no tie.
+- Options for Minerva: **fork + submodule** (recommended for a clean tie), **subtree** (one repo), or **no tie** (manual re-sync).
+- Comparison table and recommendation.
+
+**Result:** One place to decide and follow a strategy for syncing with upstream deep-agents-ui.
+
+---
+
+## 2026-02-01 — Fix backend startup: graph repositories import from minerva_models
+
+**Context:** Running `poetry run python -m minerva_backend.api.main` from the backend directory failed with:
+
+```
+ModuleNotFoundError: No module named 'minerva_backend.graph.models.entities'
+```
+
+The import chain was: `main.py` → `containers` → `graph.repositories.base` → `graph.repositories.__init__` → `concept_repository` → `..models.entities` (i.e. `minerva_backend.graph.models.entities`). That module does not exist: `backend/src/minerva_backend/graph/models/` only contains `__init__.py` and `enums.py`. Entity types (Concept, Person, JournalEntry, etc.) live in the shared package `minerva_models`.
+
+**Change:** Updated all graph repositories and the journal-entry repository to import entities (and related types) from `minerva_models` instead of `..models.entities`, `..models.base`, or `..models.documents`.
+
+**Files changed:**
+
+- `backend/src/minerva_backend/graph/repositories/concept_repository.py`  
+  `from ..models.entities import Concept` → `from minerva_models import Concept`
+
+- `backend/src/minerva_backend/graph/repositories/content_repository.py`  
+  `from ..models.entities import Content` → `from minerva_models import Content`
+
+- `backend/src/minerva_backend/graph/repositories/consumable_repository.py`  
+  `from ..models.entities import Consumable, Content` → `from minerva_models import Consumable, Content`
+
+- `backend/src/minerva_backend/graph/repositories/emotion_repository.py`  
+  `from ..models.entities import Emotion` → `from minerva_models import Emotion`
+
+- `backend/src/minerva_backend/graph/repositories/event_repository.py`  
+  `from ..models.entities import Event` → `from minerva_models import Event`
+
+- `backend/src/minerva_backend/graph/repositories/feeling_concept_repository.py`  
+  `from ..models.entities import FeelingConcept` → `from minerva_models import FeelingConcept`
+
+- `backend/src/minerva_backend/graph/repositories/feeling_emotion_repository.py`  
+  `from ..models.entities import FeelingConcept, FeelingEmotion` → `from minerva_models import FeelingConcept, FeelingEmotion`
+
+- `backend/src/minerva_backend/graph/repositories/person_repository.py`  
+  `from ..models.entities import Person` → `from minerva_models import Person`
+
+- `backend/src/minerva_backend/graph/repositories/place_repository.py`  
+  `from ..models.entities import Consumable, Content, Place` → `from minerva_models import Consumable, Content, Place`
+
+- `backend/src/minerva_backend/graph/repositories/project_repository.py`  
+  `from ..models.entities import Project, ProjectStatus` → `from minerva_models import Project, ProjectStatus`
+
+- `backend/src/minerva_backend/graph/repositories/journal_entry_repository.py`  
+  `from ..models.base import LexicalType` and `from ..models.documents import JournalEntry` → `from minerva_models import JournalEntry, LexicalType`
+
+**Left unchanged:** Imports from `..models.enums` (e.g. `EntityType`) in the above repositories; `graph/models/enums.py` exists. Other files that already imported from `minerva_models` (e.g. `base.py`, `quote_repository.py`, `relation_repository.py`, `temporal_repository.py`) were not modified.
+
+**Result:** Backend starts successfully; `poetry run python -m minerva_backend.api.main` runs and the server process starts and initializes async services.
+
+---
+
+## 2026-02-01 — Clearer error when Temporal Server is not running
+
+**Context:** If the backend is started without Temporal Server running (e.g. running only `poetry run python -m minerva_backend.api.main` from the backend directory), startup fails with a long traceback and a low-level error:
+
+```
+RuntimeError: Failed client connect: Server connection error: tonic::transport::Error(Transport, ConnectError(ConnectError("tcp connect error", 127.0.0.1:7233, Os { code: 10061, kind: ConnectionRefused, message: "No connection could be made because the target machine actively refused it." })))
+```
+
+The failure happens in `PipelineOrchestrator.initialize()` when connecting to `self.temporal_uri` (default 127.0.0.1:7233). The message does not tell the user that Temporal Server must be started (e.g. `temporal server start-dev` or `start-minerva.ps1`).
+
+**Change:** In `backend/src/minerva_backend/processing/temporal_orchestrator.py`, wrapped `Client.connect(...)` in `PipelineOrchestrator.initialize()` in a try/except. On connection-refused–style errors (RuntimeError or OSError whose message contains "ConnectionRefused", "7233", or "connect"), we re-raise a RuntimeError with a clear message:
+
+- "Cannot connect to Temporal Server. Is it running? Start it with: temporal server start-dev (or run start-minerva.ps1 from the project root)."
+
+Other errors are re-raised unchanged.
+
+**Result:** When Temporal is not running, the user sees a short, actionable message instead of the raw tonic/transport error.
+
+---
+
+## 2026-02-01 — Update ollama Python client to 0.6.x
+
+**Context:** The backend uses the official Ollama Python client (`ollama` on PyPI) for LLM and embedding calls. The project had `ollama = "^0.1.0"` in `backend/pyproject.toml` and the lockfile resolved to 0.1.9. PyPI latest is 0.6.1.
+
+**Change:**
+
+- In `backend/pyproject.toml`, updated the ollama dependency from `^0.1.0` to `^0.6.0`.
+- Ran `poetry update minerva-backend` at the project root so the backend path dependency and its transitive deps were re-resolved. Lockfile now pins **ollama 0.6.1** (was 0.1.9).
+
+**Compatibility:** Backend usage is limited to `import ollama` and `ollama.AsyncClient(host=...)` in `llm_service.py` and health checks. No code changes were made; 0.6.x keeps `AsyncClient` and the same host option.
+
+**Result:** Backend depends on ollama 0.6.1. Run `poetry install` (or rely on the updated lockfile) to use the new version.

@@ -356,9 +356,18 @@ class PipelineOrchestrator:
 
     async def initialize(self):
         """Connect to Temporal server"""
-        self.client = await Client.connect(
-            self.temporal_uri, data_converter=create_custom_data_converter()
-        )
+        try:
+            self.client = await Client.connect(
+                self.temporal_uri, data_converter=create_custom_data_converter()
+            )
+        except (RuntimeError, OSError) as e:
+            if "ConnectionRefused" in str(e) or "7233" in str(e) or "connect" in str(e).lower():
+                raise RuntimeError(
+                    "Cannot connect to Temporal Server. Is it running? "
+                    "Start it with: temporal server start-dev "
+                    "(or run start-minerva.ps1 from the project root)."
+                ) from e
+            raise
 
     async def submit_journal(self, journal_entry: JournalEntry) -> str:
         """Submit a journal entry for processing"""

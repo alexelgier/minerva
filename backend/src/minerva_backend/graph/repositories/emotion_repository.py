@@ -5,7 +5,7 @@ Handles all Emotion entity database operations.
 
 from typing import List
 
-from ..models.entities import Emotion
+from minerva_models import Emotion
 from ..models.enums import EntityType
 from .base import BaseRepository
 

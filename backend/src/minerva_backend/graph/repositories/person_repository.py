@@ -5,7 +5,7 @@ Handles all Person entity database operations.
 
 from typing import List
 
-from ..models.entities import Person
+from minerva_models import Person
 from ..models.enums import EntityType
 from .base import BaseRepository
 

@@ -3,7 +3,7 @@ Resource Repository for Minerva
 Handles all Resource entity database operations.
 """
 
-from ..models.entities import Content
+from minerva_models import Content
 from ..models.enums import EntityType
 from .base import BaseRepository
 

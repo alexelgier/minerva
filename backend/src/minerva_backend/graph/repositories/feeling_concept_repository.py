@@ -8,7 +8,7 @@ including CRUD operations and feeling-specific queries.
 from datetime import datetime
 from typing import Any, Dict, List
 
-from ..models.entities import FeelingConcept
+from minerva_models import FeelingConcept
 from ..models.enums import EntityType
 from .base import BaseRepository
 

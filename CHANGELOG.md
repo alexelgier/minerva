@@ -5,6 +5,18 @@ All notable changes to the Minerva project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Dependencies**: Updated all project libraries to latest versions
+  - **Python (Poetry)**: Ran `poetry update` at repo root; 88 packages updated (e.g. pydantic, langchain, langgraph, temporalio, jupyterlab, pytest-asyncio, neo4j). Root `poetry.lock` and backend path dependency on minerva-models resolved.
+  - **Backend path fix**: Corrected minerva-models path in `backend/pyproject.toml` from `../../minerva-models` to `../minerva-models` so Poetry resolves it correctly from the project root.
+  - **npm**: Refreshed lockfiles for root, frontend, and minerva-desktop. Frontend already on newer Vue 3.5, Vite 7, and related deps.
+  - **Rust (Cargo)**: Ran `cargo update` in `minerva-desktop/src-tauri`; ~100 crates updated including Tauri 2.9.2 → 2.9.5 and transitive deps. `Cargo.lock` updated.
+
+### Added
+- **Frontend**: Added `vue-eslint-parser@^10.0.0` as devDependency to satisfy eslint-plugin-vue@10 peer dependency and resolve npm install conflicts.
+
 ## [0.2.0] - 2025-11-XX
 
 ### 🎉 Milestone: Minerva is Now Usable!

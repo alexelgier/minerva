@@ -1,10 +1,10 @@
 {
   "devDependencies": {
-    "@babel/eslint-parser": "^7.28.4",
-    "eslint": "^9.36.0",
-    "eslint-plugin-vue": "^10.4.0"
+    "@babel/eslint-parser": "^7.28.6",
+    "eslint": "^9.39.2",
+    "eslint-plugin-vue": "^10.7.0"
   },
   "dependencies": {
-    "marked": "^16.3.0"
+    "marked": "^17.0.1"
   }
 }
