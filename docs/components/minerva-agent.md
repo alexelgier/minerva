@@ -6,15 +6,14 @@ This document provides comprehensive information about the minerva_agent LangGra
 
 ## Overview
 
-minerva_agent is a deep agent built with LangGraph and deepagents that provides intelligent assistance for Obsidian vault management.
+minerva_agent is a LangGraph agent (LangChain 1.x) that provides read-only Obsidian vault access and launches Temporal workflows (quote parsing, concept extraction, inbox classification) with mandatory human-in-the-loop (HITL) confirmation. Irreversible actions are performed by backend workflows after curation in the Curation UI.
 
 ## Key Features
 
-- File system operations (read, write, edit)
-- Search and discovery (glob patterns, grep)
-- Task planning and execution
-- Subagent delegation
+- Read-only vault tools (read_file, list_dir, glob, grep) sandboxed to OBSIDIAN_VAULT_PATH
+- Workflow launcher tools (start_quote_parsing, start_concept_extraction, start_inbox_classification, get_workflow_status) with HITL
 - Bilingual support (Spanish/English)
+- No direct file writes; workflow steps approved in Curation UI (Quotes, Concepts, Inbox)
 
 ## Quick Links
 

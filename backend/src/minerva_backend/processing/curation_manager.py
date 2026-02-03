@@ -168,6 +168,151 @@ class CurationManager:
             """
             )
 
+            # Concept extraction curation (workflow-level tracking)
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS concept_workflow_curation (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    workflow_id TEXT NOT NULL UNIQUE,
+                    content_uuid TEXT NOT NULL,
+                    overall_status TEXT DEFAULT 'PENDING_CONCEPTS'
+                        CHECK (overall_status IN ('PENDING_CONCEPTS', 'CONCEPTS_DONE', 'PENDING_RELATIONS', 'COMPLETED')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS concept_curation_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT NOT NULL,
+                    workflow_id TEXT NOT NULL,
+                    original_data_json TEXT,
+                    curated_data_json TEXT,
+                    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    curated_at TIMESTAMP,
+                    FOREIGN KEY (workflow_id) REFERENCES concept_workflow_curation (workflow_id)
+                )
+            """
+            )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS concept_relation_curation_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT NOT NULL,
+                    workflow_id TEXT NOT NULL,
+                    original_data_json TEXT,
+                    curated_data_json TEXT,
+                    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    curated_at TIMESTAMP,
+                    FOREIGN KEY (workflow_id) REFERENCES concept_workflow_curation (workflow_id)
+                )
+            """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_concept_items_workflow_status
+                ON concept_curation_items (workflow_id, status)
+            """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_concept_relation_items_workflow
+                ON concept_relation_curation_items (workflow_id, status)
+            """
+            )
+
+            # Quote parsing curation (workflow-level tracking)
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS quote_workflow_curation (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    workflow_id TEXT NOT NULL UNIQUE,
+                    file_path TEXT NOT NULL,
+                    content_title TEXT,
+                    content_author TEXT,
+                    overall_status TEXT DEFAULT 'PENDING' CHECK (overall_status IN ('PENDING', 'COMPLETED')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS quote_curation_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT NOT NULL,
+                    workflow_id TEXT NOT NULL,
+                    original_data_json TEXT,
+                    curated_data_json TEXT,
+                    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    curated_at TIMESTAMP,
+                    FOREIGN KEY (workflow_id) REFERENCES quote_workflow_curation (workflow_id)
+                )
+            """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_quote_items_workflow_status
+                ON quote_curation_items (workflow_id, status)
+            """
+            )
+
+            # Inbox classification curation (for InboxClassificationWorkflow)
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS inbox_classification_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT NOT NULL,
+                    workflow_id TEXT NOT NULL,
+                    original_data_json TEXT,
+                    curated_data_json TEXT,
+                    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    curated_at TIMESTAMP
+                )
+            """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_inbox_items_workflow_status
+                ON inbox_classification_items (workflow_id, status)
+            """
+            )
+
+            # Notifications (workflow_started, curation_pending, workflow_completed, workflow_failed)
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT NOT NULL,
+                    workflow_id TEXT,
+                    workflow_type TEXT,
+                    notification_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    message TEXT,
+                    payload_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    read_at TIMESTAMP,
+                    dismissed_at TIMESTAMP
+                )
+            """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_notifications_workflow
+                ON notifications (workflow_id)
+            """
+            )
+            await db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_notifications_unread
+                ON notifications (read_at) WHERE read_at IS NULL
+            """
+            )
+
             await db.commit()
 
     # ===== JOURNAL MANAGEMENT =====
@@ -844,9 +989,685 @@ class CurationManager:
                 relationship_stats=relationship_stats,
             )
 
+    # ===== QUOTE PARSING CURATION =====
+
+    async def create_quote_workflow(
+        self,
+        workflow_id: str,
+        file_path: str,
+        content_title: Optional[str] = None,
+        content_author: Optional[str] = None,
+    ) -> None:
+        """Create a quote workflow row."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO quote_workflow_curation
+                (workflow_id, file_path, content_title, content_author, overall_status)
+                VALUES (?, ?, ?, ?, 'PENDING')
+                """,
+                (workflow_id, file_path, content_title or "", content_author or ""),
+            )
+            await db.commit()
+
+    async def queue_quote_curation_items(
+        self, workflow_id: str, items: List[Dict[str, Any]]
+    ) -> None:
+        """Add quote items to curation queue. Each item: {uuid, original_data_json} (Quote as JSON)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            for item in items:
+                item_uuid = item.get("uuid", str(uuid4()))
+                original = item.get("original_data_json")
+                if isinstance(original, dict):
+                    original = json.dumps(original)
+                await db.execute(
+                    """
+                    INSERT INTO quote_curation_items
+                    (uuid, workflow_id, original_data_json, status)
+                    VALUES (?, ?, ?, 'PENDING')
+                    """,
+                    (item_uuid, workflow_id, original),
+                )
+            await db.commit()
+
+    async def get_quote_pending_count(self, workflow_id: str) -> int:
+        """Return count of pending quote items for a workflow."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT COUNT(*) FROM quote_curation_items
+                WHERE workflow_id = ? AND status = 'PENDING'
+                """,
+                (workflow_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+
+    async def get_approved_quote_items(
+        self, workflow_id: str
+    ) -> List[Dict[str, Any]]:
+        """Return all accepted quote items (original or curated JSON)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT uuid, original_data_json, curated_data_json
+                FROM quote_curation_items
+                WHERE workflow_id = ? AND status = 'ACCEPTED'
+                """,
+                (workflow_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        result = []
+        for uuid_val, orig_json, cur_json in rows:
+            data = json.loads(cur_json) if cur_json else json.loads(orig_json)
+            data["uuid"] = uuid_val
+            result.append(data)
+        return result
+
+    async def accept_quote_item(
+        self,
+        workflow_id: str,
+        item_uuid: str,
+        curated_data: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Accept a quote item. curated_data is the final Quote-like dict."""
+        async with aiosqlite.connect(self.db_path) as db:
+            curated_json = json.dumps(curated_data) if curated_data else None
+            cursor = await db.execute(
+                """
+                UPDATE quote_curation_items
+                SET status = 'ACCEPTED', curated_data_json = ?, curated_at = ?
+                WHERE workflow_id = ? AND uuid = ? AND status = 'PENDING'
+                """,
+                (curated_json, datetime.utcnow().isoformat(), workflow_id, item_uuid),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def reject_quote_item(self, workflow_id: str, item_uuid: str) -> bool:
+        """Reject a quote item."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                UPDATE quote_curation_items
+                SET status = 'REJECTED', curated_at = ?
+                WHERE workflow_id = ? AND uuid = ? AND status = 'PENDING'
+                """,
+                (datetime.utcnow().isoformat(), workflow_id, item_uuid),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_pending_quote_workflows(self) -> List[Dict[str, Any]]:
+        """Return list of quote workflows with PENDING overall_status."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT workflow_id, file_path, content_title, content_author, created_at
+                FROM quote_workflow_curation
+                WHERE overall_status = 'PENDING'
+                ORDER BY created_at DESC
+                """
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [
+            {
+                "workflow_id": r[0],
+                "file_path": r[1],
+                "content_title": r[2],
+                "content_author": r[3],
+                "created_at": r[4],
+            }
+            for r in rows
+        ]
+
+    async def get_quote_curation_items_for_workflow(
+        self, workflow_id: str
+    ) -> List[Dict[str, Any]]:
+        """Return all quote curation items for a workflow."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT uuid, original_data_json, curated_data_json, status, created_at
+                FROM quote_curation_items
+                WHERE workflow_id = ?
+                ORDER BY created_at
+                """,
+                (workflow_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [
+            {
+                "uuid": r[0],
+                "original_data_json": json.loads(r[1]) if r[1] else None,
+                "curated_data_json": json.loads(r[2]) if r[2] else None,
+                "status": r[3],
+                "created_at": r[4],
+            }
+            for r in rows
+        ]
+
+    async def complete_quote_workflow(self, workflow_id: str) -> None:
+        """Mark quote workflow as completed."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                UPDATE quote_workflow_curation SET overall_status = 'COMPLETED'
+                WHERE workflow_id = ?
+                """,
+                (workflow_id,),
+            )
+            await db.commit()
+
+    # ===== CONCEPT EXTRACTION CURATION =====
+
+    async def create_concept_workflow(self, workflow_id: str, content_uuid: str) -> None:
+        """Create a concept workflow row."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO concept_workflow_curation
+                (workflow_id, content_uuid, overall_status)
+                VALUES (?, ?, 'PENDING_CONCEPTS')
+                """,
+                (workflow_id, content_uuid),
+            )
+            await db.commit()
+
+    async def queue_concept_curation_items(
+        self, workflow_id: str, concept_items: List[Dict[str, Any]]
+    ) -> None:
+        """Add concept items to curation queue. Each: {uuid, original_data_json}."""
+        async with aiosqlite.connect(self.db_path) as db:
+            for item in concept_items:
+                item_uuid = item.get("uuid", str(uuid4()))
+                orig = item.get("original_data_json")
+                if isinstance(orig, dict):
+                    orig = json.dumps(orig)
+                await db.execute(
+                    """
+                    INSERT INTO concept_curation_items
+                    (uuid, workflow_id, original_data_json, status)
+                    VALUES (?, ?, ?, 'PENDING')
+                    """,
+                    (item_uuid, workflow_id, orig),
+                )
+            await db.commit()
+
+    async def queue_concept_relation_curation_items(
+        self, workflow_id: str, relation_items: List[Dict[str, Any]]
+    ) -> None:
+        """Add concept relation items to curation queue."""
+        async with aiosqlite.connect(self.db_path) as db:
+            for item in relation_items:
+                item_uuid = item.get("uuid", str(uuid4()))
+                orig = item.get("original_data_json")
+                if isinstance(orig, dict):
+                    orig = json.dumps(orig)
+                await db.execute(
+                    """
+                    INSERT INTO concept_relation_curation_items
+                    (uuid, workflow_id, original_data_json, status)
+                    VALUES (?, ?, ?, 'PENDING')
+                    """,
+                    (item_uuid, workflow_id, orig),
+                )
+            await db.commit()
+
+    async def get_concept_pending_count(self, workflow_id: str) -> int:
+        """Return count of pending concept + relation items."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT (SELECT COUNT(*) FROM concept_curation_items WHERE workflow_id = ? AND status = 'PENDING')
+                     + (SELECT COUNT(*) FROM concept_relation_curation_items WHERE workflow_id = ? AND status = 'PENDING')
+                """,
+                (workflow_id, workflow_id),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row and row[0] is not None else 0
+
+    async def get_approved_concept_items(
+        self, workflow_id: str
+    ) -> List[Dict[str, Any]]:
+        """Return all accepted concept items (curated or original JSON)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT uuid, original_data_json, curated_data_json
+                FROM concept_curation_items
+                WHERE workflow_id = ? AND status = 'ACCEPTED'
+                """,
+                (workflow_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        result = []
+        for uuid_val, orig, cur in rows:
+            data = json.loads(cur or orig)
+            data["uuid"] = uuid_val
+            result.append(data)
+        return result
+
+    async def get_approved_concept_relation_items(
+        self, workflow_id: str
+    ) -> List[Dict[str, Any]]:
+        """Return all accepted concept relation items."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT uuid, original_data_json, curated_data_json
+                FROM concept_relation_curation_items
+                WHERE workflow_id = ? AND status = 'ACCEPTED'
+                """,
+                (workflow_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        result = []
+        for uuid_val, orig, cur in rows:
+            data = json.loads(cur or orig)
+            data["uuid"] = uuid_val
+            result.append(data)
+        return result
+
+    async def accept_concept_item(
+        self, workflow_id: str, item_uuid: str, curated_data: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Accept a concept item."""
+        async with aiosqlite.connect(self.db_path) as db:
+            curated_json = json.dumps(curated_data) if curated_data else None
+            cursor = await db.execute(
+                """
+                UPDATE concept_curation_items
+                SET status = 'ACCEPTED', curated_data_json = ?, curated_at = ?
+                WHERE workflow_id = ? AND uuid = ? AND status = 'PENDING'
+                """,
+                (curated_json, datetime.utcnow().isoformat(), workflow_id, item_uuid),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def reject_concept_item(self, workflow_id: str, item_uuid: str) -> bool:
+        """Reject a concept item."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                UPDATE concept_curation_items
+                SET status = 'REJECTED', curated_at = ?
+                WHERE workflow_id = ? AND uuid = ? AND status = 'PENDING'
+                """,
+                (datetime.utcnow().isoformat(), workflow_id, item_uuid),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def accept_concept_relation_item(
+        self, workflow_id: str, item_uuid: str, curated_data: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Accept a concept relation item."""
+        async with aiosqlite.connect(self.db_path) as db:
+            curated_json = json.dumps(curated_data) if curated_data else None
+            cursor = await db.execute(
+                """
+                UPDATE concept_relation_curation_items
+                SET status = 'ACCEPTED', curated_data_json = ?, curated_at = ?
+                WHERE workflow_id = ? AND uuid = ? AND status = 'PENDING'
+                """,
+                (curated_json, datetime.utcnow().isoformat(), workflow_id, item_uuid),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def reject_concept_relation_item(
+        self, workflow_id: str, item_uuid: str
+    ) -> bool:
+        """Reject a concept relation item."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                UPDATE concept_relation_curation_items
+                SET status = 'REJECTED', curated_at = ?
+                WHERE workflow_id = ? AND uuid = ? AND status = 'PENDING'
+                """,
+                (datetime.utcnow().isoformat(), workflow_id, item_uuid),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_pending_concept_workflows(self) -> List[Dict[str, Any]]:
+        """Return list of concept workflows not COMPLETED."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT workflow_id, content_uuid, overall_status, created_at
+                FROM concept_workflow_curation
+                WHERE overall_status != 'COMPLETED'
+                ORDER BY created_at DESC
+                """
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [
+            {"workflow_id": r[0], "content_uuid": r[1], "overall_status": r[2], "created_at": r[3]}
+            for r in rows
+        ]
+
+    async def get_concept_curation_items_for_workflow(
+        self, workflow_id: str
+    ) -> List[Dict[str, Any]]:
+        """Return all concept curation items for a workflow."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT uuid, original_data_json, curated_data_json, status, created_at
+                FROM concept_curation_items
+                WHERE workflow_id = ?
+                ORDER BY created_at
+                """,
+                (workflow_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [
+            {
+                "uuid": r[0],
+                "original_data_json": json.loads(r[1]) if r[1] else None,
+                "curated_data_json": json.loads(r[2]) if r[2] else None,
+                "status": r[3],
+                "created_at": r[4],
+            }
+            for r in rows
+        ]
+
+    async def get_concept_relation_items_for_workflow(
+        self, workflow_id: str
+    ) -> List[Dict[str, Any]]:
+        """Return all concept relation curation items for a workflow."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT uuid, original_data_json, curated_data_json, status, created_at
+                FROM concept_relation_curation_items
+                WHERE workflow_id = ?
+                ORDER BY created_at
+                """,
+                (workflow_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [
+            {
+                "uuid": r[0],
+                "original_data_json": json.loads(r[1]) if r[1] else None,
+                "curated_data_json": json.loads(r[2]) if r[2] else None,
+                "status": r[3],
+                "created_at": r[4],
+            }
+            for r in rows
+        ]
+
+    async def complete_concept_workflow(self, workflow_id: str) -> None:
+        """Mark concept workflow as completed."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                UPDATE concept_workflow_curation SET overall_status = 'COMPLETED'
+                WHERE workflow_id = ?
+                """,
+                (workflow_id,),
+            )
+            await db.commit()
+
+    # ===== INBOX CLASSIFICATION CURATION =====
+
+    async def queue_inbox_classification_items(
+        self, workflow_id: str, items: List[Dict[str, Any]]
+    ) -> None:
+        """Add inbox classification items to curation queue. Each item: {uuid, source_path, target_folder, note_title, reason}."""
+        async with aiosqlite.connect(self.db_path) as db:
+            for item in items:
+                item_uuid = item.get("uuid", str(uuid4()))
+                original = {
+                    "source_path": item["source_path"],
+                    "target_folder": item["target_folder"],
+                    "note_title": item.get("note_title", ""),
+                    "reason": item.get("reason", ""),
+                }
+                await db.execute(
+                    """
+                    INSERT INTO inbox_classification_items
+                    (uuid, workflow_id, original_data_json, status)
+                    VALUES (?, ?, ?, 'PENDING')
+                    """,
+                    (item_uuid, workflow_id, json.dumps(original)),
+                )
+            await db.commit()
+
+    async def get_inbox_classification_pending_count(
+        self, workflow_id: str
+    ) -> int:
+        """Return count of pending items for a workflow."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT COUNT(*) FROM inbox_classification_items
+                WHERE workflow_id = ? AND status = 'PENDING'
+                """,
+                (workflow_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+
+    async def get_approved_inbox_classification_items(
+        self, workflow_id: str
+    ) -> List[Dict[str, Any]]:
+        """Return all accepted items with final source_path and target_folder for execution."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT uuid, original_data_json, curated_data_json
+                FROM inbox_classification_items
+                WHERE workflow_id = ? AND status = 'ACCEPTED'
+                """,
+                (workflow_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        result = []
+        for uuid_val, orig_json, cur_json in rows:
+            data = json.loads(orig_json)
+            source_path = data["source_path"]
+            target_folder = data["target_folder"]
+            if cur_json:
+                edited = json.loads(cur_json)
+                if edited.get("edited_target_folder"):
+                    target_folder = edited["edited_target_folder"]
+            result.append({
+                "uuid": uuid_val,
+                "source_path": source_path,
+                "target_folder": target_folder,
+            })
+        return result
+
+    async def accept_inbox_classification_item(
+        self,
+        workflow_id: str,
+        item_uuid: str,
+        curated_data: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Accept an inbox classification item. curated_data may include edited_target_folder."""
+        async with aiosqlite.connect(self.db_path) as db:
+            curated_json = json.dumps(curated_data or {}) if curated_data else None
+            cursor = await db.execute(
+                """
+                UPDATE inbox_classification_items
+                SET status = 'ACCEPTED', curated_data_json = ?, curated_at = ?
+                WHERE workflow_id = ? AND uuid = ? AND status = 'PENDING'
+                """,
+                (curated_json, datetime.utcnow().isoformat(), workflow_id, item_uuid),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def reject_inbox_classification_item(
+        self, workflow_id: str, item_uuid: str
+    ) -> bool:
+        """Reject an inbox classification item."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                UPDATE inbox_classification_items
+                SET status = 'REJECTED', curated_at = ?
+                WHERE workflow_id = ? AND uuid = ? AND status = 'PENDING'
+                """,
+                (datetime.utcnow().isoformat(), workflow_id, item_uuid),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_pending_inbox_workflow_ids(self) -> List[str]:
+        """Return workflow_ids that have at least one PENDING inbox item."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT DISTINCT workflow_id
+                FROM inbox_classification_items
+                WHERE status = 'PENDING'
+                ORDER BY workflow_id
+                """
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [r[0] for r in rows]
+
+    async def get_inbox_classification_items_for_workflow(
+        self, workflow_id: str
+    ) -> List[Dict[str, Any]]:
+        """Return all inbox classification items for a workflow."""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT uuid, original_data_json, curated_data_json, status, created_at
+                FROM inbox_classification_items
+                WHERE workflow_id = ?
+                ORDER BY created_at
+                """,
+                (workflow_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [
+            {
+                "uuid": r[0],
+                "original_data_json": json.loads(r[1]) if r[1] else None,
+                "curated_data_json": json.loads(r[2]) if r[2] else None,
+                "status": r[3],
+                "created_at": r[4],
+            }
+            for r in rows
+        ]
+
+    # ===== NOTIFICATIONS =====
+
+    async def create_notification(
+        self,
+        workflow_id: Optional[str],
+        workflow_type: Optional[str],
+        notification_type: str,
+        title: str,
+        message: Optional[str] = None,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Create a notification. Returns notification uuid."""
+        n_uuid = str(uuid4())
+        payload_json = json.dumps(payload) if payload else None
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO notifications
+                (uuid, workflow_id, workflow_type, notification_type, title, message, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    n_uuid,
+                    workflow_id,
+                    workflow_type,
+                    notification_type,
+                    title,
+                    message,
+                    payload_json,
+                ),
+            )
+            await db.commit()
+        return n_uuid
+
+    async def list_notifications(
+        self,
+        unread_only: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """Return (notifications, total_count). When limit=0, notifications list is empty but total is set."""
+        async with aiosqlite.connect(self.db_path) as db:
+            where = "WHERE read_at IS NULL" if unread_only else ""
+            count_sql = f"SELECT COUNT(*) FROM notifications {where}"
+            async with db.execute(count_sql) as cursor:
+                row = await cursor.fetchone()
+                total = row[0] if row else 0
+            if limit == 0:
+                return [], total
+            async with db.execute(
+                f"""
+                SELECT id, uuid, workflow_id, workflow_type, notification_type, title, message,
+                       payload_json, created_at, read_at, dismissed_at
+                FROM notifications {where}
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [
+            {
+                "id": r[0],
+                "uuid": r[1],
+                "workflow_id": r[2],
+                "workflow_type": r[3],
+                "notification_type": r[4],
+                "title": r[5],
+                "message": r[6],
+                "payload_json": json.loads(r[7]) if r[7] else None,
+                "created_at": r[8],
+                "read_at": r[9],
+                "dismissed_at": r[10],
+            }
+            for r in rows
+        ], total
+
+    async def mark_notification_read(self, notification_id: int) -> bool:
+        """Mark a notification as read by id."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                UPDATE notifications SET read_at = ? WHERE id = ?
+                """,
+                (datetime.utcnow().isoformat(), notification_id),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def mark_notification_dismissed(self, notification_id: int) -> bool:
+        """Mark a notification as dismissed by id."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                UPDATE notifications SET dismissed_at = ? WHERE id = ?
+                """,
+                (datetime.utcnow().isoformat(), notification_id),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
     async def clear_all(self):
         """Wipe all rows from every table."""
         async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM notifications")
+            await db.execute("DELETE FROM quote_curation_items")
+            await db.execute("DELETE FROM quote_workflow_curation")
+            await db.execute("DELETE FROM inbox_classification_items")
             await db.execute("DELETE FROM relationship_context_items")
             await db.execute("DELETE FROM span_curation_items")
             await db.execute("DELETE FROM relationship_curation_items")

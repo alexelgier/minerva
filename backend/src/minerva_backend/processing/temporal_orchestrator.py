@@ -12,6 +12,18 @@ from temporalio.worker import Worker
 from minerva_models import JournalEntry
 from minerva_backend.processing.models import CuratableMapping, EntityMapping
 from minerva_backend.processing.temporal_converter import create_custom_data_converter
+from minerva_backend.processing.inbox_classification_workflow import (
+    InboxClassificationWorkflow,
+    InboxClassificationActivities,
+)
+from minerva_backend.processing.quote_parsing_workflow import (
+    QuoteParsingWorkflow,
+    QuoteParsingActivities,
+)
+from minerva_backend.processing.concept_extraction_workflow import (
+    ConceptExtractionWorkflow,
+    ConceptExtractionActivities,
+)
 
 
 class PipelineStage(str, Enum):
@@ -425,7 +437,11 @@ async def run_worker():
     worker = Worker(
         client,
         task_queue="minerva-pipeline",
-        workflows=[JournalProcessingWorkflow],
+        workflows=[
+            JournalProcessingWorkflow,
+            InboxClassificationWorkflow,
+            QuoteParsingWorkflow,
+        ],
         activities=[
             PipelineActivities.extract_entities,
             PipelineActivities.extract_feelings,
@@ -435,6 +451,29 @@ async def run_worker():
             PipelineActivities.submit_relationship_curation,
             PipelineActivities.wait_for_relationship_curation,
             PipelineActivities.write_to_knowledge_graph,
+            InboxClassificationActivities.scan_inbox,
+            InboxClassificationActivities.get_vault_folder_structure,
+            InboxClassificationActivities.classify_notes_llm,
+            InboxClassificationActivities.submit_classification_curation,
+            InboxClassificationActivities.wait_for_classification_curation,
+            InboxClassificationActivities.execute_moves,
+            QuoteParsingActivities.scan_markdown_file,
+            QuoteParsingActivities.parse_quotes_and_summary,
+            QuoteParsingActivities.enrich_with_web_search,
+            QuoteParsingActivities.submit_quote_curation,
+            QuoteParsingActivities.wait_for_quote_curation,
+            QuoteParsingActivities.write_quotes_to_graph,
+            ConceptExtractionActivities.load_content_and_quotes,
+            ConceptExtractionActivities.extract_candidate_concepts,
+            ConceptExtractionActivities.detect_duplicates,
+            ConceptExtractionActivities.discover_relations,
+            ConceptExtractionActivities.self_critique,
+            ConceptExtractionActivities.refine_extraction,
+            ConceptExtractionActivities.submit_concept_curation,
+            ConceptExtractionActivities.wait_for_concept_curation,
+            ConceptExtractionActivities.write_concepts_to_graph,
+            ConceptExtractionActivities.create_obsidian_files,
+            ConceptExtractionActivities.mark_content_processed,
         ],
         debug_mode=True,
     )

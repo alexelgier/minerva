@@ -218,33 +218,35 @@ CREATE CONSTRAINT journal_uuid_unique FOR (j:JournalEntry) REQUIRE j.uuid IS UNI
 
 ## 🗃️ SQLite Curation Database
 
-The system uses SQLite for managing the curation queue and temporary data.
+The system uses SQLite for managing the curation queue and temporary data. Path is configured via `CURATION_DB_PATH`.
 
-### Tables
+### Journal Curation Tables
 
-#### curation_queue
-```sql
-CREATE TABLE curation_queue (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    journal_id TEXT NOT NULL,
-    journal_text TEXT NOT NULL,
-    entities_json TEXT NOT NULL,  -- JSON array of entities
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    status TEXT DEFAULT 'pending'  -- pending, in_progress, completed
-);
-```
+- **journal_curation**: Journal entries (uuid, journal_text, overall_status: PENDING_ENTITIES, ENTITIES_DONE, PENDING_RELATIONS, COMPLETED)
+- **entity_curation_items**: Entity tasks per journal (uuid, journal_id, entity_type, original_data_json, curated_data_json, status: PENDING/ACCEPTED/REJECTED)
+- **relationship_curation_items**: Relationship tasks per journal (uuid, journal_id, kind, relationship_type, original_data_json, curated_data_json, status)
+- **span_curation_items**: Text spans linked to entity/relationship items (uuid, journal_id, owner_uuid, span_data_json)
+- **relationship_context_items**: Context for relationship curation
 
-#### curation_actions
-```sql
-CREATE TABLE curation_actions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    journal_id TEXT NOT NULL,
-    entity_id TEXT,
-    action_type TEXT NOT NULL,  -- add, modify, delete
-    entity_data TEXT,           -- JSON of entity data
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
+### Quote Parsing Curation
+
+- **quote_workflow_curation**: Per-workflow metadata (workflow_id, file_path, content_title, content_author, status)
+- **quote_curation_items**: Quote items per workflow (uuid, workflow_id, original_data_json, curated_data_json, status: PENDING/ACCEPTED/REJECTED)
+
+### Concept Extraction Curation
+
+- **concept_workflow_curation**: Per-workflow metadata (workflow_id, content_uuid, status)
+- **concept_curation_items**: Concept items per workflow (uuid, workflow_id, original_data_json, curated_data_json, status)
+- **concept_relation_curation_items**: Concept-relation items per workflow (uuid, workflow_id, original_data_json, curated_data_json, status)
+
+### Inbox Classification Curation
+
+- **inbox_classification_items**: Classification suggestions per workflow (uuid, workflow_id, original_data_json, curated_data_json, status: PENDING/ACCEPTED/REJECTED)
+
+### Notifications
+
+- **notifications**: Workflow and system notifications (uuid, workflow_id, workflow_type, notification_type: workflow_started, curation_pending, workflow_completed, workflow_failed; title, message, payload_json; created_at, read_at, dismissed_at)
+- Indexes: idx_notifications_workflow, idx_notifications_unread (WHERE read_at IS NULL)
 
 ## 🔄 Data Flow
 

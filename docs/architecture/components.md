@@ -6,10 +6,11 @@ This document provides a high-level overview of all Minerva components and how t
 
 Minerva consists of four main components:
 
-1. **Backend API** - FastAPI-based REST API for journal processing and knowledge graph management
-2. **minerva-desktop** - Tauri desktop application for interacting with LangGraph agents
-3. **minerva_agent** - LangGraph deep agent for Obsidian vault assistance
-4. **zettel** - LangGraph agent for processing book quotes and extracting concepts
+1. **Backend API** - FastAPI-based REST API for journal processing, quote/concept/inbox workflows, curation, and knowledge graph management
+2. **Curation UI (Vue.js)** - Web frontend for human-in-the-loop: Queue (journal entities/relations), Quotes, Concepts, Inbox, Notifications
+3. **minerva-desktop** - Tauri desktop application for interacting with the LangGraph agent (chat, workflow launch with HITL)
+4. **minerva_agent** - LangGraph agent (LangChain 1.x) for Obsidian vault: read-only tools + workflow-launcher tools; HITL for workflow confirmation
+5. **zettel** *(deprecated)* - Quote/concept workflows migrated to backend Temporal workflows; folder kept for reference
 
 ## System Architecture Diagram
 
@@ -19,20 +20,24 @@ Minerva consists of four main components:
 └─────────────────────────────────────────────────────────────┘
 
 ┌──────────────────┐         ┌──────────────────┐
-│  minerva-desktop  │────────│  LangGraph Agents   │
-│  (Tauri + Next.js)│         │  (minerva_agent,  │
-│                   │         │   zettel)         │
+│  minerva-desktop  │────────│  minerva_agent   │
+│  (Tauri + React) │         │  (LangGraph)     │
 └────────┬──────────┘         └────────┬──────────┘
          │                              │
-         │ HTTP/WebSocket               │ LangGraph SDK
-         │                              │
-         ▼                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Backend API (FastAPI)                          │
-│  - Journal Processing                                       │
-│  - Curation Management                                      │
-│  - Knowledge Graph Operations                                │
-└──────────────────┬──────────────────────────────────────────┘
+┌────────▼──────────┐                   │
+│  Curation UI      │                   │ LangGraph SDK
+│  (Vue.js)         │                   │
+│  Queue/Quotes/    │                   │
+│  Concepts/Inbox/  │                   │
+│  Notifications    │                   │
+└────────┬──────────┘                   │
+         │                              ▼
+         │              ┌─────────────────────────────────────────────┐
+         └─────────────│              Backend API (FastAPI)           │
+                       │  - Journal / Quote / Concept / Inbox         │
+                       │  - Curation Management + Notifications       │
+                       │  - Temporal Workflows + Knowledge Graph      │
+                       └──────────────────┬──────────────────────────┘
                    │
                    │ Neo4j Driver
                    │
@@ -58,11 +63,11 @@ Minerva consists of four main components:
 - Store and query knowledge graph data
 
 **Key Features**:
-- Entity extraction from journal entries
-- Relationship discovery
-- Curation queue management
-- Obsidian vault synchronization
-- Temporal workflow orchestration
+- Entity extraction from journal entries (8-stage Temporal pipeline)
+- Quote parsing, concept extraction, inbox classification (Temporal workflows)
+- Curation queue management (journal, quote, concept, inbox) and notifications
+- Obsidian vault synchronization (Zettel sync)
+- Temporal workflow orchestration (Journal, QuoteParsing, ConceptExtraction, InboxClassification)
 
 **Documentation**: See [backend/README.md](../../backend/README.md) and [backend/docs/](../../backend/docs/)
 
@@ -86,44 +91,43 @@ Minerva consists of four main components:
 
 **Documentation**: See [minerva-desktop/README.md](../../minerva-desktop/README.md)
 
+### Curation UI (Vue.js)
+
+**Technology**: Vue 3, Vite, Pinia
+
+**Purpose**: Human-in-the-loop approval for all workflow outputs.
+
+**Key Features**:
+- **Queue**: Journal entity and relationship curation
+- **Quotes**: Quote parsing workflow items (accept/reject, complete workflow)
+- **Concepts**: Concept extraction workflow items (concepts and relations)
+- **Inbox**: Inbox classification workflow items (accept/reject moves)
+- **Notifications**: List, mark read, dismiss (workflow_started, curation_pending, workflow_completed)
+
+**Documentation**: See [frontend/](../../frontend/) and backend curation API.
+
 ### minerva_agent
 
-**Technology**: LangGraph, deepagents, Google Gemini, Python 3.12+
+**Technology**: LangGraph 1.x, LangChain agents, Google Gemini, Temporal client, Python 3.12+
 
 **Purpose**:
-- Assist with Obsidian vault operations
-- File system operations (read, write, edit)
-- Search and discovery
-- Task planning and execution
-- Subagent delegation
+- Assist with Obsidian vault operations via read-only tools
+- Launch Temporal workflows (quote parsing, concept extraction, inbox classification) with mandatory HITL confirmation
 
 **Key Features**:
 - Bilingual support (Spanish/English)
-- Filesystem backend for vault access
-- Task planning capabilities
-- Subagent system for context isolation
-- Pattern matching and grep search
+- Read-only tools: read_file, list_dir, glob, grep (sandboxed to vault)
+- Workflow launcher tools: start_quote_parsing, start_concept_extraction, start_inbox_classification, get_workflow_status
+- HumanInTheLoopMiddleware for workflow tools (user must confirm before execution)
+- No direct file writes; irreversible actions are performed by Temporal workflows after curation
 
-**Documentation**: See [backend/minerva_agent/README.md](../../backend/minerva_agent/README.md)
+**Documentation**: See [backend/minerva_agent/README.md](../../backend/minerva_agent/README.md) and [minerva-agent Architecture](minerva-agent.md)
 
-### zettel
+### zettel *(deprecated)*
 
-**Technology**: LangGraph, Neo4j, Google Gemini, Ollama, Python 3.12+
+**Status**: Quote parsing and concept extraction have been migrated to Temporal workflows in the backend (`quote_parsing_workflow.py`, `concept_extraction_workflow.py`). The Curation UI (Quotes, Concepts) and minerva_agent workflow tools use the backend. This folder is kept for reference only.
 
-**Purpose**:
-- Parse quotes from book markdown files
-- Extract atomic concepts (Zettels) from quotes
-- Attribute quotes to existing concepts
-- Manage concept-quote relationships
-
-**Key Features**:
-- Two-graph system (quote parsing, concept extraction)
-- Vector similarity search
-- LLM-based concept analysis
-- Batch quote processing
-- Neo4j integration
-
-**Documentation**: See [backend/zettel/README.md](../../backend/zettel/README.md)
+**Documentation**: See [backend/zettel/README.md](../../backend/zettel/README.md) (deprecation notice) and [zettel Architecture](zettel.md)
 
 ## Data Flow
 
@@ -151,17 +155,18 @@ User → minerva-desktop → LangGraph Server → Agent → Obsidian Vault / Neo
 4. Results returned to desktop app
 5. User sees updates in real-time
 
-### Quote Processing Flow
+### Quote / Concept Flow (Backend Temporal)
 
 ```
-Book Markdown → quote_parse_graph → Neo4j (Quotes) → concept_extraction_graph → Neo4j (Concepts)
+User (agent or API) → Start QuoteParsing workflow → Curation UI (Quotes) → Neo4j
+User → Start ConceptExtraction workflow → Curation UI (Concepts) → Neo4j
 ```
 
-1. Parse quotes from markdown file
-2. Store quotes in Neo4j with embeddings
-3. Extract concepts using vector search
-4. Attribute quotes to concepts
-5. Store concepts and relationships
+1. User launches quote parsing via minerva_agent (HITL) or API; workflow parses markdown, submits to curation DB
+2. User reviews quotes in Curation UI (Quotes), accepts/rejects, completes workflow
+3. Workflow writes Content, Quote, Person and QUOTED_IN/AUTHORED_BY to Neo4j
+4. User launches concept extraction for a content UUID; workflow extracts concepts, submits to curation DB
+5. User reviews concepts/relations in Curation UI (Concepts); workflow writes Concept nodes and SUPPORTS/relations to Neo4j
 
 ## Integration Points
 
@@ -190,9 +195,10 @@ Book Markdown → quote_parse_graph → Neo4j (Quotes) → concept_extraction_gr
 | Component | Frontend | Backend | Database | AI/ML |
 |-----------|----------|---------|----------|-------|
 | Backend API | - | FastAPI, Python | Neo4j, SQLite | Ollama (local LLM) |
-| minerva-desktop | Next.js, React, Tauri | - | - | - |
+| Curation UI | Vue.js, Vite | - | - | - |
+| minerva-desktop | React, Tauri | - | - | - |
 | minerva_agent | - | LangGraph, Python | - | Google Gemini |
-| zettel | - | LangGraph, Python | Neo4j | Google Gemini, Ollama |
+| zettel *(deprecated)* | - | (migrated to backend) | Neo4j | Google Gemini, Ollama |
 
 ## Communication Protocols
 

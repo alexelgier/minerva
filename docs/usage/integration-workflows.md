@@ -32,46 +32,59 @@ Use minerva_agent to help prepare journal entries before backend processing.
 ## Workflow 2: Book Analysis Pipeline
 
 ### Overview
-Process book quotes and extract concepts, then integrate with knowledge graph.
+Process book quotes and extract concepts via backend Temporal workflows and Curation UI.
 
 ### Steps
 
 1. **Prepare Book Notes**:
    - Create markdown with quotes
    - Format with "# Citas" section
-2. **Parse Quotes** (zettel):
-   - Run `quote_parse_graph`
-   - Store quotes in Neo4j
-3. **Extract Concepts** (zettel):
-   - Run `concept_extraction_graph`
-   - Generate concept proposals
-4. **Review Concepts**:
-   - Review proposals in Neo4j
-   - Accept or modify concepts
-5. **Link to Knowledge Graph**:
-   - Link concepts to journal entries
-   - Create relationships with entities
-   - Build concept network
+2. **Start Quote Parsing** (minerva_agent or API):
+   - From minerva_agent: use workflow launcher tool `start_quote_parsing` (file_path, author, title); confirm in chat (HITL)
+   - Backend QuoteParsing workflow parses file, submits quote items to curation DB; notification appears
+3. **Review Quotes** (Curation UI):
+   - Open Curation UI → **Quotes**; select workflow; accept/reject items; complete workflow
+   - Workflow writes Content, Quote, Person and QUOTED_IN/AUTHORED_BY to Neo4j
+4. **Start Concept Extraction** (minerva_agent or API):
+   - Use `start_concept_extraction` (content_uuid); confirm in chat
+   - Backend ConceptExtraction workflow extracts concepts/relations, submits to curation DB
+5. **Review Concepts** (Curation UI):
+   - Open Curation UI → **Concepts**; select workflow; accept/reject concept and relation items; complete workflow
+   - Workflow writes Concept nodes, SUPPORTS (Quote→Concept), and concept relations to Neo4j
+6. **Notifications**: Workflow events appear in Curation UI → **Notifications**
 
 ### Benefits
-- Systematic concept extraction
-- Reusable concepts
-- Knowledge graph integration
+- Systematic concept extraction with human approval at each step
+- Reusable concepts; knowledge graph integration
+- Single Curation UI for quotes, concepts, and notifications
 
-## Workflow 3: Vault Organization with Knowledge Graph
+## Workflow 3: Inbox Classification (Backend + Curation UI)
+
+### Overview
+Classify inbox notes with LLM suggestions; approve moves in Curation UI; workflow executes file moves.
+
+### Steps
+
+1. **Start Inbox Classification** (minerva_agent or API):
+   - From minerva_agent: use `start_inbox_classification` (inbox_path); confirm in chat (HITL)
+   - Backend InboxClassification workflow scans inbox, LLM suggests target folder per note, submits to curation DB
+2. **Review Classifications** (Curation UI):
+   - Open Curation UI → **Inbox**; select workflow; accept/reject each move
+   - Workflow executes approved moves (moves files from inbox to target folders)
+3. **Notifications**: workflow_started, curation_pending, workflow_completed in Curation UI → **Notifications**
+
+## Workflow 4: Vault Organization with Knowledge Graph
 
 ### Overview
 Use agent to organize vault, then sync to knowledge graph.
 
 ### Steps
 
-1. **Agent Organization**:
-   - Open minerva-desktop
-   - Ask agent to organize inbox
-   - Agent plans and executes
-2. **Review Changes**:
-   - Check file operations
-   - Approve or modify
+1. **Agent Organization** (read-only + workflow launch):
+   - Open minerva-desktop; ask agent to organize inbox
+   - Agent can read files and launch inbox classification workflow (HITL); Curation UI is where moves are approved
+2. **Review Changes** (Curation UI):
+   - Review and approve/reject moves in Curation UI (Inbox)
 3. **Sync to Backend**:
    - Backend syncs Obsidian vault
    - Updates knowledge graph
@@ -113,7 +126,7 @@ Extract concepts from books, then link to journal entries and entities.
 - Build knowledge network
 - Discover insights
 
-## Workflow 5: Daily Knowledge Management
+## Workflow 6: Daily Knowledge Management
 
 ### Overview
 Complete daily workflow using all components.

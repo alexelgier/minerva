@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "minerva-backend"
-version = "0.2.0"
+version = "0.4.0"
 description = "Backend processing engine for Minerva"
 authors = ["Alex <alexander.elgier@gmail.com>"]
 readme = "README.md"

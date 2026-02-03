@@ -1,17 +1,32 @@
 # Zettel Agent Usage Guide
 
-How to use the zettel agent for processing book quotes and extracting concepts.
+> **Current approach:** Quote parsing and concept extraction are now Temporal workflows in the backend. Use the **Curation UI** (Quotes, Concepts) and **minerva_agent** (workflow launcher tools) instead of the legacy zettel LangGraph server. See [Components Overview](../architecture/components.md) and [backend API](../../backend/docs/api/endpoints.md) (quotes/concepts endpoints).
 
-## Getting Started
+How to use quote parsing and concept extraction (via Curation UI and minerva_agent).
 
-### Start the Agent
+## Current Workflow (Backend + Curation UI)
+
+1. **Start quote parsing**: From minerva_agent (chat), use the workflow launcher tool `start_quote_parsing` with file_path, author, title. Confirm in chat (HITL). The backend Temporal workflow parses the file and submits quote items to the curation DB.
+2. **Review quotes**: Open the Curation UI (Vue.js), go to **Quotes**, select the workflow, accept/reject items, then complete the workflow. The workflow writes Content, Quote, Person and relations to Neo4j.
+3. **Start concept extraction**: From minerva_agent, use `start_concept_extraction` with content_uuid. Confirm in chat. The backend workflow extracts concepts and submits to curation DB.
+4. **Review concepts**: In Curation UI go to **Concepts**, select the workflow, accept/reject concept and relation items, complete the workflow. The workflow writes Concept nodes and SUPPORTS/relations to Neo4j.
+
+**Notifications**: Workflow events (workflow_started, curation_pending, workflow_completed) appear in Curation UI under **Notifications**.
+
+---
+
+## Legacy: Zettel Agent (Reference Only)
+
+The following describes the deprecated LangGraph-based zettel agent.
+
+### Start the Agent (Legacy)
 
 ```bash
 cd backend/zettel
 poetry run langgraph dev
 ```
 
-Agent server exposes two graphs:
+Agent server exposed two graphs:
 - `quote_parse_graph`: Parse quotes from markdown
 - `concept_extraction_graph`: Extract concepts from quotes
 

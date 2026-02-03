@@ -1,5 +1,7 @@
 # Zettel Agent
 
+> **DEPRECATED (2025).** Quote parsing and concept extraction workflows have been migrated to Temporal workflows in `minerva_backend` (see `backend/src/minerva_backend/processing/quote_parsing_workflow.py`, `concept_extraction_workflow.py`). The curation UI and agent now use those workflows. This folder is kept for reference only; new development should use the backend Temporal workflows.
+
 A LangGraph-based agent system for processing book quotes and extracting atomic concepts (Zettels) from them. The Zettel agent implements a Zettelkasten methodology for knowledge management, processing quotes from books and organizing them into atomic, interconnected concepts.
 
 ## Overview

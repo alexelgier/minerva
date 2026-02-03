@@ -1,35 +1,32 @@
 # Zettel Agent - Component Overview
 
-zettel is a LangGraph-based agent system for processing book quotes and extracting atomic concepts (Zettels) using Zettelkasten methodology.
+> **DEPRECATED.** Quote parsing and concept extraction have been migrated to Temporal workflows in the backend. Use the **Curation UI** (Quotes, Concepts) and **minerva_agent** workflow launcher tools (start_quote_parsing, start_concept_extraction) instead.
 
-## Key Features
+The legacy zettel module was a LangGraph-based system for processing book quotes and extracting atomic concepts (Zettels). That behavior is now implemented in:
 
-- **Quote Parsing**: Extract quotes from markdown book notes with section and page references
-- **Concept Extraction**: Generate atomic concepts (Zettels) from related quotes using vector search and LLM analysis
-- **3-Phase Workflow**: LLM self-improvement loop, human-in-the-loop review, and database commit
-- **User Suggestions**: Optional freeform text input to guide the extraction process
-- **Duplicate Detection**: Semantic similarity search to avoid duplicate concepts
-- **Relation Discovery**: Automatic detection of concept relationships
-- **Neo4j Integration**: Graph database with vector indexes for semantic search
-- **Obsidian Integration**: Automatic generation of Zettel markdown files
+- **Backend**: `quote_parsing_workflow.py`, `concept_extraction_workflow.py` (Temporal)
+- **Curation UI**: Quotes view, Concepts view
+- **minerva_agent**: start_quote_parsing, start_concept_extraction tools (HITL)
+
+## Key Features (Current Implementation)
+
+- **Quote Parsing**: Backend Temporal workflow; Curation UI (Quotes) for approval; Neo4j Content, Quote, Person, QUOTED_IN, AUTHORED_BY
+- **Concept Extraction**: Backend Temporal workflow; Curation UI (Concepts) for approval; Neo4j Concept, SUPPORTS, concept relations
+- **Notifications**: workflow_started, curation_pending, workflow_completed in Curation UI (Notifications)
 
 ## Documentation
 
-### Comprehensive Module Documentation
+### Current Implementation
 
-The zettel module now has comprehensive documentation in `backend/zettel/docs/`:
+- **[Backend Processing Pipeline](../../backend/docs/architecture/processing-pipeline.md)** - Quote/Concept/Inbox Temporal workflows
+- **[Curation API](../../backend/docs/api/endpoints.md)** - quotes, concepts, inbox, notifications endpoints
+- **[Architecture Overview](../architecture/zettel.md)** - Deprecation notice and migrated behavior
+- **[Usage Guide](../usage/zettel.md)** - How to use via Curation UI and minerva_agent
 
-- **[API Reference](../../backend/zettel/docs/API.md)** - Complete API reference for all functions and classes
-- **[Architecture Documentation](../../backend/zettel/docs/ARCHITECTURE.md)** - Deep technical architecture details
-- **[Developer Guide](../../backend/zettel/docs/DEVELOPER.md)** - Guide for extending and modifying the module
-- **[Workflows Documentation](../../backend/zettel/docs/WORKFLOWS.md)** - Detailed workflow documentation
+### Legacy Module (Reference Only)
 
-### Project-Level Documentation
-
-- **[Setup Guide](../setup/zettel-setup.md)** - Setup instructions
-- **[Usage Guide](../usage/zettel.md)** - Usage examples and patterns
-- **[Architecture Overview](../architecture/zettel.md)** - High-level architecture
-- **[Module README](../../backend/zettel/README.md)** - Module overview and quick start
+- **[Module README](../../backend/zettel/README.md)** - Deprecation notice at top
+- **[Setup Guide](../setup/zettel-setup.md)** - Legacy setup (deprecated)
 
 ## Quick Links
 

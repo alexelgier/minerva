@@ -1,6 +1,6 @@
 # Project Minerva: AI-Powered Personal Knowledge Graph
 
-> **Version 0.2.0** — Minerva is now usable end-to-end. The desktop application connects to LangGraph agents for Obsidian vault interaction, while the backend processes journal entries through a durable Temporal.io pipeline.
+> **Version 0.4.0** — Backend rework: quote/concept/inbox Temporal workflows, curation DB (quotes, concepts, inbox, notifications), Curation UI (Queue, Quotes, Concepts, Inbox, Notifications), minerva_agent refactor (read-only + workflow launchers with HITL), zettel deprecated.
 
 ## 1. Project Summary
 
@@ -89,13 +89,14 @@
 | Styling | Tailwind CSS + SCSS | v4 |
 | Agent SDK | @langchain/langgraph-sdk | 0.0.105+ |
 
-### LangGraph Agents (`backend/minerva_agent/`, `backend/zettel/`)
+### LangGraph Agent (`backend/minerva_agent/`)
 | Layer | Technology | Version |
 |-------|------------|---------|
 | Framework | LangGraph | 1.0+ |
-| Agent Library | deepagents | 0.2.7+ |
+| Agent API | LangChain 1.x create_agent | — |
 | LLM Provider | Google Gemini | 2.5 Pro/Flash |
-| Embeddings | Ollama (mxbai-embed-large) | — |
+| Workflow Client | Temporal (minerva-backend) | 1.17+ |
+| Note: zettel deprecated; quote/concept workflows in backend Temporal | — | — |
 
 ### Legacy Frontend (`frontend/`)
 | Layer | Technology | Version |
@@ -114,10 +115,11 @@
 The FastAPI backend exposes REST endpoints for journal processing, curation, and system health.
 
 **Key Endpoints**:
-- `POST /api/journal/submit` — Submit journal entry for processing
-- `GET /api/curation/pending` — Get all pending curation tasks
-- `POST /api/curation/entities/{journal_id}/{entity_id}` — Accept/reject entity
-- `POST /api/curation/relationships/{journal_id}/{relationship_id}` — Accept/reject relationship
+- Journal: `POST /api/journal/submit`, `GET /api/curation/pending`, `POST /api/curation/entities/{journal_id}/complete`, `POST /api/curation/entities/{journal_id}/{entity_id}`, `POST /api/curation/relationships/{journal_id}/complete`, `POST /api/curation/relationships/{journal_id}/{relationship_id}`
+- Quote curation: `GET /api/curation/quotes/pending`, `GET /api/curation/quotes/{workflow_id}/items`, `POST /api/curation/quotes/{workflow_id}/{quote_id}`, `POST /api/curation/quotes/{workflow_id}/complete`
+- Concept curation: `GET /api/curation/concepts/pending`, `GET /api/curation/concepts/{workflow_id}/items`, `POST /api/curation/concepts/{workflow_id}/{concept_id}`, `POST /api/curation/concepts/{workflow_id}/relations/{relation_id}`, `POST /api/curation/concepts/{workflow_id}/complete`
+- Inbox curation: `GET /api/curation/inbox/pending`, `GET /api/curation/inbox/{workflow_id}/items`, `POST /api/curation/inbox/{workflow_id}/{item_id}`
+- Notifications: `GET /api/curation/notifications`, `POST /api/curation/notifications/{id}/read`, `POST /api/curation/notifications/{id}/dismiss`
 - `GET /api/pipeline/status/{workflow_id}` — Get pipeline status
 - `GET /api/health/` — Comprehensive health check
 
@@ -148,6 +150,11 @@ An 8-stage durable workflow orchestrated by Temporal.io:
 **Entity Extraction Order**: Person → Concept → Project → Consumable → Content → Event → Place
 
 **Relationship Extraction**: Generic relations, concept relations, emotion feelings, concept feelings
+
+**Additional Temporal Workflows** (quote/concept/inbox):
+- **QuoteParsingWorkflow**: Parse markdown quotes → submit to curation DB → wait for approval → write Content, Quote, Person, QUOTED_IN, AUTHORED_BY to Neo4j. Emits notifications.
+- **ConceptExtractionWorkflow**: Load content/quotes from Neo4j → LLM extract concepts/relations → submit to curation DB → wait for approval → write Concept, SUPPORTS, relations to Neo4j. Emits notifications.
+- **InboxClassificationWorkflow**: Scan inbox → LLM suggest target folder per note → submit to curation DB → wait for approval → execute file moves. Emits notifications.
 
 ### 4.3 LLM Service (`processing/llm_service.py`)
 
@@ -186,57 +193,35 @@ Native desktop application for agent interaction built with Tauri + Next.js.
 
 ### 4.6 minerva_agent (`backend/minerva_agent/`)
 
-LangGraph deep agent for Obsidian vault assistance.
+LangGraph agent (LangChain 1.x) for Obsidian vault assistance. Read-only vault tools + workflow launcher tools with mandatory HITL confirmation. Irreversible actions are performed by backend Temporal workflows after curation in the Curation UI.
 
-**Capabilities** (via deepagents library):
-- File operations (read, write, edit)
-- Directory listing
-- Glob pattern matching
-- Grep content search
-- Task planning and execution
-- Subagent delegation
+**Capabilities**:
+- **Read-only tools** (sandboxed to OBSIDIAN_VAULT_PATH): read_file, list_dir, glob, grep
+- **Workflow launcher tools** (HITL required): start_quote_parsing, start_concept_extraction, start_inbox_classification, get_workflow_status
+- HumanInTheLoopMiddleware: user must confirm in chat before a workflow is started
+- No direct file writes; quote/concept/inbox steps approved in Curation UI (Quotes, Concepts, Inbox)
 
-**LLM**: Google Gemini 2.5 Pro (temperature: 0)
+**LLM**: Google Gemini (temperature: 0)
 
-**Configuration**:
-```python
-FilesystemBackend(root_dir=OBSIDIAN_VAULT_PATH, virtual_mode=True)
-```
+### 4.7 zettel (`backend/zettel/`) — DEPRECATED
 
-### 4.7 zettel (`backend/zettel/`)
+Quote parsing and concept extraction have been migrated to Temporal workflows in the backend (`quote_parsing_workflow.py`, `concept_extraction_workflow.py`). Use the Curation UI (Quotes, Concepts) and minerva_agent workflow launcher tools instead. The zettel folder is kept for reference only.
 
-LangGraph agent system for book quote processing and Zettelkasten-style concept extraction.
+### 4.8 Curation UI — Vue.js Frontend (`frontend/`)
 
-**Two Graphs**:
+Human-in-the-loop curation interface for journal entities/relations and for quote, concept, and inbox workflows.
 
-1. **quote_parse_graph**: Parses markdown files with book quotes
-   - Reads "# Citas" sections
-   - Generates book summaries (with web search enrichment)
-   - Creates Content, Quote, and Author nodes
-
-2. **concept_extraction_graph**: Extracts atomic concepts
-   - Three-phase workflow:
-     - Phase 1: LLM self-improvement loop (extract → deduplicate → relate → critique → refine)
-     - Phase 2: Human-in-the-loop review
-     - Phase 3: Database commit + Obsidian file generation
-   - Quality checks: atomicity, distinctness, quote coverage, relation accuracy
-
-**LLM Models**:
-- `gemini-2.5-flash-lite` — Quote parsing, web search
-- `gemini-2.5-flash` — Simpler extraction tasks
-- `gemini-2.5-pro` — Complex extraction, critique, refinement
-
-### 4.8 Vue.js Frontend (Legacy) (`frontend/`)
-
-Curation interface for reviewing AI-extracted entities and relationships.
-
-**Purpose**: Human-in-the-loop curation UI (still functional, used alongside minerva-desktop)
+**Purpose**: Sole surface for approving workflow steps (journal pipeline, quote parsing, concept extraction, inbox classification)
 
 **Routes**:
-- `/curation-queue` — List pending curation tasks
+- `/curation-queue` — Journal pending curation tasks (Queue)
 - `/curation/:journalId/:entityId` — Detailed entity/relationship editing
+- `/quotes` — Quote curation (workflow list, items, accept/reject, complete)
+- `/concepts` — Concept curation (workflow list, concept/relation items, accept/reject, complete)
+- `/inbox` — Inbox classification curation (workflow list, items, accept/reject)
+- `/notifications` — Notifications (workflow_started, curation_pending, workflow_completed); mark read, dismiss
 
-**Features**: Split-panel view (journal text | entity editor), quick accept/reject, span highlighting
+**Features**: Nav (Queue, Quotes, Concepts, Inbox, Notifications with unread badge), split-panel view for journal, quick accept/reject, span highlighting
 
 ---
 

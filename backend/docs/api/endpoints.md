@@ -22,9 +22,11 @@ The API uses Temporal workflows with custom serialization to ensure type safety 
 - `GET /api/pipeline/all-pending` - Get all pending pipelines
 
 ### Curation Management
-- `GET /api/curation/pending` - Get pending curation items
-- `POST /api/curation/complete-entity/{journal_id}` - Complete entity curation
-- `POST /api/curation/entity/{journal_id}/{entity_id}` - Handle entity curation action
+- **Journal curation**: `GET /api/curation/pending`, `GET /api/curation/stats`, `POST /api/curation/entities/{journal_id}/complete`, `POST /api/curation/entities/{journal_id}/{entity_id}`, `POST /api/curation/relationships/{journal_id}/complete`, `POST /api/curation/relationships/{journal_id}/{relationship_id}`
+- **Quote curation**: `GET /api/curation/quotes/pending`, `GET /api/curation/quotes/{workflow_id}/items`, `POST /api/curation/quotes/{workflow_id}/complete`, `POST /api/curation/quotes/{workflow_id}/{quote_id}`
+- **Concept curation**: `GET /api/curation/concepts/pending`, `GET /api/curation/concepts/{workflow_id}/items`, `POST /api/curation/concepts/{workflow_id}/complete`, `POST /api/curation/concepts/{workflow_id}/{concept_id}`, `POST /api/curation/concepts/{workflow_id}/relations/{relation_id}`
+- **Inbox curation**: `GET /api/curation/inbox/pending`, `GET /api/curation/inbox/{workflow_id}/items`, `POST /api/curation/inbox/{workflow_id}/{item_id}`
+- **Notifications**: `GET /api/curation/notifications?unread_only=&limit=&offset=`, `POST /api/curation/notifications/{id}/read`, `POST /api/curation/notifications/{id}/dismiss`
 
 ### Health & Monitoring
 - `GET /api/health` - System health check
@@ -184,36 +186,47 @@ GET /api/curation/pending
 
 #### Complete Entity Curation
 ```http
-POST /api/curation/complete-entity/{journal_id}
+POST /api/curation/entities/{journal_id}/complete
 ```
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Entity curation completed successfully"
+  "message": "Entity curation phase completed",
+  "journal_id": "journal-uuid-456",
+  "data": { "phase": "entity", "status": "completed" }
 }
 ```
 
 #### Handle Entity Curation Action
 ```http
-POST /api/curation/entity/{journal_id}/{entity_id}
+POST /api/curation/entities/{journal_id}/{entity_id}
 Content-Type: application/json
 
 {
-  "action": "modify",
-  "entity_data": {
-    "name": "John Smith",
-    "summary": "Updated summary"
-  }
+  "action": "accept",
+  "curated_data": { "name": "John Smith", "summary": "Updated summary" }
 }
 ```
 
-**Actions:**
-- `accept` - Accept entity as-is
-- `modify` - Modify entity properties
-- `delete` - Remove entity
-- `add` - Add new entity
+**Actions:** `accept` (requires curated_data), `reject`
+
+#### Quote / Concept / Inbox Curation
+- **Quotes**: `GET /api/curation/quotes/pending` → workflows; `GET /api/curation/quotes/{workflow_id}/items` → items; `POST /api/curation/quotes/{workflow_id}/{quote_id}` with `{ "action": "accept"|"reject", "curated_data": ... }`; `POST /api/curation/quotes/{workflow_id}/complete`
+- **Concepts**: `GET /api/curation/concepts/pending`; `GET /api/curation/concepts/{workflow_id}/items`; `POST /api/curation/concepts/{workflow_id}/{concept_id}`; `POST /api/curation/concepts/{workflow_id}/relations/{relation_id}`; `POST /api/curation/concepts/{workflow_id}/complete`
+- **Inbox**: `GET /api/curation/inbox/pending`; `GET /api/curation/inbox/{workflow_id}/items`; `POST /api/curation/inbox/{workflow_id}/{item_id}` with `{ "action": "accept"|"reject", "curated_data": ... }`
+
+#### Notifications
+```http
+GET /api/curation/notifications?unread_only=false&limit=50&offset=0
+```
+**Response:** `{ "notifications": [...], "total": N }`. Use `unread_only=true&limit=0` for unread count only.
+
+```http
+POST /api/curation/notifications/{notification_id}/read
+POST /api/curation/notifications/{notification_id}/dismiss
+```
 
 ### Health & Monitoring
 

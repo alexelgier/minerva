@@ -1,6 +1,8 @@
 # Zettel Agent Setup Guide
 
-Detailed setup instructions for the zettel agent (quote parsing and concept extraction).
+> **DEPRECATED.** Quote parsing and concept extraction are now implemented as Temporal workflows in the backend. Use the **Curation UI** (Quotes, Concepts) and **minerva_agent** workflow launcher tools (start_quote_parsing, start_concept_extraction) instead. See [backend processing pipeline](../../backend/docs/architecture/processing-pipeline.md) and [curation API](../../backend/docs/api/endpoints.md). The instructions below refer to the legacy `backend/zettel` module (kept for reference only).
+
+Detailed setup instructions for the legacy zettel agent (quote parsing and concept extraction).
 
 ## Prerequisites
 

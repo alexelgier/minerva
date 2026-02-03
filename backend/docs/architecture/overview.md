@@ -24,7 +24,9 @@ Minerva is a personal knowledge management system that processes journal entries
 ┌───────▼────────┐    ┌──────────▼──────────┐    ┌─────────▼─────────┐
 │  Processing     │    │   Knowledge Graph   │    │   Temporal        │
 │  Pipeline       │    │   (Neo4j)           │    │   Workflows       │
-└─────────────────┘    └─────────────────────┘    └───────────────────┘
+│  + Quote/       │    └─────────────────────┘    │   Journal, Quote, │
+│  Concept/Inbox   │                               │   Concept, Inbox  │
+└─────────────────┘                               └───────────────────┘
 ```
 
 ## 🔄 Data Flow
@@ -54,9 +56,12 @@ Curated Entities → Relationship Extraction → Neo4j Storage
 
 ### Processing Layer (`processing/`)
 - **Extraction Service**: Orchestrates entity extraction using LLM
-- **Temporal Orchestrator**: Manages long-running workflows
-- **Curation Manager**: Handles human-in-the-loop validation
+- **Temporal Orchestrator**: Manages long-running workflows (journal, quote parsing, concept extraction, inbox classification)
+- **Curation Manager**: Handles human-in-the-loop validation (journal entities/relations, quote items, concept items, inbox items, notifications)
 - **LLM Service**: Interfaces with Ollama for text processing
+- **Quote Parsing Workflow**: Parse quotes from markdown, submit for curation, write to Neo4j
+- **Concept Extraction Workflow**: Extract concepts from content quotes, submit for curation, write to Neo4j
+- **Inbox Classification Workflow**: Classify inbox notes with LLM, submit for curation, execute moves
 
 ### Knowledge Graph (`graph/`)
 - **Neo4j Database**: Stores entities and relationships
@@ -92,27 +97,37 @@ The system extracts and manages these entity types:
 - **Place**: Locations and places
 - **Concept**: Abstract ideas and concepts
 
-## 🔄 Processing Workflow
+## 🔄 Processing Workflows
 
-### Stage 1: Entity Extraction
-1. Journal entry received via API
-2. LLM processes text to extract entities
-3. Entities queued for human curation
+### Journal Processing (8-stage pipeline)
+1. **Entity Extraction** — LLM extracts entities; queued for curation
+2. **Human Curation** — User reviews entities in Curation UI (Queue)
+3. **Relationship Extraction** — LLM extracts relationships; queued for curation
+4. **Relationship Curation** — User reviews relationships
+5. **Knowledge Graph Update** — Validated data stored in Neo4j
 
-### Stage 2: Human Curation
-1. User reviews and validates extracted entities
-2. Entities can be modified, added, or removed
-3. Curated entities proceed to relationship extraction
+### Quote Parsing (Temporal)
+1. Scan markdown file → parse quotes + LLM summary → submit to curation DB
+2. User reviews quotes in Curation UI (Quotes) → approve/reject
+3. Workflow writes approved quotes to Neo4j (Content, Quote, Person, QUOTED_IN, AUTHORED_BY)
+4. Notifications emitted (workflow_started, curation_pending, workflow_completed)
 
-### Stage 3: Relationship Extraction
-1. LLM analyzes curated entities for relationships
-2. Relationships queued for human validation
-3. User reviews and validates relationships
+### Concept Extraction (Temporal)
+1. Load content and quotes from Neo4j → LLM extracts concepts/relations → submit to curation DB
+2. User reviews concepts and relations in Curation UI (Concepts)
+3. Workflow writes approved concepts to Neo4j (Concept, SUPPORTS, relations)
+4. Notifications emitted at key stages
 
-### Stage 4: Knowledge Graph Update
-1. Validated entities and relationships stored in Neo4j
-2. Graph structure updated with new knowledge
-3. Processing complete
+### Inbox Classification (Temporal)
+1. Scan inbox folder → LLM suggests target folder per note → submit to curation DB
+2. User reviews classifications in Curation UI (Inbox) → accept/reject
+3. Workflow moves files to target folders
+4. Notifications emitted at key stages
+
+### Notifications
+- Stored in curation SQLite (`notifications` table); workflow_type, notification_type (workflow_started, curation_pending, workflow_completed, workflow_failed)
+- API: `GET /api/curation/notifications`, `POST /api/curation/notifications/{id}/read`, `POST /api/curation/notifications/{id}/dismiss`
+- Curation UI includes a Notifications panel and unread badge in the header
 
 ## 🛡️ Error Handling
 

@@ -17,15 +17,17 @@ How all Minerva components work together to provide a complete knowledge managem
 - Visual feedback
 
 ### minerva_agent
-- Obsidian vault assistance
-- File operations
-- Search and discovery
-- Task planning
+- Obsidian vault assistance (read-only tools: read_file, list_dir, glob, grep)
+- Workflow launcher tools (quote parsing, concept extraction, inbox classification) with HITL confirmation
+- Query workflow status
 
-### zettel
-- Quote processing
-- Concept extraction
-- Knowledge organization
+### Curation UI (Vue.js)
+- Queue: Journal entity and relationship curation
+- Quotes, Concepts, Inbox: Workflow item curation (accept/reject, complete workflow)
+- Notifications: Workflow events (workflow_started, curation_pending, workflow_completed)
+
+### zettel *(deprecated)*
+- Quote/concept workflows are now in the backend (Temporal); use Curation UI (Quotes, Concepts) and minerva_agent workflow tools
 
 ## Typical Workflows
 
@@ -49,14 +51,18 @@ How all Minerva components work together to provide a complete knowledge managem
 5. User reviews results in desktop app
 ```
 
-### Workflow 3: Book Quote Processing
+### Workflow 3: Book Quote and Concept Processing
 
 ```
 1. User has book notes with quotes
-2. Run zettel quote_parse_graph
-3. Quotes stored in Neo4j
-4. Run concept_extraction_graph
-5. Concepts extracted and organized
+2. From minerva_agent: start_quote_parsing (file_path, author, title); confirm in chat (HITL)
+3. Backend QuoteParsing workflow parses file, submits to curation DB; notification appears
+4. User reviews quotes in Curation UI (Quotes), accepts/rejects, completes workflow
+5. Workflow writes Content, Quote, Person and relations to Neo4j
+6. From minerva_agent: start_concept_extraction (content_uuid); confirm in chat
+7. Backend ConceptExtraction workflow extracts concepts, submits to curation DB
+8. User reviews concepts in Curation UI (Concepts), completes workflow
+9. Workflow writes Concept nodes and SUPPORTS/relations to Neo4j
 ```
 
 ## Integration Patterns

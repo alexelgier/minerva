@@ -249,6 +249,16 @@ class JournalProcessingWorkflow:
         )
 ```
 
+### Additional Temporal Workflows (Quote, Concept, Inbox)
+
+Besides the Journal Processing workflow, the backend runs three other Temporal workflows:
+
+- **QuoteParsingWorkflow** (`quote_parsing_workflow.py`): Parse quotes from markdown book notes; submit to curation; wait for human approval; write Content, Person, Quote nodes and QUOTED_IN/AUTHORED_BY to Neo4j. Emits notifications (workflow_started, curation_pending, workflow_completed).
+- **ConceptExtractionWorkflow** (`concept_extraction_workflow.py`): Load content and quotes from Neo4j; LLM extracts candidate concepts and relations; submit to curation; wait for approval; write Concept nodes, SUPPORTS (Quote→Concept), and concept relations to Neo4j. Emits notifications.
+- **InboxClassificationWorkflow** (`inbox_classification_workflow.py`): Scan inbox folder; LLM suggests target folder per note; submit to curation; wait for approval; execute file moves. Emits notifications.
+
+All three use the same curation SQLite DB and Curation Manager; the Curation UI (Vue.js) has dedicated views: Quotes, Concepts, Inbox. Notifications are stored in the `notifications` table and exposed via `GET /api/curation/notifications` and mark-read/dismiss endpoints.
+
 ### Retry Policies
 - **LLM Activities**: 5 retries with exponential backoff
 - **Database Operations**: 3 retries with linear backoff

@@ -1,6 +1,8 @@
 # Zettel Agent Architecture
 
-Zettel Agent is a LangGraph-based system for processing book quotes and extracting atomic concepts (Zettels) using Zettelkasten methodology.
+> **DEPRECATED.** Quote parsing and concept extraction have been migrated to Temporal workflows in the backend (`backend/src/minerva_backend/processing/quote_parsing_workflow.py`, `concept_extraction_workflow.py`). Use the Curation UI (Quotes, Concepts) and minerva_agent workflow launcher tools (start_quote_parsing, start_concept_extraction) instead. The `backend/zettel` folder is kept for reference only.
+
+Zettel Agent was a LangGraph-based system for processing book quotes and extracting atomic concepts (Zettels) using Zettelkasten methodology. The following describes the *migrated* behavior now implemented in the backend.
 
 ## Architecture Overview
 
@@ -283,19 +285,19 @@ poetry run langgraph dev
 
 ## Related Documentation
 
-### Comprehensive Module Documentation
+### Current Implementation (Backend Temporal)
 
-The zettel module has comprehensive documentation in `backend/zettel/docs/`:
+- **Quote Parsing**: [backend processing pipeline](../../backend/docs/architecture/processing-pipeline.md#additional-temporal-workflows-quote-concept-inbox), [curation API](../../backend/docs/api/endpoints.md) (quotes endpoints)
+- **Concept Extraction**: Same pipeline doc; curation API (concepts endpoints)
+- **Curation UI**: Queue, Quotes, Concepts, Inbox, Notifications (Vue.js frontend)
+- **Agent**: minerva_agent workflow launcher tools (start_quote_parsing, start_concept_extraction)
 
-- **[API Reference](../../backend/zettel/docs/API.md)** - Complete API reference
-- **[Architecture Documentation](../../backend/zettel/docs/ARCHITECTURE.md)** - Deep technical architecture
-- **[Developer Guide](../../backend/zettel/docs/DEVELOPER.md)** - Extension and modification guide
-- **[Workflows Documentation](../../backend/zettel/docs/WORKFLOWS.md)** - Detailed workflow documentation
+### Deprecated Module (Reference Only)
 
-### Project-Level Documentation
+The zettel module in `backend/zettel/` is deprecated. For historical documentation see:
 
+- [Module README](../../backend/zettel/README.md) (deprecation notice at top)
 - [Components Overview](components.md)
-- [Setup Guide](../setup/zettel-setup.md)
-- [Usage Guide](../usage/zettel.md)
-- [Module README](../../backend/zettel/README.md)
+- [Setup Guide](../setup/zettel-setup.md) (deprecation notice)
+- [Usage Guide](../usage/zettel.md) (points to Curation UI + backend workflows)
 

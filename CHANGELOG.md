@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-02-03
+
+### Added
+- **Backend — Quote Parsing Workflow**: Temporal `QuoteParsingWorkflow`; parse markdown quotes, submit to curation DB, wait for approval, write Content/Quote/Person and QUOTED_IN/AUTHORED_BY to Neo4j. Emits notifications (workflow_started, curation_pending, workflow_completed).
+- **Backend — Concept Extraction Workflow**: Temporal `ConceptExtractionWorkflow`; load content/quotes from Neo4j, LLM extract concepts/relations, submit to curation DB, wait for approval, write Concept nodes and SUPPORTS/relations to Neo4j. Emits notifications.
+- **Backend — Inbox Classification Workflow**: Temporal `InboxClassificationWorkflow`; scan inbox, LLM suggest target folder per note, submit to curation DB, wait for approval, execute file moves. Emits notifications.
+- **Curation DB**: New tables `quote_workflow_curation`, `quote_curation_items`, `concept_workflow_curation`, `concept_curation_items`, `concept_relation_curation_items`, `inbox_classification_items`, `notifications`. CurationManager methods for all of the above and for create/list/mark-read/dismiss notifications.
+- **Curation API**: Endpoints for quote curation (`/api/curation/quotes/*`), concept curation (`/api/curation/concepts/*`), inbox curation (`/api/curation/inbox/*`), notifications (`/api/curation/notifications`, `.../read`, `.../dismiss`).
+- **Curation UI (Vue.js)**: New routes and views — `/quotes` (QuoteCurationView), `/concepts` (ConceptCurationView), `/inbox` (InboxCurationView), `/notifications` (NotificationsView). Header nav: Queue, Quotes, Concepts, Inbox, Notifications (with unread badge).
+- **minerva_agent**: Read-only tools (`read_file`, `list_dir`, `glob`, `grep`) sandboxed to `OBSIDIAN_VAULT_PATH`; workflow launcher tools (`start_quote_parsing`, `start_concept_extraction`, `start_inbox_classification`, `get_workflow_status`) with mandatory HITL (HumanInTheLoopMiddleware). Agent no longer performs direct file writes; irreversible actions are done by backend Temporal workflows after curation.
+
+### Changed
+- **minerva_agent**: Migrated from `deepagents.create_deep_agent` to LangChain 1.x `create_agent`; removed deepagents and FilesystemBackend write tools. Workflow launches require user confirmation in chat (HITL).
+- **Backend**: All new workflows and activities registered in `temporal_orchestrator.py` (QuoteParsing, ConceptExtraction, InboxClassification).
+- **Documentation**: Updated `backend/docs` (architecture overview, processing pipeline, database schema, API endpoints) and `docs` (architecture/components, minerva-agent, zettel; setup zettel-setup; usage overview, zettel, integration-workflows; components minerva-agent, zettel; PROJECT_OVERVIEW_V3) to describe Temporal quote/concept/inbox workflows, notifications, Curation UI, and minerva_agent refactor.
+- **Version**: Bumped all project versions to 0.4.0 (root `pyproject.toml`, backend, minerva_agent, zettel, minerva-models, minerva-desktop Cargo.toml and package.json). Subprojects follow the workspace release version.
+
+### Deprecated
+- **zettel** (`backend/zettel/`): Quote parsing and concept extraction have been migrated to backend Temporal workflows. Use Curation UI (Quotes, Concepts) and minerva_agent workflow launcher tools instead. Deprecation notice added to `backend/zettel/README.md` and relevant docs; folder kept for reference.
+
 ## [0.3.0] - 2026-02-02
 
 ### Added
@@ -88,6 +108,7 @@ While functionality is still limited and many features are in development, this 
 
 ---
 
+[0.4.0]: https://github.com/yourusername/Minerva/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/yourusername/Minerva/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yourusername/Minerva/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/yourusername/Minerva/releases/tag/v0.1.0
